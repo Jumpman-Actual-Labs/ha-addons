@@ -379,7 +379,7 @@ pure white/opaque, per the brief's "avoid making it pure white").
   background…" (unconditionally now, for both `entityType`s - it used to
   only apply for `"inventory_item"`, before `CacheUploadPhotoView` started
   running EVERY photo upload through OpenAI background removal, not just
-  parts; see `ha-cache-integration`'s CLAUDE.md). `photo-manager-section.ts`
+  parts; see the backend's CLAUDE.md). `photo-manager-section.ts`
   also shows a `.processing-note` line above the grid, unconditionally
   too, while `_uploading` is true, since the background-removal round trip
   is visibly slower than a plain upload and a silent spinner reads like
@@ -412,7 +412,7 @@ pure white/opaque, per the brief's "avoid making it pure white").
   heading/save-button copy and prefills date/location/notes/rows from the
   existing session in `willUpdate`, and `_save()` calls
   `cacheApi.updateRangeSession()` instead of `logRangeSession()` when set -
-  see `ha-cache-integration`'s CLAUDE.md for how the backend reconciles
+  see the backend's CLAUDE.md for how the backend reconciles
   round counts/ammo when a session's entries change.
 - `src/styles.ts` - shared glassmorphism card treatment + form/button/badge
   primitives, imported into each view's own `static styles` (shadow DOM
@@ -486,7 +486,7 @@ pure white/opaque, per the brief's "avoid making it pure white").
 - Ammunition's Cost Per Round isn't directly editable - the form takes Cost
   Per Box + Rounds Per Box instead, sends `cost_per_box`/`rounds_per_box`,
   and the backend computes `cost_per_round` server-side (see
-  `ha-cache-integration`'s CLAUDE.md). `ammunition-view.ts`'s
+  the backend's CLAUDE.md). `ammunition-view.ts`'s
   `computedCostPerRound()` does the same division purely for the live "≈
   $X.XX/round" hint under the form fields - it's not what gets saved.
   `Ammunition.speedClass` ("Subsonic"/"Supersonic"/`null`) is likewise
@@ -526,7 +526,7 @@ pure white/opaque, per the brief's "avoid making it pure white").
   another" button. This is what lets one schedule cover a multi-caliber AR
   upper (a 300 BLK row + a 5.56 row) or "train with either my AR or my
   shotgun." Matches the backend's `RangeSchedule.targets` list (see
-  `ha-cache-integration`'s CLAUDE.md) - `training-schedule-view.ts` mirrors
+  the backend's CLAUDE.md) - `training-schedule-view.ts` mirrors
   the backend's per-target `target_type`/`firearm_id`/`firearm_type`/
   `caliber`/`speed_class`/`bullet_type`/`rounds_min` shape exactly, one
   `TargetDraft` per `RangeScheduleTarget`. Each row's third selector ("Any
@@ -545,7 +545,7 @@ pure white/opaque, per the brief's "avoid making it pure white").
   list of steps where only one is "current" at a time (e.g. a 6-month
   rifle/shotgun rotation), not one standalone recurring goal. Matches the
   backend's `TrainingPlan`/`TrainingPlanStep` shape (see
-  `ha-cache-integration`'s CLAUDE.md). `PlanDraft.steps: StepDraft[]` is a
+  the backend's CLAUDE.md). `PlanDraft.steps: StepDraft[]` is a
   reorderable list (move up/down buttons per `.step-card`, not drag-and-
   drop) - each step is its own mini-form with the same repeatable
   `targets: TargetDraft[]` row UI as a Training Schedule, including each
@@ -570,7 +570,7 @@ pure white/opaque, per the brief's "avoid making it pure white").
   since calendar-mode plans can advance purely from the passage of time
   with no user action.
 - Settings' "Ammunition Alerts" card has a rules list below the global
-  default threshold input (`AmmoAlertRule` - see `ha-cache-integration`'s
+  default threshold input (`AmmoAlertRule` - see the backend's
   CLAUDE.md for the three-tier priority: an ammo entry's own threshold,
   then the first matching rule, then the global default). Unlike the rest
   of the Settings view (which batches edits into a local `_draft` and
@@ -587,11 +587,35 @@ pure white/opaque, per the brief's "avoid making it pure white").
 - `Firearm.effectiveEstimatedValue` (both firearm-card and firearm-detail
   "Estimated Value" displays, and the value sort in `firearms-view.ts`)
   is a backend-computed field - the firearm's own value plus every
-  installed part's value (see `ha-cache-integration`'s CLAUDE.md) - never
+  installed part's value (see the backend's CLAUDE.md) - never
   read `currentEstimatedValue` for display. `currentEstimatedValue`
   itself still only ever appears in the Add/Edit Firearm form's own
   "Current Estimated Value" input - that one's the raw manual override,
   editing it doesn't touch what installed parts are worth.
+
+- The firearm detail page's Estimated Value/Purchase Price stat buttons
+  (see the `Firearm.effectiveEstimatedValue` bullet above) render Purchase
+  Price first, Estimated Value second - Purchase Price is what was
+  actually spent, Estimated Value is the more speculative of the two, so
+  the more concrete number reads left-to-right first. Below both, a
+  "Get AI Used-Value Estimate" button (`firearms-view.ts`'s
+  `_estimateValue()`, `inventory-view.ts` has the identical thing for
+  parts) calls the new `cacheApi.estimateUsedValue()` (`POST api/
+  estimate_value`, see the backend's CLAUDE.md for the
+  backend). This is a knowledge-based GUESS from OpenAI's training data,
+  NOT live market data - this app has no web-browsing capability anywhere
+  - so the result is always shown with that caveat and a low/high range
+  plus a confidence word rather than a single confident number, and
+  NEVER auto-applied: `UsedValueEstimate` (`types.ts`) is just displayed,
+  and only a second, explicit "Apply to Estimated Value" click writes the
+  range's midpoint into `current_estimated_value`/`estimated_value` via
+  the existing `updateFirearm`/`updateInventoryItem` - same "review, then
+  explicitly apply" convention as the ammo-scan fields
+  (`_mergeScannedFields`) elsewhere in this app. Both estimated prices
+  come back `null` (rendered as an explicit "couldn't estimate
+  confidently" message, not a button-less dead end) when the model
+  doesn't recognize the item, rather than a guessed number - the frontend
+  never invents a number the backend didn't actually return.
 
 ## The shadow-DOM gotcha
 
@@ -603,14 +627,14 @@ CSS to the component that defines it.
 ## My Build
 
 `src/types.ts`'s `PART_TAXONOMY` (`Record<Category, Part[]>`, mirroring
-`ha-cache-integration`'s `const.py` constant of the same name exactly) is
+the backend's `const.py` constant of the same name exactly) is
 the taxonomy every part-related feature in this app reads from - 10
 Categories (`INVENTORY_CATEGORIES`, derived via `Object.keys`), 18 Parts
 (`PART_TYPES`, derived via flattening `Object.values`), plus a reverse
 `CATEGORY_FOR_PART` lookup. Every `InventoryItem` stores both as real,
 independent fields - `category` (coarse, e.g. "Optic") and `partType`
 (specific, e.g. "Optic Mount") - the backend cross-validates that a given
-pair actually belongs together (see `ha-cache-integration`'s CLAUDE.md),
+pair actually belongs together (see the backend's CLAUDE.md),
 this frontend just narrows the add/edit form's Part `<select>` to
 `PART_TAXONOMY[category]` when Category changes
 (`inventory-view.ts`) and resets `partType` to that list's first entry so
@@ -651,7 +675,7 @@ inventory record, not picking one from a list) gains its own Part
 
 A Part is NOT exclusive - any number of items can share the same Part on
 the same firearm at once (e.g. two Optics), matching the backend's
-`async_install_item` (see `ha-cache-integration`'s CLAUDE.md). Because of
+`async_install_item` (see the backend's CLAUDE.md). Because of
 this, `installedBySlot()` (`utils/installed-items.ts`) maps each Part to
 an ARRAY of `InstalledItemSummary`, not a single item, and both
 `<cache-attachment-bar>` and `slot-modal` were built around that shape
@@ -684,7 +708,7 @@ folded into one of the 10 (Sling, Holster, Case, Cleaning Kit, Ammo Can,
 Range Bag, Safe, Tool, and the old catch-all "Miscellaneous", now "Other
 / Miscellaneous" under Accessory) - existing items with one of those
 values get migrated server-side on the backend's next storage load (see
-`ha-cache-integration`'s CLAUDE.md's `storage.py` bullet), this frontend
+the backend's CLAUDE.md's `storage.py` bullet), this frontend
 never sees the old shape.
 
 `src/components/attachment-bar.ts` (`<cache-attachment-bar>`) is a flat bar
@@ -798,7 +822,7 @@ are still two independently installable slots.
 sites use to build the slot map fresh from the live
 `cacheState.inventoryItems` list (each item's own `photos` array) rather
 than `Firearm.installedItems` (a lightweight backend summary with no
-photo data - see `ha-cache-integration`'s `sensor.py` `FirearmSensor`,
+photo data - see the backend's `states.py` (`_firearm_entity`),
 still used for the section heading's `(N)` count, just not for what's
 rendered underneath it). `.art img` sets `width: 100%; height: 100%;
 object-fit: contain` rather than `max-width`/`max-height: 100%` - the
@@ -834,7 +858,7 @@ A firearm has no separate "hero" or "build" image field - there used to
 be one (`Firearm.buildImageUrl`, its own dedicated upload endpoint and a
 "Hero / Build Image" section in Edit Firearm), removed once that concept
 stopped earning its keep: every gallery photo already runs through
-background removal on upload (see `ha-cache-integration`'s CLAUDE.md), so
+background removal on upload (see the backend's CLAUDE.md), so
 a second dedicated upload wasn't producing a different RESULT, just a
 second thing that could disagree with the gallery. A firearm's hero photo
 is now simply whichever gallery photo is marked primary
@@ -913,7 +937,7 @@ is now its only home.
 - The backend's `add_firearm`/`add_inventory_item` services are the FIRST
   use of Home Assistant's `supports_response=SupportsResponse.OPTIONAL`
   pattern in this codebase (`hass.services.async_register(...,
-  supports_response=...)` - see `ha-cache-integration`'s CLAUDE.md).
+  supports_response=...)` - see the backend's CLAUDE.md).
   `OPTIONAL`, not `ONLY`, so every existing fire-and-forget
   `hass.callService(...)` caller elsewhere in the app is unaffected -
   only a caller that explicitly asks for a response
@@ -965,7 +989,7 @@ photos into Edit" below for why they diverged in this pass:
   `wishlist-reorder-dialog.ts`'s drag-and-drop list, never from this form
   (`FirearmDraft` sends `is_wishlist` only; the coordinator auto-assigns
   a `wishlist_rank` server-side on the `false`→`true` transition and
-  auto-clears it on `true`→`false` - see `ha-cache-integration`'s
+  auto-clears it on `true`→`false` - see the backend's
   CLAUDE.md).
 - The detail page shows a `.badge.warning` chip and a "Mark as Purchased"
   button that only appears while `isWishlist` is true. For
@@ -988,7 +1012,7 @@ photos into Edit" below for why they diverged in this pass:
   units) - `logic.dashboard_stats` on the backend resolves this with a
   two-tier fallback: a ranked wishlist firearm always wins if any wishlist
   firearms exist at all, falling back to the top-priority wishlist part
-  only when there are none (see `ha-cache-integration`'s CLAUDE.md). The
+  only when there are none (see the backend's CLAUDE.md). The
   frontend's own `_topWishlistFirearm` getter in `dashboard-view.ts`
   mirrors the firearm half of this: primary sort key `wishlistRank ??
   Infinity` (nulls last), tiebroken by estimated value descending, with a
@@ -997,7 +1021,7 @@ photos into Edit" below for why they diverged in this pass:
   firearm, never a part - see its own doc comment for why.
 - `slot-modal.ts`'s remove-item dialog only requires picking a Storage
   Location when the item being removed is owned - a wishlist item was
-  only ever installed to preview a build (see `ha-cache-integration`'s
+  only ever installed to preview a build (see the backend's
   CLAUDE.md), so it has no physical location to return to and the field
   is optional for it (defaults to "None", clearing
   `InventoryItem.storageLocationId` on removal). `InstalledItemSummary`
@@ -1025,7 +1049,7 @@ photos into Edit" below for why they diverged in this pass:
   `cacheApi.reorderWishlistFirearms(hass, this._order.map(f => f.id))`,
   which saves the COMPLETE new order in one call (rank = list position)
   rather than per-drag deltas, matching the coordinator's own atomic
-  `async_reorder_wishlist_firearms` design (see `ha-cache-integration`'s
+  `async_reorder_wishlist_firearms` design (see the backend's
   CLAUDE.md) - simpler than insert-between/fractional-rank math, and it
   means a cancelled dialog (or one closed via the X) leaves the saved
   order completely untouched since `_order` was always just local state.
@@ -1033,7 +1057,7 @@ photos into Edit" below for why they diverged in this pass:
 `dashboard-view.ts` is the "home screen" - SEVEN consolidated glass
 surfaces instead of one-card-per-stat-field. Every value is still read
 straight from `DashboardStats`/`CacheState` (already wishlist-excluded
-server-side where relevant - see `ha-cache-integration`'s CLAUDE.md);
+server-side where relevant - see the backend's CLAUDE.md);
 this redesign is entirely about grouping/presentation, not new data.
 Nothing is fabricated - a metric this app doesn't actually track (a
 separate "maintenance" concept distinct from cleaning, "storage
@@ -1101,7 +1125,7 @@ issues") is simply not shown, rather than invented.
    `ammunitionByCaliber` entry. A caliber's row gets a `.badge.warning`
    "Low" tag when ANY underlying `Ammunition` entry for that caliber has
    `isLow === true` (already computed server-side per-entry via
-   `logic.is_ammo_low` - see `ha-cache-integration`'s CLAUDE.md) -
+   `logic.is_ammo_low` - see the backend's CLAUDE.md) -
    `ammunitionByCaliber` is an AGGREGATE across possibly-multiple
    entries sharing a caliber name, so this checks the raw
    `cacheState.ammunition` list rather than inventing a caliber-level
@@ -1113,7 +1137,7 @@ issues") is simply not shown, rather than invented.
 7. **Wishlist** - features the single top-ranked WISHLIST FIREARM
    (`_topWishlistFirearm` getter), not the backend's pooled `
    topWishlistItemName`/`topWishlistItemPriority` (which ranks firearms
-   AND parts together - see `ha-cache-integration`'s CLAUDE.md's
+   AND parts together - see the backend's CLAUDE.md's
    `dashboard_stats` bullet - and doesn't expose a photo or the actual
    record, only a name string). This panel needed the real `Firearm`
    object (for its image and to link somewhere meaningful), so it

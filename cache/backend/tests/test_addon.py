@@ -295,6 +295,28 @@ async def test_photo_upload_still_fails_when_configured_key_errors(
     assert coordinator.firearms[0].photos == []
 
 
+async def test_estimate_value_returns_openai_estimate(client, config, monkeypatch):
+    from cache_addon import web
+
+    seen = {}
+
+    async def _estimate(_session, api_key, description):
+        seen["args"] = (api_key, description)
+        return {"estimated_low": 450, "estimated_high": 550, "confidence": "medium"}
+
+    resp = await client.post("/api/estimate_value", json={"description": "Glock 19"})
+    assert resp.status == 400  # no key configured yet
+
+    config.openai_api_key = "sk-test"
+    monkeypatch.setattr(web, "estimate_used_value", _estimate)
+    resp = await client.post("/api/estimate_value", json={"description": "  Glock 19 "})
+    assert (await resp.json())["estimated_high"] == 550
+    assert seen["args"] == ("sk-test", "Glock 19")
+
+    resp = await client.post("/api/estimate_value", json={"description": ""})
+    assert resp.status == 400
+
+
 async def test_index_served_without_caching(client):
     resp = await client.get("/")
     assert resp.status == 200

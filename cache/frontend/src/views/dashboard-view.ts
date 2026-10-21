@@ -14,7 +14,7 @@ interface ActivityEvent {
   firearmId?: string;
 }
 
-/** The Dashboard - Bear Armory's "home screen," not a grid of individual
+/** The Dashboard - Cache's "home screen," not a grid of individual
  * database stats. SEVEN consolidated glass surfaces (Armory Overview's 4
  * KPI cards, then Collection Breakdown/Armory Status/Recent Activity/
  * Most Used/Ammunition Status/Wishlist, one panel each) instead of the
@@ -50,7 +50,7 @@ export class CacheDashboardView extends LitElement {
     css`
       .overview-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
         gap: 14px;
         margin-bottom: 14px;
       }
@@ -86,7 +86,7 @@ export class CacheDashboardView extends LitElement {
         color: var(--secondary-text-color, #a3adb6);
       }
       .kpi-value {
-        font-size: 1.5rem;
+        font-size: 1.75rem;
         font-weight: 700;
         line-height: 1.25;
         white-space: nowrap;
@@ -262,7 +262,7 @@ export class CacheDashboardView extends LitElement {
       .bar-fill {
         height: 100%;
         border-radius: 4px;
-        background: color-mix(in srgb, var(--primary-color, #f2f4f6) 55%, transparent);
+        background: linear-gradient(90deg, var(--cache-olive), var(--cache-olive-light));
       }
       .bar-count {
         width: 40px;
@@ -425,7 +425,7 @@ export class CacheDashboardView extends LitElement {
       .ranking-bar-fill {
         height: 100%;
         border-radius: 3px;
-        background: color-mix(in srgb, var(--primary-color, #f2f4f6) 55%, transparent);
+        background: linear-gradient(90deg, var(--cache-olive), var(--cache-olive-light));
       }
       /* Ammunition Status */
       .ammo-status-header {
@@ -491,6 +491,17 @@ export class CacheDashboardView extends LitElement {
         border-top: 1px solid var(--divider-color, rgba(255, 255, 255, 0.1));
         font-size: 0.78rem;
         font-weight: 600;
+      }
+      .panel-heading ha-icon { color: var(--cache-coyote); }
+      .activity-group { border-left: 1px solid var(--cache-olive); padding-left: 12px; }
+      .activity-icon { border-color: var(--cache-olive); background: var(--cache-gunmetal); }
+      .kpi-icon { box-shadow: inset 0 1px rgba(255,255,255,.07), 0 3px 8px rgba(0,0,0,.25); }
+      @media (max-width: 600px) {
+        ha-card.panel, ha-card.kpi-card { padding: 14px 12px; }
+        .bar-row { flex-wrap: wrap; gap: 6px; }
+        .bar-row .bar-label { width: 88px; font-size: 12px; }
+        .bar-track { min-width: 32px; }
+        .bar-count { width: 32px; }
       }
     `,
   ];
@@ -925,3 +936,4 @@ declare global {
     "cache-dashboard-view": CacheDashboardView;
   }
 }
+

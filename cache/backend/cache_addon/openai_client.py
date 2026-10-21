@@ -77,6 +77,30 @@ _TEXT_PROMPT = (
     "invent values the listing doesn't actually contain:\n" + _FIELD_LIST + "\n\nListing:\n"
 )
 
+_VALUE_ESTIMATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "estimated_low": {"type": ["number", "null"]},
+        "estimated_high": {"type": ["number", "null"]},
+        "confidence": {"type": ["string", "null"]},
+    },
+    "required": ["estimated_low", "estimated_high", "confidence"],
+    "additionalProperties": False,
+}
+
+_VALUE_ESTIMATE_PROMPT = (
+    "Estimate the typical USED/resale market price range in US dollars for "
+    "the firearm or firearm part described below, based on your general "
+    "knowledge of typical secondhand pricing for items like it. You have no "
+    "ability to browse live listings or current market data - this is a "
+    "rough estimate from training knowledge only, so be conservative and "
+    "honest about it. If you don't recognize the item or don't have enough "
+    "information to estimate responsibly, return null for both prices "
+    "rather than guessing wildly. Also return your confidence in the "
+    "estimate as \"low\", \"medium\", or \"high\" (null if you returned no "
+    "estimate).\n\nItem:\n"
+)
+
 _BACKGROUND_REMOVAL_PROMPT = (
     "Remove the background completely so only the firearm remains, "
     "centered, on a fully transparent background. Leave a generous "
@@ -145,19 +169,27 @@ async def get_openai_api_key(config: AddonConfig) -> str | None:
     return await asyncio.to_thread(_fallbacks)
 
 
-async def _extract_fields(session: aiohttp.ClientSession, api_key: str, content: list) -> dict:
-    """Shared request/response handling for both extraction paths - `content`
-    is an OpenAI chat "content parts" list (text, and optionally an
-    image_url part)."""
+async def _structured_completion(
+    session: aiohttp.ClientSession,
+    api_key: str,
+    content: list,
+    schema_name: str,
+    schema: dict,
+) -> dict:
+    """Shared request/response handling for every Structured Outputs call
+    this module makes (ammo field extraction, the used-value estimate
+    below) - `content` is an OpenAI chat "content parts" list (text, and
+    optionally an image_url part), `schema`/`schema_name` pick what shape
+    comes back."""
     payload = {
         "model": OPENAI_VISION_MODEL,
         "messages": [{"role": "user", "content": content}],
         "response_format": {
             "type": "json_schema",
             "json_schema": {
-                "name": "ammo_box_fields",
+                "name": schema_name,
                 "strict": True,
-                "schema": _EXTRACTION_SCHEMA,
+                "schema": schema,
             },
         },
         "max_tokens": 500,
@@ -194,7 +226,9 @@ async def scan_ammo_box(
         {"type": "text", "text": _IMAGE_PROMPT},
         {"type": "image_url", "image_url": {"url": f"data:{content_type};base64,{b64}"}},
     ]
-    return await _extract_fields(session, api_key, content)
+    return await _structured_completion(
+        session, api_key, content, "ammo_box_fields", _EXTRACTION_SCHEMA
+    )
 
 
 async def extract_ammo_fields_from_text(
@@ -202,16 +236,37 @@ async def extract_ammo_fields_from_text(
 ) -> dict:
     """Same structured extraction as scan_ammo_box, but from a barcode
     lookup's product listing text (title/brand/description) instead of a
-    photo - see http.py's CacheLookupAmmoBarcodeView."""
+    photo - see web.py's lookup_ammo_barcode."""
     content = [{"type": "text", "text": _TEXT_PROMPT + listing_text}]
-    return await _extract_fields(session, api_key, content)
+    return await _structured_completion(
+        session, api_key, content, "ammo_box_fields", _EXTRACTION_SCHEMA
+    )
+
+
+async def estimate_used_value(
+    session: aiohttp.ClientSession, api_key: str, description: str
+) -> dict:
+    """AI-estimated used/resale price range for a firearm or part, from
+    OpenAI's general training knowledge - NOT live market data, this module
+    has no web-browsing capability anywhere (plain chat-completions REST
+    calls only, same as the rest of this file). Returns null for both
+    prices when the model doesn't recognize the item or can't estimate
+    responsibly, same "don't guess" convention as scan_ammo_box's field
+    extraction, rather than inventing a number. See web.py's
+    estimate_value / the frontend's CLAUDE.md for how the
+    frontend surfaces this - it's shown for the user to review and
+    explicitly apply, never auto-saved."""
+    content = [{"type": "text", "text": _VALUE_ESTIMATE_PROMPT + description}]
+    return await _structured_completion(
+        session, api_key, content, "used_value_estimate", _VALUE_ESTIMATE_SCHEMA
+    )
 
 
 async def remove_background(
     session: aiohttp.ClientSession, api_key: str, image_bytes: bytes, content_type: str
 ) -> bytes:
     """Sends a firearm/part photo to OpenAI's image edit endpoint to isolate
-    it on a transparent background (see http.py's CacheUploadPhotoView).
+    it on a transparent background (see web.py's upload_photo).
     Returns the resulting PNG bytes; a transparent background always comes
     back as PNG regardless of the input format."""
     form = aiohttp.FormData()

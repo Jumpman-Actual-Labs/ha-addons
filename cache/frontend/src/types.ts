@@ -272,6 +272,19 @@ export interface ScannedAmmoFields {
   roundsPerBox: number | null;
 }
 
+/** cacheApi.estimateUsedValue()'s result - an AI-GUESSED used/resale price
+ * range from OpenAI's general training knowledge, NOT live market data
+ * (this app has no web-browsing capability anywhere). Both prices are null
+ * when the model doesn't recognize the item or can't estimate responsibly,
+ * same "don't guess" convention as ScannedAmmoFields - never auto-applied
+ * to currentEstimatedValue/estimatedValue, only shown for the user to
+ * review and explicitly apply. */
+export interface UsedValueEstimate {
+  estimatedLow: number | null;
+  estimatedHigh: number | null;
+  confidence: string | null;
+}
+
 export interface RangeSessionFirearmEntry {
   firearmId: string;
   firearmName: string | null;

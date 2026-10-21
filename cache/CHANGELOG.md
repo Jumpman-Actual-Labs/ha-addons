@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.2
+
+- Brings in the latest Cache work that 1.0.0 missed: the tactical redesign
+  (olive accents, contour background, Bear Armory branding), expandable
+  Estimated Value / Purchase Price breakdowns, and the "Get AI Used-Value
+  Estimate" button for firearms and parts.
+
 ## 1.0.1
 
 - Photos can be added without an OpenAI API key - they're saved as-is.

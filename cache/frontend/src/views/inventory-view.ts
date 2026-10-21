@@ -2,7 +2,7 @@ import { LitElement, css, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "../ha-api";
 import { cacheApi } from "../ha-api";
-import type { CacheState, InventoryItem } from "../types";
+import type { CacheState, InventoryItem, UsedValueEstimate } from "../types";
 import { CATEGORY_FOR_PART, CONDITIONS, INVENTORY_CATEGORIES, PART_TYPES, WISHLIST_PRIORITIES } from "../types";
 import { glassCardStyle, formStyles } from "../styles";
 import { formatCurrency, formatDate, formatDateTime, todayIso } from "../utils/format";
@@ -59,6 +59,11 @@ export class CacheInventoryView extends LitElement {
   @state() private _category = "";
   @state() private _wishlistFilter: "owned" | "wishlist" | "all" = "owned";
   @state() private _selectedId: string | null = null;
+  // AI used-value estimate flow (cacheApi.estimateUsedValue) - reset on
+  // item switch, same as firearms-view.ts's equivalent.
+  @state() private _estimating = false;
+  @state() private _valueEstimate: UsedValueEstimate | null = null;
+  @state() private _estimateError: string | null = null;
   @state() private _formOpen = false;
   @state() private _editing: InventoryItem | null = null;
   @state() private _draft: ItemDraft = { ...EMPTY_DRAFT };
@@ -180,6 +185,21 @@ export class CacheInventoryView extends LitElement {
         background: var(--secondary-background-color, #eee);
         flex-shrink: 0;
       }
+      /* Same fix as firearms-view.ts's detail page: below 600px the fixed
+         140px photo + 20px gap leaves no real room for the text column,
+         so it stacks instead of squeezing. */
+      @media (max-width: 600px) {
+        .detail-header {
+          flex-direction: column;
+        }
+        .detail-photo {
+          width: 100%;
+          height: auto;
+          aspect-ratio: 1;
+          max-width: 280px;
+          margin: 0 auto;
+        }
+      }
       .fields {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -191,6 +211,22 @@ export class CacheInventoryView extends LitElement {
         font-size: 0.75rem;
         color: var(--secondary-text-color, #727272);
         margin: 0;
+      }
+      .ai-estimate {
+        margin-top: 12px;
+      }
+      .ai-estimate-result {
+        margin-top: 8px;
+        padding: 10px 14px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--hud-border, rgba(255, 255, 255, 0.08));
+        border-radius: var(--hud-radius-sm, 8px);
+      }
+      .ai-estimate-result > span {
+        font-weight: 600;
+      }
+      .ai-estimate-result button {
+        margin-top: 8px;
       }
       .back-link {
         background: none;
@@ -209,6 +245,11 @@ export class CacheInventoryView extends LitElement {
   willUpdate(changed: Map<string, unknown>): void {
     if (changed.has("initialItemId") && this.initialItemId) {
       this._selectedId = this.initialItemId;
+    }
+    if (changed.has("_selectedId")) {
+      this._estimating = false;
+      this._valueEstimate = null;
+      this._estimateError = null;
     }
   }
 
@@ -418,6 +459,78 @@ export class CacheInventoryView extends LitElement {
     this._purchasePrice = "";
   }
 
+  // Plain text summary fed to cacheApi.estimateUsedValue - see
+  // firearms-view.ts's identical-in-spirit _describeFirearm.
+  private _describeItem(item: InventoryItem): string {
+    const parts = [
+      item.manufacturer,
+      item.model,
+      item.partType ?? item.category,
+      item.condition ? `${item.condition} condition` : null,
+    ].filter((p): p is string => Boolean(p));
+    return parts.length > 0 ? parts.join(", ") : item.customName;
+  }
+
+  private async _estimateValue(item: InventoryItem): Promise<void> {
+    this._estimating = true;
+    this._estimateError = null;
+    this._valueEstimate = null;
+    try {
+      this._valueEstimate = await cacheApi.estimateUsedValue(this.hass, this._describeItem(item));
+    } catch (err) {
+      this._estimateError = err instanceof Error ? err.message : "Failed to get an AI estimate";
+    } finally {
+      this._estimating = false;
+    }
+  }
+
+  // Applying is a deliberate second click, never automatic - see
+  // firearms-view.ts's identical _applyEstimate for the reasoning.
+  private async _applyEstimate(item: InventoryItem): Promise<void> {
+    const estimate = this._valueEstimate;
+    if (!estimate || (estimate.estimatedLow === null && estimate.estimatedHigh === null)) return;
+    const mid =
+      estimate.estimatedLow !== null && estimate.estimatedHigh !== null
+        ? (estimate.estimatedLow + estimate.estimatedHigh) / 2
+        : (estimate.estimatedLow ?? estimate.estimatedHigh)!;
+    await cacheApi.updateInventoryItem(this.hass, item.id, { estimated_value: Math.round(mid * 100) / 100 });
+    this._valueEstimate = null;
+  }
+
+  private _renderValueEstimate(item: InventoryItem) {
+    return html`
+      <div class="ai-estimate">
+        <button
+          class="secondary"
+          type="button"
+          ?disabled=${this._estimating}
+          @click=${() => this._estimateValue(item)}
+        >
+          ${this._estimating ? "Estimating…" : "Get AI Used-Value Estimate"}
+        </button>
+        ${this._estimateError ? html`<p class="small muted">${this._estimateError}</p>` : ""}
+        ${this._valueEstimate
+          ? this._valueEstimate.estimatedLow === null && this._valueEstimate.estimatedHigh === null
+            ? html`<p class="small muted">The AI couldn't estimate this item confidently - try filling in more details (manufacturer, model, condition) and edit the value by hand instead.</p>`
+            : html`
+                <div class="ai-estimate-result">
+                  <span>
+                    AI estimate: ${formatCurrency(this._valueEstimate.estimatedLow)} –
+                    ${formatCurrency(this._valueEstimate.estimatedHigh)}${this._valueEstimate.confidence
+                      ? ` (${this._valueEstimate.confidence} confidence)`
+                      : ""}
+                  </span>
+                  <p class="small muted">Based on general knowledge, not live market data - review before applying.</p>
+                  <button class="secondary" type="button" @click=${() => this._applyEstimate(item)}>
+                    Apply to Estimated Value
+                  </button>
+                </div>
+              `
+          : ""}
+      </div>
+    `;
+  }
+
   private _renderDetail(item: InventoryItem) {
     return html`
       <button class="back-link" @click=${() => (this._selectedId = null)}>
@@ -470,6 +583,8 @@ export class CacheInventoryView extends LitElement {
             ? html`<div class="field"><label>Product Link</label><div><a href=${item.productUrl} target="_blank" rel="noopener noreferrer">${item.productUrl}</a></div></div>`
             : ""}
         </div>
+
+        ${this._renderValueEstimate(item)}
         ${item.notes ? html`<p>${item.notes}</p>` : ""}
 
         <div class="actions" style="justify-content:flex-start">

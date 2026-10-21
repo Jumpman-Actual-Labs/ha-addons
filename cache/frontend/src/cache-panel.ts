@@ -52,122 +52,51 @@ export class CachePanel extends LitElement {
   @state() private _pendingItemId: string | null = null;
   @state() private _pendingWishlistFilter = false;
 
-  /* Premium futuristic-OS glass theme - a "smoked-glass holoscreen"
-   * material system, not a themed website. Defined once here and
-   * cascaded everywhere: every view/component in this app was already
-   * written against Home Assistant's own theme variables (`var(
-   * --primary-color, <light-theme fallback>)`, `var(--card-background-
-   * color, ...)`, etc.) rather than literal colors, specifically so a
-   * theme could be swapped in from one place. Redefining those SAME
-   * variable names here, on `:host`, means every descendant `var(--x,
-   * fallback)` call - in this component's own shadow tree AND in every
-   * nested view/dialog's shadow tree, since CSS custom properties
-   * inherit straight through shadow boundaries the same way `color`/
-   * `font-family` do - resolves to the theme palette instead of its
-   * light-theme fallback, with zero changes needed in most other files.
-   * Only components that hardcode literal hex instead of reading these
-   * variables (attachment-bar.ts - a deliberately-always-dark surface
-   * from before this reskin) needed their own hex values swapped by
-   * hand; everything else - forms, buttons, badges, every ha-card-based
-   * panel - picks this up automatically.
-   *
-   * This is the SEVENTH pass at this theme, iterated live against
-   * feedback each time: green-phosphor CRT terminal → cyan/violet glass
-   * HUD → pure black/white/gray → a desaturated gunmetal accent → a
-   * vivid GLOWING arc-reactor cyan ("Iron Man/Stark tech") → a flat,
-   * matte, glow-free monochrome match to a specific reference image →
-   * **here**: an explicit, detailed brief for a "sophisticated
-   * near-future armory management operating system running on smoked
-   * glass displays" - dark/minimal/elegant/precise/glass-like/
-   * futuristic/professional, explicitly NOT gritty/cyberpunk/neon-heavy/
-   * blue-everywhere/video-game-like/busy/military-cliché. The pass-6
-   * "no glow, flat monochrome, muted green for status only" direction
-   * carries forward essentially unchanged - what's new is depth and
-   * material quality: three distinct near-black background tones
-   * instead of two (a deeper `--hud-bg` for the content area, `--hud-
-   * bg-2` for the app shell/topbar, `--hud-sidebar-bg` for the sidebar -
-   * previously the sidebar and topbar shared one flat tone), the
-   * sidebar and topbar gained real translucency + backdrop blur instead
-   * of a solid fill, and several NEW tokens exist purely so every glass
-   * surface in the app (see `styles.ts`'s `glassCardStyle`/`formStyles`)
-   * reads as ONE consistent material system rather than each component
-   * picking its own blur/radius/hover values: `--hud-border-hover` (a
-   * card's border on hover - distinct from `--hud-border-strong`, which
-   * is for small chip/avatar outlines, not card interaction),
-   * `--hud-radius`/`--hud-radius-sm` (card vs. control corner
-   * rounding), and `--hud-blur` (the base glass blur amount cards read
-   * against). Still no glow anywhere - depth here comes from real
-   * translucency/blur/shadow layering, not light emission.
-   *
-   * Layout: `render()` below replaced the original horizontal `<header>`
-   * tab strip with a fixed-width `<aside class="sidebar">` (logo block,
-   * a vertical icon+label nav list, a "SYSTEM STATUS" footer card) plus
-   * a slim top utility bar showing the REAL signed-in HA user's name
-   * (`hass.user.name`) - not a fabricated callsign, and not decorative
-   * search/notification icons, since neither has any real functionality
-   * behind it in this app yet. There's deliberately no decorative
-   * right-side "system telemetry" panel (vault temperature, humidity,
-   * GPS, etc.) - none of that data exists anywhere in this app's domain
-   * model, and fabricating live-looking sensor readouts would read as
-   * real telemetry when it's actually invented, which is worse than
-   * just not having the panel. */
+  // Shared tactical tokens inherit through every Lit shadow root.
   static styles = css`
     :host {
       display: flex;
       height: 100%;
       position: relative;
       overflow: hidden;
-      /* Three distinct near-black tones (deepest to lightest) instead of
-         a flat two-tone split - content area, app shell, sidebar each
-         read as a slightly different depth layer rather than one flat
-         background. Still overwhelmingly neutral black/charcoal, no
-         blue cast. */
-      --hud-bg: #050607;
-      --hud-bg-2: #08090b;
-      --hud-sidebar-bg: #101114;
-      /* The glass fill every card/dialog/control is built from - dark
-         charcoal, genuinely translucent (not "nearly solid"), so
-         backdrop-filter blur has real material to show through. */
-      --hud-panel-bg: rgba(22, 24, 27, 0.4);
-      --hud-white: #f2f4f6;
-      --hud-white-dim: #a3adb6;
-      --hud-mute: #6b7078;
-      /* The one hue that isn't the neutral accent or semantic warning/
-         error - reserved strictly for "everything's fine" status text
-         (the sidebar's SYSTEM STATUS card, badges elsewhere reading
-         "operational"/"secure"/etc.). */
-      --hud-good: #7bc98f;
-      /* The interactive accent is plain white/light-gray, not a hue.
-         No glow anywhere in this theme - depth comes from translucency/
-         blur/shadow layering instead. */
-      --hud-accent: var(--hud-white);
-      --hud-border: rgba(255, 255, 255, 0.1);
-      /* Small chip/avatar/logo-mark outlines (NOT card hover - see
-         --hud-border-hover below). */
-      --hud-border-strong: rgba(255, 255, 255, 0.22);
-      /* A glass card's border on hover - one step up from --hud-border,
-         short of --hud-border-strong, so an interactive card visibly
-         responds without reading as a hard outline. */
-      --hud-border-hover: rgba(255, 255, 255, 0.16);
-      /* Shared corner rounding - cards vs. smaller controls (inputs,
-         buttons, filter pills). Dialogs stay their own literal 14px,
-         distinct enough from both to read as a deliberately larger
-         surface. */
+      color-scheme: dark;
+      --cache-bg: #090B0C;
+      --cache-surface: rgba(15, 18, 19, 0.78);
+      --cache-surface-raised: rgba(27, 32, 35, 0.94);
+      --cache-border: rgba(174, 180, 184, 0.20);
+      --cache-border-highlight: rgba(174, 180, 184, 0.38);
+      --cache-text: #F0F2F2;
+      --cache-text-muted: #A4AAAD;
+      --cache-silver: #AEB4B8;
+      --cache-gunmetal: #1B2023;
+      --cache-olive: #687447;
+      --cache-button: #59643B;
+      --cache-button-hover: #626F42;
+      --cache-olive-light: #8E9A62;
+      --cache-coyote: #C1A071;
+      --cache-danger: #EF767A;
+      --cache-warning: #E8B34C;
+      --cache-success: #7BC98F;
+      --cache-shadow: inset 0 1px 0 rgba(255,255,255,.09), inset 1px 0 0 rgba(255,255,255,.035), inset 0 -1px 0 rgba(0,0,0,.45), 0 8px 24px rgba(0,0,0,.32);
+      --hud-bg: var(--cache-bg);
+      --hud-bg-2: #0D0F10;
+      --hud-sidebar-bg: #131618;
+      --hud-panel-bg: var(--cache-surface);
+      --hud-white: var(--cache-text);
+      --hud-white-dim: var(--cache-text-muted);
+      --hud-mute: #949CA0;
+      --hud-good: var(--cache-success);
+      --hud-accent: var(--cache-olive-light);
+      --hud-border: var(--cache-border);
+      --hud-border-strong: var(--cache-border-highlight);
+      --hud-border-hover: var(--cache-border-highlight);
       --hud-radius: 10px;
       --hud-radius-sm: 8px;
-      /* The base glass blur every card/control reads against;
-         larger surfaces (dialogs) use a proportionally larger literal
-         blur rather than this token. */
-      --hud-blur: 18px;
-      --hud-amber: #e8b34c;
-      --hud-red: #e5484d;
-      /* Wishlist's own hue - distinct from --hud-amber (still used for
-         low-ammo/"installed elsewhere" warnings) so a wishlist badge/card
-         tint doesn't visually collide with an unrelated warning state on
-         the same card. */
-      --hud-purple: #a78bfa;
+      --hud-blur: 10px;
+      --hud-amber: var(--cache-warning);
+      --hud-red: var(--cache-danger);
+      --hud-purple: var(--cache-coyote);
       --hud-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-
       --primary-color: var(--hud-accent);
       --secondary-color: var(--hud-amber);
       --primary-background-color: var(--hud-bg);
@@ -177,26 +106,23 @@ export class CachePanel extends LitElement {
       --primary-text-color: var(--hud-white);
       --secondary-text-color: var(--hud-white-dim);
       --divider-color: var(--hud-border);
-      --text-primary-color: #0a0a0b;
+      --text-primary-color: #090B0C;
       --error-color: var(--hud-red);
 
       background: var(--hud-bg);
       color: var(--hud-white);
       font-family: var(--hud-font);
     }
-    /* A soft, colorless ambient highlight - not decoration for its own
-       sake, but what makes the glass cards elsewhere actually READ as
-       glass: a frosted, semi-transparent panel over a perfectly flat
-       background is visually identical to an opaque one, since blur has
-       nothing to refract. This gives every backdrop-filter blur surface
-       something to catch. */
+    /* Restrained contour texture remains behind all content. */
     :host::before {
       content: "";
       position: absolute;
       inset: 0;
       pointer-events: none;
       z-index: 0;
-      background: radial-gradient(ellipse 900px 560px at 22% -8%, rgba(255, 255, 255, 0.05), transparent 60%);
+      background:
+        repeating-radial-gradient(ellipse at 110% 85%, transparent 0 29px, rgba(174,180,184,.045) 30px 31px, transparent 32px 54px),
+        radial-gradient(ellipse at 5% 10%, rgba(169,131,82,.09), transparent 55%);
     }
     /* A faint film-grain texture, tiled across the ENTIRE host bounds
        (unlike the radial highlight above, which only lights up the
@@ -305,9 +231,9 @@ export class CachePanel extends LitElement {
        thin edge highlight (not a hard outline) - restrained, no strong
        color. */
     button.nav-item.active {
-      color: var(--hud-white);
-      background: color-mix(in srgb, var(--hud-white) 9%, transparent);
-      box-shadow: inset 0 0 0 1px var(--hud-border);
+      color: var(--cache-coyote);
+      background: linear-gradient(120deg, rgba(104,116,71,.22), rgba(27,32,35,.55));
+      box-shadow: inset 3px 0 var(--cache-coyote), inset 0 0 0 1px var(--hud-border);
     }
     .status-card {
       margin: 12px;
@@ -425,6 +351,19 @@ export class CachePanel extends LitElement {
         padding: 10px 8px;
       }
     }
+    .logo-text small, .page-heading small { display: block; font-size: 10px; color: var(--cache-text-muted); letter-spacing: .06em; margin-top: 5px; }
+    .page-heading { margin-right: auto; min-width: 0; }
+    .page-heading h1 { font-size: 22px; letter-spacing: .06em; text-transform: uppercase; margin: 0; }
+    button.nav-item { min-height: 44px; }
+    button:focus-visible { outline: 2px solid var(--cache-coyote); outline-offset: 2px; }
+    @media (max-width: 700px) {
+      main { padding: 12px; }
+      nav { padding: 4px 6px; }
+      .topbar { padding: 12px; }
+      .page-heading h1 { font-size: 18px; }
+      .page-heading small { font-size: 9px; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   `;
 
   private _selectTab(tab: Tab): void {
@@ -490,13 +429,16 @@ export class CachePanel extends LitElement {
       <aside class="sidebar">
         <div class="logo">
           <div class="logo-mark"><ha-icon icon="mdi:safe"></ha-icon></div>
-          <div class="logo-text">${state.settings?.collectionName ?? "Cache"}</div>
+          <div class="logo-text">CACHE<small>${state.settings?.collectionName ?? "Tactical Asset Management"}</small></div>
         </div>
-        <nav>
+        <nav aria-label="Cache navigation">
           ${TABS.map(
             (tab) => html`
               <button
                 class="nav-item ${this._tab === tab.id ? "active" : ""}"
+                aria-label=${tab.label}
+                title=${tab.label}
+                aria-current=${this._tab === tab.id ? "page" : "false"}
                 @click=${() => this._selectTab(tab.id)}
               >
                 <ha-icon icon=${tab.icon}></ha-icon>
@@ -512,6 +454,7 @@ export class CachePanel extends LitElement {
       </aside>
       <div class="content-col">
         <div class="topbar">
+          <div class="page-heading"><h1>${TABS.find(tab => tab.id === this._tab)?.label}</h1><small>Tactical Asset Management</small></div>
           ${userName
             ? html`
                 <div class="operator">
@@ -582,3 +525,4 @@ declare global {
     "cache-panel": CachePanel;
   }
 }
+

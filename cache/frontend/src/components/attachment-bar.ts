@@ -260,7 +260,7 @@ export class CacheAttachmentBar extends LitElement {
        not a dramatic floating effect). */
     .attachment-card {
       position: relative;
-      background: color-mix(in srgb, #16181b 46%, transparent);
+      background: var(--cache-surface);
       backdrop-filter: blur(var(--hud-blur, 18px)) saturate(120%);
       -webkit-backdrop-filter: blur(var(--hud-blur, 18px)) saturate(120%);
       border: 1px solid rgba(255, 255, 255, 0.1);
@@ -332,7 +332,7 @@ export class CacheAttachmentBar extends LitElement {
       text-overflow: ellipsis;
     }
     .val.empty {
-      color: #6b7078;
+      color: var(--cache-text-muted);
       font-style: italic;
     }
     .overflow-count {
@@ -340,6 +340,7 @@ export class CacheAttachmentBar extends LitElement {
       font-weight: 700;
       color: #f2f4f6;
     }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   `;
 
   private _onSlotClick(slotType: string): void {
@@ -446,3 +447,4 @@ declare global {
     "cache-attachment-bar": CacheAttachmentBar;
   }
 }
+

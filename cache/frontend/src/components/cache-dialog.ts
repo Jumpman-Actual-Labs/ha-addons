@@ -38,11 +38,13 @@ export class CacheDialog extends LitElement {
        floating effect. */
     .surface {
       position: relative;
+      box-sizing: border-box;
+      width: calc(100% - 24px);
       max-width: var(--dialog-width, 480px);
       margin: 6vh auto 0;
-      background: color-mix(in srgb, var(--card-background-color, #16181b) 62%, transparent);
+      background: var(--cache-surface-raised, rgba(27,32,35,.94));
       color: var(--primary-text-color, #f2f4f6);
-      border-radius: 14px;
+      border-radius: 10px;
       border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.1));
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 -18px 28px -22px rgba(0, 0, 0, 0.26),
         0 4px 14px rgba(0, 0, 0, 0.24), 0 26px 54px -16px rgba(0, 0, 0, 0.44);
@@ -70,10 +72,15 @@ export class CacheDialog extends LitElement {
       cursor: pointer;
       color: var(--secondary-text-color, #a0a0a6);
       display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      min-height: 44px;
     }
     .close-btn:hover {
       color: var(--primary-color, #f2f4f6);
     }
+    .close-btn:focus-visible { outline: 2px solid var(--cache-coyote); outline-offset: 2px; }
   `;
 
   private _close(): void {
@@ -98,7 +105,8 @@ export class CacheDialog extends LitElement {
           : ""}
         <slot></slot>
       </div>
-    `;
+      .close-btn:focus-visible { outline: 2px solid var(--cache-coyote); outline-offset: 2px; }
+  `;
   }
 }
 
@@ -107,3 +115,4 @@ declare global {
     "cache-dialog": CacheDialog;
   }
 }
+

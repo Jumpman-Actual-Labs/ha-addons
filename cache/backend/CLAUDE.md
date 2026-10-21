@@ -413,6 +413,19 @@ registration, read it as the add-on equivalent: `storage.py`'s
   (photo scan vs. barcode scan) end up at the same `ScannedAmmoFields`-
   shaped JSON response either way, so the frontend handles them
   identically once the request comes back.
+- `web.py`'s `estimate_value` (`api/estimate_value`) asks OpenAI for a
+  rough used/resale price range via `openai_client.estimate_used_value` -
+  a Structured Outputs call sharing the `_structured_completion` plumbing
+  `scan_ammo_box`/`extract_ammo_fields_from_text` use (renamed from
+  `_extract_fields` and generalized to take a schema). A knowledge-based
+  estimate from the model's training data, NOT live market data - the
+  prompt says so and asks for null-both-prices rather than a guess when
+  the model doesn't recognize the item. Takes one plain text
+  `description` (built by the panel from whatever manufacturer/model/
+  type/caliber/condition is on file), so one endpoint serves firearms and
+  parts. Persists nothing - the panel shows the range for the user to
+  review and explicitly apply to `current_estimated_value`/
+  `estimated_value`.
 - `openai_client.py` - vision-capable OpenAI chat-completions calls (plain
   `aiohttp` REST, not the `openai` pip package, to avoid a new dependency
   for two endpoints) extracting caliber/manufacturer/product_name/

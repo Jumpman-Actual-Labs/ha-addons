@@ -19,6 +19,7 @@ import type {
   StorageLocation,
   TrainingPlan,
   TrainingPlanStep,
+  UsedValueEstimate,
 } from "./types";
 
 export interface HassEntity {
@@ -607,6 +608,14 @@ function parseScannedAmmoFields(body: Record<string, unknown>): ScannedAmmoField
   };
 }
 
+function parseUsedValueEstimate(body: Record<string, unknown>): UsedValueEstimate {
+  return {
+    estimatedLow: numOrNull(body.estimated_low),
+    estimatedHigh: numOrNull(body.estimated_high),
+    confidence: strOrNull(body.confidence),
+  };
+}
+
 export const cacheApi = {
   // ------------------------------------------------------- storage locations
   addStorageLocation(hass: HomeAssistant, name: string, description?: string) {
@@ -822,5 +831,14 @@ export const cacheApi = {
   async lookupAmmoBarcode(hass: HomeAssistant, barcode: string): Promise<ScannedAmmoFields> {
     const body = await postJson(hass, "api/lookup_ammo_barcode", { barcode });
     return parseScannedAmmoFields(body);
+  },
+  // AI-guessed used/resale price range from OpenAI's general knowledge,
+  // not live market data - see UsedValueEstimate's own doc comment.
+  // `description` is a plain text summary the caller builds from whatever
+  // manufacturer/model/type/caliber/condition fields are on file; nothing
+  // here persists anything server-side.
+  async estimateUsedValue(hass: HomeAssistant, description: string): Promise<UsedValueEstimate> {
+    const body = await postJson(hass, "api/estimate_value", { description });
+    return parseUsedValueEstimate(body);
   },
 };

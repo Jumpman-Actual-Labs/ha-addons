@@ -2,7 +2,7 @@ import { LitElement, css, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "../ha-api";
 import { cacheApi } from "../ha-api";
-import type { CacheState, Firearm } from "../types";
+import type { CacheState, Firearm, InventoryItem, UsedValueEstimate } from "../types";
 import { installedBySlot } from "../utils/installed-items";
 import { firearmHeroImage } from "../utils/hero-image";
 import { CONDITIONS, FIREARM_TYPES, FIREARM_USES } from "../types";
@@ -156,6 +156,17 @@ export class CacheFirearmsView extends LitElement {
   @state() private _wishlistFilter: "owned" | "wishlist" | "all" = "owned";
   @state() private _sort: "custom_name" | "purchase_date" | "current_estimated_value" | "lifetime_round_count" = "custom_name";
   @state() private _selectedId: string | null = null;
+  // Detail page's Estimated Value / Purchase Price stat buttons - reset
+  // to collapsed whenever a different firearm is opened (willUpdate),
+  // rather than carrying an expanded state over to a firearm that wasn't
+  // the one it was opened on.
+  @state() private _valueExpanded = false;
+  @state() private _priceExpanded = false;
+  // AI used-value estimate flow (cacheApi.estimateUsedValue) - also reset
+  // on firearm switch, same as the two stat buttons above.
+  @state() private _estimating = false;
+  @state() private _valueEstimate: UsedValueEstimate | null = null;
+  @state() private _estimateError: string | null = null;
 
   @state() private _formOpen = false;
   @state() private _editing: Firearm | null = null;
@@ -365,6 +376,25 @@ export class CacheFirearmsView extends LitElement {
         align-items: center;
         justify-content: center;
       }
+      /* Below 600px .detail-header's photo+text row has no room left for
+         the text column once the fixed 160px photo and its 20px gap are
+         taken out - the title/badges/fields all get squeezed into a
+         sliver and wrap awkwardly. Stack instead, same breakpoint
+         reasoning as .firearms-grid going single-column at 480px, just a
+         little wider since a single centered photo + full-width text
+         needs less room to look right than a 2-column card grid does. */
+      @media (max-width: 600px) {
+        .detail-header {
+          flex-direction: column;
+        }
+        .detail-photo {
+          width: 100%;
+          height: auto;
+          aspect-ratio: 1;
+          max-width: 280px;
+          margin: 0 auto;
+        }
+      }
       .fields {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -376,6 +406,96 @@ export class CacheFirearmsView extends LitElement {
         font-size: 0.75rem;
         color: var(--secondary-text-color, #727272);
         margin: 0;
+      }
+      /* Estimated Value / Purchase Price as clickable disclosure buttons
+         rather than plain .field entries - each toggles a breakdown of
+         the firearm's own value/price plus every owned installed part's,
+         matching how f.effectiveEstimatedValue is actually computed on
+         the backend instead of just showing the opaque total. */
+      .value-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .value-stat {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 180px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--hud-border, rgba(255, 255, 255, 0.08));
+        border-radius: var(--hud-radius-sm, 8px);
+        padding: 10px 14px;
+        cursor: pointer;
+        text-align: left;
+        color: inherit;
+        font: inherit;
+      }
+      .value-stat:hover {
+        border-color: var(--hud-border-hover, rgba(255, 255, 255, 0.16));
+      }
+      .value-stat .stat-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .value-stat label {
+        margin: 0;
+        cursor: pointer;
+      }
+      .value-stat ha-icon {
+        --mdc-icon-size: 18px;
+        color: var(--secondary-text-color, #727272);
+      }
+      .value-stat .amount {
+        font-size: 1.15rem;
+        font-weight: 600;
+      }
+      .value-breakdown {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--hud-border, rgba(255, 255, 255, 0.08));
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .value-breakdown .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 0.85rem;
+        font-weight: 400;
+        color: var(--secondary-text-color, #727272);
+      }
+      .value-breakdown .row span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .value-breakdown .row.total {
+        margin-top: 2px;
+        padding-top: 4px;
+        border-top: 1px solid var(--hud-border, rgba(255, 255, 255, 0.08));
+        color: var(--primary-text-color, #212121);
+        font-weight: 600;
+      }
+      .ai-estimate {
+        margin-top: 10px;
+      }
+      .ai-estimate-result {
+        margin-top: 8px;
+        padding: 10px 14px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--hud-border, rgba(255, 255, 255, 0.08));
+        border-radius: var(--hud-radius-sm, 8px);
+      }
+      .ai-estimate-result > span {
+        font-weight: 600;
+      }
+      .ai-estimate-result button {
+        margin-top: 8px;
       }
       section.sub {
         margin-top: 24px;
@@ -400,6 +520,13 @@ export class CacheFirearmsView extends LitElement {
     }
     if (changed.has("initialWishlistFilter") && this.initialWishlistFilter) {
       this._wishlistFilter = "wishlist";
+    }
+    if (changed.has("_selectedId")) {
+      this._valueExpanded = false;
+      this._priceExpanded = false;
+      this._estimating = false;
+      this._valueEstimate = null;
+      this._estimateError = null;
     }
   }
 
@@ -554,11 +681,152 @@ export class CacheFirearmsView extends LitElement {
     this._purchasePrice = "";
   }
 
+  // Owned (non-wishlist) parts currently installed on a firearm - the
+  // same population logic.firearm_effective_value sums server-side (a
+  // wishlist part previewed on a build shouldn't count as money spent,
+  // see that function's own comment on the backend).
+  private _ownedInstalledParts(f: Firearm): InventoryItem[] {
+    return this.cacheState.inventoryItems.filter(
+      (i) => i.installedFirearmId === f.id && !i.isWishlist
+    );
+  }
+
+  private _renderValueStat(opts: {
+    label: string;
+    total: number | null;
+    rows: { label: string; value: number | null }[];
+    expanded: boolean;
+    onToggle: () => void;
+  }) {
+    const { label, total, rows, expanded, onToggle } = opts;
+    return html`
+      <button
+        class="value-stat"
+        type="button"
+        aria-expanded=${expanded}
+        @click=${onToggle}
+      >
+        <div class="stat-row">
+          <label>${label}</label>
+          <ha-icon icon=${expanded ? "mdi:chevron-up" : "mdi:chevron-down"}></ha-icon>
+        </div>
+        <div class="amount">${formatCurrency(total)}</div>
+        ${expanded
+          ? html`
+              <div class="value-breakdown">
+                ${rows.map(
+                  (r) => html`<div class="row"><span>${r.label}</span><span>${formatCurrency(r.value)}</span></div>`
+                )}
+                <div class="row total"><span>Total</span><span>${formatCurrency(total)}</span></div>
+              </div>
+            `
+          : ""}
+      </button>
+    `;
+  }
+
+  // Plain text summary fed to cacheApi.estimateUsedValue - only whatever
+  // fields are actually on file, so the model isn't asked to reason about
+  // blanks.
+  private _describeFirearm(f: Firearm): string {
+    const parts = [
+      f.manufacturer,
+      f.model,
+      f.firearmType,
+      f.caliber ? `${f.caliber} caliber` : null,
+      f.condition ? `${f.condition} condition` : null,
+    ].filter((p): p is string => Boolean(p));
+    return parts.length > 0 ? parts.join(", ") : f.customName;
+  }
+
+  private async _estimateValue(f: Firearm): Promise<void> {
+    this._estimating = true;
+    this._estimateError = null;
+    this._valueEstimate = null;
+    try {
+      this._valueEstimate = await cacheApi.estimateUsedValue(this.hass, this._describeFirearm(f));
+    } catch (err) {
+      this._estimateError = err instanceof Error ? err.message : "Failed to get an AI estimate";
+    } finally {
+      this._estimating = false;
+    }
+  }
+
+  // Applying is a deliberate second click, never automatic - the estimate
+  // is a guess, not something that should silently overwrite a real field.
+  // Midpoint of the range, rounded to cents; falls back to whichever of
+  // the two bounds came back if only one did.
+  private async _applyEstimate(f: Firearm): Promise<void> {
+    const estimate = this._valueEstimate;
+    if (!estimate || (estimate.estimatedLow === null && estimate.estimatedHigh === null)) return;
+    const mid =
+      estimate.estimatedLow !== null && estimate.estimatedHigh !== null
+        ? (estimate.estimatedLow + estimate.estimatedHigh) / 2
+        : (estimate.estimatedLow ?? estimate.estimatedHigh)!;
+    await cacheApi.updateFirearm(this.hass, f.id, { current_estimated_value: Math.round(mid * 100) / 100 });
+    this._valueEstimate = null;
+  }
+
+  private _renderValueEstimate(f: Firearm) {
+    return html`
+      <div class="ai-estimate">
+        <button
+          class="secondary"
+          type="button"
+          ?disabled=${this._estimating}
+          @click=${() => this._estimateValue(f)}
+        >
+          ${this._estimating ? "Estimating…" : "Get AI Used-Value Estimate"}
+        </button>
+        ${this._estimateError ? html`<p class="small muted">${this._estimateError}</p>` : ""}
+        ${this._valueEstimate
+          ? this._valueEstimate.estimatedLow === null && this._valueEstimate.estimatedHigh === null
+            ? html`<p class="small muted">The AI couldn't estimate this item confidently - try filling in more details (manufacturer, model, condition) and edit the value by hand instead.</p>`
+            : html`
+                <div class="ai-estimate-result">
+                  <span>
+                    AI estimate: ${formatCurrency(this._valueEstimate.estimatedLow)} –
+                    ${formatCurrency(this._valueEstimate.estimatedHigh)}${this._valueEstimate.confidence
+                      ? ` (${this._valueEstimate.confidence} confidence)`
+                      : ""}
+                  </span>
+                  <p class="small muted">Based on general knowledge, not live market data - review before applying.</p>
+                  <button class="secondary" type="button" @click=${() => this._applyEstimate(f)}>
+                    Apply to Estimated Value
+                  </button>
+                </div>
+              `
+          : ""}
+      </div>
+    `;
+  }
+
   private _renderDetail(f: Firearm) {
     const heroPhoto = firearmHeroImage(this.cacheState, f);
     const rangeSessions = this.cacheState.rangeSessions.filter((s) =>
       s.firearms.some((entry) => entry.firearmId === f.id)
     );
+
+    // Estimated Value mirrors the backend's firearm_effective_value: the
+    // firearm's own estimate-or-purchase-price, plus each owned installed
+    // part's own estimate-or-purchase-price - f.effectiveEstimatedValue
+    // IS that backend-computed total, these rows are only the breakdown
+    // of what it's made of. Purchase Price has no backend-computed
+    // aggregate counterpart, so its total is summed client-side purely
+    // for this display, from the same "own + owned installed parts"
+    // population - never sent anywhere.
+    const parts = this._ownedInstalledParts(f);
+    const valueRows = [
+      { label: f.customName, value: f.currentEstimatedValue ?? f.purchasePrice },
+      ...parts.map((i) => ({ label: i.customName, value: i.estimatedValue ?? i.purchasePrice })),
+    ];
+    const priceRows = [
+      { label: f.customName, value: f.purchasePrice },
+      ...parts.map((i) => ({ label: i.customName, value: i.purchasePrice })),
+    ];
+    const priceTotal = priceRows.every((r) => r.value === null)
+      ? null
+      : priceRows.reduce((sum, r) => sum + (r.value ?? 0), 0);
 
     return html`
       <button class="back-link" @click=${() => (this._selectedId = null)}>
@@ -586,8 +854,26 @@ export class CacheFirearmsView extends LitElement {
               <div class="field"><label>Round Count</label><div>${formatNumber(f.lifetimeRoundCount)}</div></div>
               <div class="field"><label>Last Fired</label><div>${formatDate(f.lastFiredDate)}</div></div>
               <div class="field"><label>Last Cleaned</label><div>${formatDate(f.lastCleaningDate)}</div></div>
-              <div class="field"><label>Estimated Value</label><div>${formatCurrency(f.effectiveEstimatedValue)}</div></div>
             </div>
+
+            <div class="value-stats">
+              ${this._renderValueStat({
+                label: "Purchase Price",
+                total: priceTotal,
+                rows: priceRows,
+                expanded: this._priceExpanded,
+                onToggle: () => (this._priceExpanded = !this._priceExpanded),
+              })}
+              ${this._renderValueStat({
+                label: "Estimated Value",
+                total: f.effectiveEstimatedValue,
+                rows: valueRows,
+                expanded: this._valueExpanded,
+                onToggle: () => (this._valueExpanded = !this._valueExpanded),
+              })}
+            </div>
+
+            ${this._renderValueEstimate(f)}
 
             <div class="actions" style="justify-content:flex-start">
               <button class="primary" @click=${() => this._openEdit(f)}>Edit Firearm</button>
@@ -617,7 +903,6 @@ export class CacheFirearmsView extends LitElement {
             <div class="field"><label>Color</label><div>${f.color ?? "—"}</div></div>
             <div class="field"><label>Condition</label><div>${f.condition ?? "—"}</div></div>
             <div class="field"><label>Purchase Date</label><div>${formatDate(f.purchaseDate)}</div></div>
-            <div class="field"><label>Purchase Price</label><div>${formatCurrency(f.purchasePrice)}</div></div>
             <div class="field"><label>Purchased From</label><div>${f.purchasedFrom ?? "—"}</div></div>
             <div class="field"><label>Warranty Expiration</label><div>${formatDate(f.warrantyExpiration)}</div></div>
             ${f.productUrl

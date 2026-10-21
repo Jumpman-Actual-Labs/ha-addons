@@ -5,8 +5,9 @@ Serves the panel itself plus everything it used to get from Home Assistant:
   states.py), pushed over the websocket on every change.
 - `api/services/<name>` - what `hass.callService("cache", name, ...)` used to
   be (see services.py).
-- `api/upload/*`, `api/scan_ammo_box`, `api/lookup_ammo_barcode` - the old
-  integration's http.py views, unchanged apart from where files land.
+- `api/upload/*`, `api/scan_ammo_box`, `api/lookup_ammo_barcode`,
+  `api/estimate_value` - the old integration's http.py views, unchanged
+  apart from where files land.
 - `uploads/<filename>` - uploaded photos/documents (was `/local/cache_uploads/`).
 
 Every path is relative, because ingress serves the add-on under
@@ -50,6 +51,7 @@ from .const import (
 from .coordinator import CacheCoordinator, CacheError
 from .openai_client import (
     OpenAIError,
+    estimate_used_value,
     extract_ammo_fields_from_text,
     get_openai_api_key,
     remove_background,
@@ -422,6 +424,37 @@ async def lookup_ammo_barcode(request: web.Request) -> web.Response:
     return web.json_response(fields)
 
 
+async def estimate_value(request: web.Request) -> web.Response:
+    """Asks OpenAI for a rough used/resale price range for a firearm or
+    part, from its own general knowledge (see openai_client.
+    estimate_used_value) - NOT live market data, nothing here browses the
+    web. Takes a plain text description built by the caller (manufacturer/
+    model/type/caliber/condition, whatever's on file) rather than
+    structured fields, so one endpoint serves both firearms and parts.
+    Nothing is persisted - same "ask AI, return fields, discard the request"
+    shape as scan_ammo_box/lookup_ammo_barcode; the panel shows the estimate
+    for the user to review and explicitly apply if they want it."""
+    try:
+        data = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return _error("Invalid request body")
+
+    description = str(data.get("description") or "").strip()
+    if not description:
+        return _error("A description is required")
+
+    api_key = await get_openai_api_key(request.app[CONFIG_KEY])
+    if not api_key:
+        return _error(_NO_OPENAI_KEY)
+
+    try:
+        estimate = await estimate_used_value(request.app[SESSION_KEY], api_key, description)
+    except OpenAIError as err:
+        return _error(str(err), status=502)
+
+    return web.json_response(estimate)
+
+
 # -------------------------------------------------------------------- app
 
 
@@ -462,6 +495,7 @@ def create_app(
     app.router.add_post("/api/upload/diagram_image", upload_diagram_image)
     app.router.add_post("/api/scan_ammo_box", scan_ammo_box_view)
     app.router.add_post("/api/lookup_ammo_barcode", lookup_ammo_barcode)
+    app.router.add_post("/api/estimate_value", estimate_value)
     app.router.add_static("/uploads", config.uploads_dir)
     if (config.static_dir / "assets").is_dir():
         app.router.add_static("/assets", config.static_dir / "assets")
