@@ -13,9 +13,11 @@ versioned update flow. Those two repos are retired; start Cache work here.
 - `cache/config.yaml` - the add-on: ingress panel (`panel_icon: mdi:safe`),
   `homeassistant_config:ro` map (only for the one-time import and the
   secrets.yaml key fallback), `services: mqtt:want`, options
-  (`openai_api_key`, `mqtt_enabled`, `log_level`). `image:` points at
-  GHCR, so Supervisor pulls prebuilt images instead of building on the
-  device.
+  (`openai_api_key`, `mqtt_enabled`, `log_level`). No `image:` key, so
+  Supervisor builds the Dockerfile on the HA box itself at install/update
+  (a few minutes). Prebuilt GHCR images were tried first and dropped: the
+  Jumpman-Actual-Labs org blocks public packages, and Supervisor can't pull
+  private ones.
 - `cache/Dockerfile` - two stages: Node builds `cache/frontend`, then the
   HA Python base image gets the backend + the built panel in
   `/app/static`. Started by s6 (`rootfs/etc/services.d/cache/run`, which
@@ -49,12 +51,10 @@ versioned update flow. Those two repos are retired; start Cache work here.
 ## Release / deploy
 
 Nothing here auto-deploys to the live house like the integration repos did.
-On push to `main`, `.github/workflows/build.yml` builds and pushes
-`ghcr.io/jumpman-actual-labs/{aarch64,amd64}-addon-cache:<version>`; Home
-Assistant offers the update only when `cache/config.yaml`'s `version`
-changes. So: bump `version` + `cache/CHANGELOG.md` in the same change as
-anything meant to ship. The GHCR packages must be public for Supervisor to
-pull them.
+Home Assistant offers an update only when `cache/config.yaml`'s `version`
+changes, then rebuilds the image on the HA box. So: bump `version` +
+`cache/CHANGELOG.md` in the same change as anything meant to ship. The
+repo must stay public - the Add-on Store can't add a private repository.
 
 `validate.yml` runs backend ruff + pytest, frontend lint + build, and the
 add-on linter.

@@ -6,7 +6,6 @@ url: https://github.com/Jumpman-Actual-Labs/ha-cache-addon
 arch:
   - aarch64
   - amd64
-image: ghcr.io/jumpman-actual-labs/{arch}-addon-cache
 init: false
 ingress: true
 ingress_stream: true
