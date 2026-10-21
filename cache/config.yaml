@@ -1,0 +1,33 @@
+name: Cache
+version: "1.0.0"
+slug: cache
+description: Firearm, parts, ammunition, maintenance and range tracking
+url: https://github.com/Jumpman-Actual-Labs/ha-cache-addon
+arch:
+  - aarch64
+  - amd64
+image: ghcr.io/jumpman-actual-labs/{arch}-addon-cache
+init: false
+startup: application
+boot: auto
+ingress: true
+ingress_port: 8099
+ingress_stream: true
+panel_icon: mdi:safe
+panel_title: Cache
+# Read-only, only so the first start can import the old integration's
+# .storage/cache_data_* document and www/cache_uploads/ files, and fall back
+# to secrets.yaml's openai_api_key. Nothing is ever written there.
+map:
+  - homeassistant_config:ro
+services:
+  - mqtt:want
+backup: hot
+options:
+  openai_api_key: ""
+  mqtt_enabled: true
+  log_level: info
+schema:
+  openai_api_key: password?
+  mqtt_enabled: bool
+  log_level: list(debug|info|warning|error)

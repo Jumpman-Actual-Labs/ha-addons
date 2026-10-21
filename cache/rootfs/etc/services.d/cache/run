@@ -1,0 +1,5 @@
+#!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
+bashio::log.info "Starting Cache"
+cd /app || bashio::exit.nok "App directory missing"
+exec python3 -m cache_addon

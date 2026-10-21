@@ -1,0 +1,9 @@
+#!/usr/bin/env bashio
+# shellcheck shell=bash
+# Take the whole container down with the service, so the Supervisor sees
+# the crash and its watchdog can restart the add-on.
+if [[ "$1" -ne 0 ]] && [[ "$1" -ne 256 ]]; then
+  bashio::log.warning "Cache exited with code $1"
+  echo "$1" > /run/s6-linux-init-container-results/exitcode
+  exec /run/s6/basedir/bin/halt
+fi
