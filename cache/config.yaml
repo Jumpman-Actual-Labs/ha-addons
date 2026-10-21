@@ -8,10 +8,7 @@ arch:
   - amd64
 image: ghcr.io/jumpman-actual-labs/{arch}-addon-cache
 init: false
-startup: application
-boot: auto
 ingress: true
-ingress_port: 8099
 ingress_stream: true
 panel_icon: mdi:safe
 panel_title: Cache
@@ -22,7 +19,6 @@ map:
   - homeassistant_config:ro
 services:
   - mqtt:want
-backup: hot
 options:
   openai_api_key: ""
   mqtt_enabled: true
