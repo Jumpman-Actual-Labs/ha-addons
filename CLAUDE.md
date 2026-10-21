@@ -1,15 +1,43 @@
+# Jumpman Actual Labs add-ons
+
+The single Home Assistant add-on repository for all Jumpman Actual Labs
+add-ons. Users add `https://github.com/Jumpman-Actual-Labs/ha-addons` to the
+Add-on Store once; every top-level folder with a `config.yaml` shows up as
+its own installable add-on. (Renamed from `ha-cache-addon` so new add-ons
+don't each need their own repository.)
+
+## Adding a new add-on
+
+1. Create a top-level folder named after the add-on's `slug`
+   (e.g. `relay/`) with `config.yaml`, `Dockerfile`, `build.yaml`,
+   `DOCS.md`, `CHANGELOG.md`, `icon.png`, `logo.png`. Use `cache/` as the
+   reference. Set `url:` in `config.yaml` and the
+   `org.opencontainers.image.source` label in `build.yaml` to this repo's
+   URL.
+2. Keep the slug unique in this repo - it's part of the add-on's ID.
+3. Add a row to the table in `README.md`.
+4. If it has tests/builds, add `.github/workflows/<slug>.yml` with
+   `paths: ["<slug>/**", ...]` filters like `cache.yml`. `addon-lint.yml`
+   finds and lints every add-on folder automatically.
+5. Push, then in HA: Add-on Store > ⋮ > Check for updates.
+
+Don't leave scratch/template folders containing a `config.yaml` at the
+top level - Supervisor would list them as add-ons.
+
+Each add-on keeps its own CLAUDE.md for its internals. The rest of this
+file is about Cache.
+
 # Cache add-on
 
 Firearm, parts, ammunition, maintenance and range tracking as a Home
-Assistant **add-on** (this repo is also the add-on repository users add to
-the Add-on Store). Replaced the `ha-cache-integration` +
+Assistant **add-on**. Replaced the `ha-cache-integration` +
 `ha-cache-frontend` pair (a native integration + custom panel, the Stash/
 Hustle pattern) - moved to an add-on for the Add-on Store's install and
 versioned update flow. Those two repos are retired; start Cache work here.
 
 ## Layout
 
-- `repository.yaml` - add-on repository manifest.
+- `repository.yaml` - add-on repository manifest (shared by all add-ons).
 - `cache/config.yaml` - the add-on: ingress panel (`panel_icon: mdi:ammunition`),
   `homeassistant_config:ro` map (only for the one-time import and the
   secrets.yaml key fallback), `services: mqtt:want`, options
@@ -56,8 +84,8 @@ changes, then rebuilds the image on the HA box. So: bump `version` +
 `cache/CHANGELOG.md` in the same change as anything meant to ship. The
 repo must stay public - the Add-on Store can't add a private repository.
 
-`validate.yml` runs backend ruff + pytest, frontend lint + build, and the
-add-on linter.
+`cache.yml` runs backend ruff + pytest and frontend lint + build when
+`cache/` changes; `addon-lint.yml` runs the add-on linter on every add-on.
 
 ## Local dev
 

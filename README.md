@@ -1,12 +1,14 @@
-<p align="center"><img src="cache/logo.png" alt="Cache" width="256"></p>
+# Jumpman Actual Labs Add-ons
 
-# Cache add-on repository
-
-Add this repository to Home Assistant (Settings > Add-ons > Add-on Store >
-⋮ > Repositories):
+Home Assistant add-ons by Jumpman Actual Labs. Add this repository once
+(Settings > Add-ons > Add-on Store > ⋮ > Repositories):
 
 ```
-https://github.com/Jumpman-Actual-Labs/ha-cache-addon
+https://github.com/Jumpman-Actual-Labs/ha-addons
 ```
 
-then install **Cache**. See [cache/DOCS.md](cache/DOCS.md).
+then install whichever add-ons you want. Nothing installs until you pick it.
+
+| Add-on | Description |
+| --- | --- |
+| [Cache](cache/DOCS.md) | Firearm, parts, ammunition, maintenance and range tracking |

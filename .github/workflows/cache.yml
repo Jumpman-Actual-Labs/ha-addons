@@ -1,9 +1,11 @@
-name: Validate
+name: Cache
 
 on:
   pull_request:
+    paths: ["cache/**", ".github/workflows/cache.yml"]
   push:
     branches: [main]
+    paths: ["cache/**", ".github/workflows/cache.yml"]
 
 jobs:
   backend:
@@ -37,11 +39,3 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
-
-  addon-lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: frenck/action-addon-linter@v2
-        with:
-          path: ./cache

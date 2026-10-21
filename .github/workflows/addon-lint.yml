@@ -1,0 +1,36 @@
+name: Add-on lint
+
+# Lints every add-on in the repo: any top-level folder with a config.yaml.
+# New add-ons are picked up automatically.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    outputs:
+      addons: ${{ steps.find.outputs.addons }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: find
+        run: |
+          addons=$(find . -mindepth 2 -maxdepth 2 -name config.yaml -printf '%h\n' \
+            | sed 's|^\./||' | sort | jq -R . | jq -sc .)
+          echo "Found: $addons"
+          echo "addons=$addons" >> "$GITHUB_OUTPUT"
+
+  lint:
+    needs: find
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        addon: ${{ fromJSON(needs.find.outputs.addons) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: frenck/action-addon-linter@v2
+        with:
+          path: ./${{ matrix.addon }}
