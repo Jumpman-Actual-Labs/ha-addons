@@ -1,3 +1,5 @@
+<p align="center"><img src="cache/logo.png" alt="Cache" width="256"></p>
+
 # Cache add-on repository
 
 Add this repository to Home Assistant (Settings > Add-ons > Add-on Store >

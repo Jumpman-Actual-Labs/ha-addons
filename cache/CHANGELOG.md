@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.3
+
+- New Cache logo and icon.
+
 ## 1.0.2
 
 - Brings in the latest Cache work that 1.0.0 missed: the tactical redesign

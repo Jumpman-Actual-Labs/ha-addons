@@ -1,5 +1,5 @@
 name: Cache
-version: "1.0.2"
+version: "1.0.3"
 slug: cache
 description: Firearm, parts, ammunition, maintenance and range tracking
 url: https://github.com/Jumpman-Actual-Labs/ha-cache-addon
