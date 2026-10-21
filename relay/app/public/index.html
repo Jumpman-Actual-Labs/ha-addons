@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Relay</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar" id="sidebar" aria-label="Chats">
+    <div class="side-head"><div class="brand"><span class="brand-mark" aria-hidden="true">↗</span> Relay</div>
+      <button class="btn primary" id="newChat">＋ New conversation</button>
+    </div>
+    <div class="side-label">Recent conversations</div><nav class="chat-list" id="chatList" aria-label="Recent conversations"></nav>
+    <div class="side-foot">
+      <div class="conn" id="connClaude"><span class="dot"></span>Claude</div>
+      <div class="conn" id="connCodex"><span class="dot"></span>ChatGPT</div>
+      <div class="conn" id="connHome"><span class="dot"></span>Home</div>
+      <button class="btn ghost" id="openFiles">Files</button>
+      <button class="btn ghost" id="openSettings">Accounts</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="btn ghost icon" id="toggleSidebar" aria-label="Show chats" aria-expanded="false">☰</button>
+      <h1 id="chatTitle">New conversation</h1>
+      <div class="chat-actions" id="chatActions" hidden>
+        <button class="btn ghost" id="copyChat" type="button" aria-label="Copy chat"><span aria-hidden="true">⧉</span><span class="lbl"> Copy chat</span></button>
+        <button class="btn ghost" id="exportLog" type="button" aria-label="Export log"><span aria-hidden="true">⤓</span><span class="lbl"> Export log</span></button>
+        <button class="btn ghost danger" id="deleteChat" type="button" aria-label="Delete chat"><span aria-hidden="true">✕</span><span class="lbl"> Delete chat</span></button>
+      </div>
+    </header>
+
+    <section class="thread" id="thread" aria-live="polite">
+      <div class="empty" id="empty">
+        <div class="welcome-badge">✦ Your AI workspace</div><p class="empty-title">One place. Two powerful assistants.</p>
+        <p>Talk to Claude or ChatGPT without switching apps. Keep everything on Auto and Relay will choose the assistant and workflow for the job.</p><div class="welcome-cards"><div class="welcome-card"><strong>✦ Chat</strong><span>Ask questions, write and brainstorm.</span></div><div class="welcome-card"><strong>⌕ Look up</strong><span>Search the web and read Home Assistant data.</span></div><div class="welcome-card"><strong>⚡ Agent</strong><span>Work with files and tools in <code id="wsPath">/share/relay/workspace</code>.</span></div></div>
+      </div>
+    </section>
+
+    <div class="limit" id="limitBar" hidden></div>
+
+    <form class="composer" id="composer">
+      <div class="input-wrap"><textarea id="input" rows="1" placeholder="Ask Relay anything…" aria-label="Message"></textarea><div class="send-wrap"><button type="button" class="btn ghost danger" id="stop" hidden>Stop</button><button type="submit" class="btn primary" id="send">Send ↑</button></div></div>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Who answers" data-key="provider">
+          <span class="seg-label">Who</span>
+          <button type="button" data-v="auto" aria-pressed="true">Auto</button>
+          <button type="button" data-v="claude" aria-pressed="false">Claude</button>
+          <button type="button" data-v="codex" aria-pressed="false">ChatGPT</button>
+        </div>
+        <div class="seg" role="group" aria-label="How" data-key="mode">
+          <span class="seg-label">How</span>
+          <button type="button" data-v="auto" aria-pressed="true">Auto</button>
+          <button type="button" data-v="chat" aria-pressed="false">Chat</button>
+          <button type="button" data-v="lookup" aria-pressed="false">Look up</button>
+          <button type="button" data-v="agent" aria-pressed="false">Agent</button>
+        </div>
+        <div class="seg" role="group" aria-label="Effort" data-key="effort">
+          <span class="seg-label">Effort</span>
+          <button type="button" data-v="auto" aria-pressed="true">Auto</button>
+          <button type="button" data-v="low" aria-pressed="false">Low</button>
+          <button type="button" data-v="medium" aria-pressed="false">Med</button>
+          <button type="button" data-v="high" aria-pressed="false">High</button>
+        </div>
+        <label class="check"><input type="checkbox" id="heavy"> Hard problem</label>
+
+      </div><div class="composer-hint">Enter to send · Shift + Enter for a new line</div>
+    </form>
+  </main>
+</div>
+
+<dialog id="settings">
+  <form method="dialog" class="settings-body">
+    <h2>Accounts</h2>
+    <section>
+      <h3>Claude</h3>
+      <p id="claudeState"></p>
+      <p class="hint">On a computer where you use Claude Code, run <code>claude setup-token</code>, sign in with your Claude Pro account, then paste the token into this add-on's Configuration tab in Home Assistant and restart the add-on.</p>
+    </section>
+    <section>
+      <h3>ChatGPT</h3>
+      <p id="codexState"></p>
+      <div class="row">
+        <button type="button" class="btn primary" id="codexLogin">Connect ChatGPT</button>
+        <button type="button" class="btn ghost" id="codexLogout">Disconnect</button>
+      </div>
+      <pre class="login-log" id="codexLog" hidden></pre>
+      <p class="hint">Connecting shows a link and a one-time code. Open the link on any device, sign in with your ChatGPT Plus account and enter the code.</p>
+    </section>
+    <section>
+      <h3>Home Assistant</h3>
+      <p id="homeState"></p>
+      <p class="hint">The models can read entity states and your weather forecast, never change them. Turn this off or hide entities in the add-on's Configuration tab.</p>
+    </section>
+    <div class="row end"><button class="btn">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="filesDialog">
+  <form method="dialog" class="settings-body">
+    <h2>Files</h2>
+    <p class="hint">Everything the agents have saved in the workspace, newest first.</p>
+    <div class="file-list" id="fileList"></div>
+    <div class="row end"><button class="btn">Close</button></div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script src="./app.js"></script>
+</body>
+</html>

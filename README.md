@@ -12,3 +12,4 @@ then install whichever add-ons you want. Nothing installs until you pick it.
 | Add-on | Description |
 | --- | --- |
 | [Cache](cache/DOCS.md) | Firearm, parts, ammunition, maintenance and range tracking |
+| [Relay](relay/DOCS.md) | One chat for your Claude Pro and ChatGPT Plus subscriptions |

@@ -1,0 +1,40 @@
+configuration:
+  claude_oauth_token:
+    name: Claude token
+    description: Run "claude setup-token" on a computer where you use Claude Code and paste the token here. It uses your Claude Pro plan, not API billing.
+  default_chat_provider:
+    name: Default for quick chats
+    description: Which subscription answers simple questions when the provider is set to Auto.
+  default_agent_provider:
+    name: Default for agent work
+    description: Which subscription handles multi-step work with files and commands when the provider is set to Auto.
+  claude_model:
+    name: Claude model
+    description: Model used for Claude by default (sonnet, opus or haiku).
+  claude_heavy_model:
+    name: Claude model for hard problems
+    description: Used when you turn on "Hard problem" in the chat.
+  codex_model:
+    name: ChatGPT model
+    description: Leave empty to use the Codex default for your plan.
+  codex_agent_sandbox:
+    name: ChatGPT agent sandbox
+    description: The add-on container is already isolated. Use workspace-write only if Codex's own sandbox works on your host.
+  max_agent_turns:
+    name: Agent step limit
+    description: Stops a runaway agent after this many steps.
+  bash_max_output_chars:
+    name: Command output cap
+    description: Long command output is cut to this many characters before it goes back to the model. Lower saves usage.
+  compact_at_tokens:
+    name: Compact long chats at
+    description: When a chat's context passes this size, it is summarized and continued in a fresh session.
+  home_access:
+    name: Let models read Home Assistant
+    description: Gives Claude and ChatGPT read-only tools to look up entity states and your weather forecast. They can never change anything.
+  home_hidden_entities:
+    name: Hide these entities
+    description: Entity ids or patterns the models can't see, like camera.* or sensor.bank_*.
+  home_area:
+    name: Your area
+    description: Like "Charlotte, NC". Helps look-ups pick the local team, store or weather when a question is ambiguous. If empty, Relay uses your Home Assistant location.

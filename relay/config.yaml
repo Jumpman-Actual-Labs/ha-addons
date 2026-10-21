@@ -1,0 +1,48 @@
+name: Relay
+version: "0.3.1"
+slug: relay
+description: One chat for your Claude Pro and ChatGPT Plus subscriptions
+url: https://github.com/Jumpman-Actual-Labs/ha-addons
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+ingress: true
+ingress_port: 8099
+ingress_stream: true
+panel_icon: mdi:transit-connection-variant
+panel_title: Relay
+panel_admin: true
+homeassistant_api: true
+map:
+  - share:rw
+options:
+  claude_oauth_token: ""
+  default_chat_provider: codex
+  default_agent_provider: claude
+  claude_model: sonnet
+  claude_heavy_model: opus
+  codex_model: ""
+  codex_agent_sandbox: danger-full-access
+  max_agent_turns: 60
+  bash_max_output_chars: 20000
+  compact_at_tokens: 120000
+  home_access: true
+  home_hidden_entities: []
+  home_area: ""
+schema:
+  claude_oauth_token: password
+  default_chat_provider: list(claude|codex)
+  default_agent_provider: list(claude|codex)
+  claude_model: str
+  claude_heavy_model: str
+  codex_model: str?
+  codex_agent_sandbox: list(workspace-write|danger-full-access)
+  max_agent_turns: int(5,500)
+  bash_max_output_chars: int(2000,200000)
+  compact_at_tokens: int(20000,800000)
+  home_access: bool
+  home_hidden_entities:
+    - str
+  home_area: str?
