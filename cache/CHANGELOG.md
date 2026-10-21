@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.5
+
+- Sidebar icon is now an ammunition icon instead of a safe.
+
 ## 1.0.4
 
 - Ammunition cards: Edit and Delete moved into a ⋮ menu, and Add/Remove

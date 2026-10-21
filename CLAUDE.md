@@ -10,7 +10,7 @@ versioned update flow. Those two repos are retired; start Cache work here.
 ## Layout
 
 - `repository.yaml` - add-on repository manifest.
-- `cache/config.yaml` - the add-on: ingress panel (`panel_icon: mdi:safe`),
+- `cache/config.yaml` - the add-on: ingress panel (`panel_icon: mdi:ammunition`),
   `homeassistant_config:ro` map (only for the one-time import and the
   secrets.yaml key fallback), `services: mqtt:want`, options
   (`openai_api_key`, `mqtt_enabled`, `log_level`). No `image:` key, so

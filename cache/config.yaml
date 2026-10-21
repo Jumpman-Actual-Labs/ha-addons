@@ -1,5 +1,5 @@
 name: Cache
-version: "1.0.4"
+version: "1.0.5"
 slug: cache
 description: Firearm, parts, ammunition, maintenance and range tracking
 url: https://github.com/Jumpman-Actual-Labs/ha-cache-addon
@@ -9,7 +9,7 @@ arch:
 init: false
 ingress: true
 ingress_stream: true
-panel_icon: mdi:safe
+panel_icon: mdi:ammunition
 panel_title: Cache
 # Read-only, only so the first start can import the old integration's
 # .storage/cache_data_* document and www/cache_uploads/ files, and fall back
