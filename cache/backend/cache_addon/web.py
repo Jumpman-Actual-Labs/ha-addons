@@ -240,15 +240,18 @@ async def _unlink_upload(config: AddonConfig, filename: str) -> None:
 
 
 async def upload_photo(request: web.Request) -> web.Response:
-    """Every photo uploaded here - firearm gallery or inventory item (part) -
-    is always run through OpenAI's background removal first
-    (`openai_client.remove_background`) before saving, so it reads as a
-    clean cutout rather than a product photo with its original background.
+    """With an OpenAI key configured, every photo uploaded here - firearm
+    gallery or inventory item (part) - is run through OpenAI's background
+    removal first (`openai_client.remove_background`) before saving, so it
+    reads as a clean cutout rather than a product photo with its original
+    background. Without a key the photo is saved exactly as uploaded -
+    background removal is a nicety, and a new install shouldn't be unable
+    to add photos at all until someone sets up an OpenAI account. A key
+    that IS configured but fails (OpenAI down, out of credit) still fails
+    the upload rather than silently skipping the cutout the user expects.
     Parts and firearms both go through this same endpoint regardless of
-    entity_type. A missing OpenAI key fails the upload outright rather than
-    silently storing the unprocessed original. Existing photos uploaded
-    before this behavior existed aren't retroactively touched - see
-    services.py's `reprocess_firearm_photos` for that."""
+    entity_type. Photos saved without removal can be cut out later with
+    services.py's `reprocess_firearm_photos` once a key is added."""
     config = request.app[CONFIG_KEY]
     form = await request.post()
 
@@ -258,21 +261,23 @@ async def upload_photo(request: web.Request) -> web.Response:
         return _error("entity_type ('firearm' or 'inventory_item') and entity_id are required")
 
     api_key = await get_openai_api_key(config)
-    if not api_key:
-        return _error(_NO_OPENAI_KEY)
 
     try:
         image_bytes, content_type, original_filename = _read_upload(
             form.get("file"), ALLOWED_PHOTO_CONTENT_TYPES
         )
-        try:
-            processed_bytes = await remove_background(
-                request.app[SESSION_KEY], api_key, image_bytes, content_type
-            )
-        except OpenAIError as err:
-            return _error(str(err), status=502)
-        stored_name = f"{uuid.uuid4().hex}.png"
-        await _write_bytes(config, stored_name, processed_bytes)
+        if api_key:
+            try:
+                image_bytes = await remove_background(
+                    request.app[SESSION_KEY], api_key, image_bytes, content_type
+                )
+            except OpenAIError as err:
+                return _error(str(err), status=502)
+            ext = ".png"
+        else:
+            ext = Path(original_filename).suffix[:10]
+        stored_name = f"{uuid.uuid4().hex}{ext}"
+        await _write_bytes(config, stored_name, image_bytes)
 
         photo = await request.app[COORDINATOR_KEY].async_add_photo(
             str(entity_type), str(entity_id), stored_name, original_filename

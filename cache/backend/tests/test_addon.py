@@ -256,6 +256,45 @@ async def test_states_endpoint_and_websocket_push(client, coordinator):
     await ws.close()
 
 
+async def test_photo_saved_as_is_without_openai_key(client, coordinator, config):
+    firearm = await coordinator.async_add_firearm(custom_name="AR", firearm_type="Rifle")
+    form = aiohttp.FormData()
+    form.add_field("entity_type", "firearm")
+    form.add_field("entity_id", firearm.id)
+    form.add_field("file", b"jpeg-bytes", filename="ar.jpg", content_type="image/jpeg")
+
+    resp = await client.post("/api/upload/photo", data=form)
+    assert resp.status == 200
+    body = await resp.json()
+    assert body["filename"].endswith(".jpg")
+    assert body["is_primary"] is True
+    assert (config.uploads_dir / body["filename"]).read_bytes() == b"jpeg-bytes"
+    assert coordinator.firearms[0].photos[0].filename == body["filename"]
+
+
+async def test_photo_upload_still_fails_when_configured_key_errors(
+    client, coordinator, config, monkeypatch
+):
+    from cache_addon import web
+    from cache_addon.openai_client import OpenAIError
+
+    async def _fail(*_args):
+        raise OpenAIError("OpenAI is down")
+
+    config.openai_api_key = "sk-test"
+    monkeypatch.setattr(web, "remove_background", _fail)
+    firearm = await coordinator.async_add_firearm(custom_name="AR", firearm_type="Rifle")
+    form = aiohttp.FormData()
+    form.add_field("entity_type", "firearm")
+    form.add_field("entity_id", firearm.id)
+    form.add_field("file", b"jpeg-bytes", filename="ar.jpg", content_type="image/jpeg")
+
+    resp = await client.post("/api/upload/photo", data=form)
+    assert resp.status == 502
+    assert (await resp.json()) == {"error": "OpenAI is down"}
+    assert coordinator.firearms[0].photos == []
+
+
 async def test_index_served_without_caching(client):
     resp = await client.get("/")
     assert resp.status == 200

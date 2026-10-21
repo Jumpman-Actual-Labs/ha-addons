@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+- Photos can be added without an OpenAI API key - they're saved as-is.
+  With a key set, background removal works as before.
+
 ## 1.0.0
 
 - Cache is now a Home Assistant add-on instead of a custom integration +

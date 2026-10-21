@@ -13,7 +13,7 @@ sidebar panel.
 
 | Option | Description |
 | --- | --- |
-| `openai_api_key` | Used for photo background removal and ammo box scanning. If blank, Cache falls back to an `openai_api_key` entry in `secrets.yaml`, then to the key the old integration had. |
+| `openai_api_key` | Optional. Used for photo background removal (photos are saved as-is without it) and ammo box scanning. If blank, Cache falls back to an `openai_api_key` entry in `secrets.yaml`, then to the key the old integration had. |
 | `mqtt_enabled` | Publish the automation entities over MQTT. |
 | `log_level` | `debug`, `info`, `warning` or `error`. |
 

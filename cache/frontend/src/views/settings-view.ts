@@ -421,10 +421,11 @@ export class CacheSettingsView extends LitElement {
       <ha-card class="panel">
         <h2 style="margin-top:0">Photo Background Removal</h2>
         <p class="small muted">
-          New firearm photos already have their background removed automatically, same as
-          part photos and My Build hero images. Use this to apply the same treatment to
-          firearm photos uploaded before that started - it costs one OpenAI call per photo
-          and overwrites the stored file, so there's no undo once it's run.
+          When an OpenAI API key is set (Settings &gt; Add-ons &gt; Cache &gt; Configuration),
+          new firearm and part photos have their background removed automatically. Without
+          a key they're saved as-is. Use this to apply the cutout to firearm photos uploaded
+          before a key was set - it costs one OpenAI call per photo and overwrites the stored
+          file, so there's no undo once it's run.
         </p>
         ${this._reprocessError ? html`<div class="error-banner">${this._reprocessError}</div>` : ""}
         ${this._reprocessDone

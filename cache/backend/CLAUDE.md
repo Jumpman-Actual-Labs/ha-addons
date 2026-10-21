@@ -394,23 +394,18 @@ registration, read it as the add-on equivalent: `storage.py`'s
   discarding the photo. Most share `_read_upload` (validate + read into
   memory); the ones that persist as-is go on to `_save_upload`'s disk
   write, which itself calls the shared `_write_bytes` executor-job helper.
-  `CacheUploadPhotoView` is the one exception to "persist as-is": it pipes
-  the upload through `openai_client.remove_background` FIRST and only
-  writes the processed result to disk (via `_write_bytes` directly, not
-  `_save_upload`, since the bytes being saved aren't the untouched
-  upload) - see the hero-photo bullet above. This applies unconditionally
-  regardless of `entity_type` - a `"firearm"` gallery photo gets the same
-  treatment as an `"inventory_item"` (part) photo, both reading as a clean
-  cutout rather than a product photo with its original background (a
-  part's photo is what renders as its attachment-card art,
-  `cache-attachment-bar` in the frontend; a firearm's gallery photo gets it
-  purely for visual consistency across the app, and doubles as that
-  firearm's hero photo wherever one is shown - there's no second dedicated
-  endpoint for that). Same "no non-AI fallback" rule applies here as
-  everywhere else this pattern is used: a missing OpenAI key fails the
-  upload outright with the standard "OpenAI API key not configured..."
-  message rather than silently storing the unprocessed original.
-  Firearm photos uploaded BEFORE this behavior existed aren't touched
+  `upload_photo` is the one exception to "persist as-is": when an OpenAI
+  key is configured it pipes the upload through
+  `openai_client.remove_background` FIRST and writes the processed PNG
+  (via `_write_bytes` directly, not `_save_upload`) - for both
+  `entity_type`s, so parts (whose photo is their attachment-card art) and
+  firearms (whose primary gallery photo doubles as their hero) read as
+  clean cutouts. **Without a key the photo is saved as uploaded** (original
+  extension kept) - this used to reject the upload outright, which left a
+  fresh install unable to add any photos until the user set up OpenAI. A
+  key that IS configured but whose call fails still fails the upload
+  (502), rather than silently skipping a cutout the user expects.
+  Firearm photos saved without removal (no key at the time) aren't touched
   retroactively by a plain upload/re-upload - `services.py`'s
   `reprocess_firearm_photos` service (see below) is the one-off batch
   action for those. `CacheLookupAmmoBarcodeView` is a non-upload view
