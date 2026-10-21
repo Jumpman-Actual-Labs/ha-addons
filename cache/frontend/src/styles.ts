@@ -164,6 +164,77 @@ export const formStyles = css`
   button.link.danger:hover {
     background: color-mix(in srgb, var(--error-color, #e5484d) 10%, transparent);
   }
+  /* Square icon-only button (an ha-icon inside, plus a title/aria-label
+     for the text it doesn't show) - for small, frequent card actions where
+     a labelled button would crowd the card. */
+  button.icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: none;
+    border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.1));
+    border-radius: var(--hud-radius-sm, 8px);
+    color: var(--primary-text-color, #f2f4f6);
+    cursor: pointer;
+    --mdc-icon-size: 18px;
+    transition: border-color 180ms ease, background 180ms ease;
+  }
+  button.icon:hover {
+    border-color: var(--hud-border-hover, rgba(255, 255, 255, 0.16));
+    background: color-mix(in srgb, var(--primary-color, #f2f4f6) 8%, transparent);
+  }
+  button.icon.bare {
+    border-color: transparent;
+    color: var(--secondary-text-color, #a1a7b0);
+  }
+  button.icon.bare:hover {
+    color: var(--primary-text-color, #f2f4f6);
+  }
+  /* Overflow ("three dots") menu anchored to a card's top-right corner -
+     the card itself needs position: relative, and the open card a raised
+     z-index so the menu isn't painted under the next card in the grid
+     (each glass card is its own stacking context via backdrop-filter). */
+  .card-menu {
+    position: relative;
+  }
+  .card-menu .menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 10;
+    min-width: 140px;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    background: var(--hud-bg-2, #0d0f11);
+    border: 1px solid var(--hud-border-hover, rgba(255, 255, 255, 0.16));
+    border-radius: var(--hud-radius-sm, 8px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  }
+  .card-menu .menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    color: var(--primary-text-color, #f2f4f6);
+    font: inherit;
+    font-size: 0.85rem;
+    text-align: left;
+    cursor: pointer;
+    --mdc-icon-size: 18px;
+  }
+  .card-menu .menu button:hover {
+    background: color-mix(in srgb, var(--primary-color, #f2f4f6) 10%, transparent);
+  }
+  .card-menu .menu button.danger {
+    color: var(--error-color, #e5484d);
+  }
   .actions {
     display: flex;
     justify-content: flex-end;

@@ -511,6 +511,15 @@ pure white/opaque, per the brief's "avoid making it pure white").
   Both `cacheApi` methods return the same `ScannedAmmoFields` shape (see
   `ha-api.ts`'s shared `parseScannedAmmoFields()`), so the view handles
   either scan method identically once the response comes back.
+- Ammunition cards keep their actions compact: a ⋮ button (`.card-menu`,
+  `button.icon.bare`) in the top-right opens an Edit/Delete menu, and
+  Remove/Add rounds are `−`/`+` `button.icon`s beside the round count.
+  `button.icon` and `.card-menu` live in `styles.ts` so other card grids
+  can reuse them. Only one menu is open at a time (`_menuFor`, the ammo
+  id); it closes on picking an item, any click outside a `.card-menu`, or
+  Escape. The card with the open menu gets `.menu-open` (`z-index: 5`) -
+  each glass card is its own stacking context (backdrop-filter), so
+  without it the menu paints under the next card in the grid.
 - The Add/Remove Rounds dialog (adjusting an existing ammo entry's
   quantity) shows an "Add by" Rounds/Boxes selector only when that entry
   has a `roundsPerBox` on file - entries without a known box size just get

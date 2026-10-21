@@ -89,10 +89,30 @@ export class CacheAmmunitionView extends LitElement {
       ha-card.ammo {
         padding: 16px;
       }
+      ha-card.ammo.menu-open {
+        z-index: 5;
+      }
       .ammo-header {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
+        gap: 8px;
+      }
+      .header-icons {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        margin: -6px -8px 0 0;
+      }
+      .qty-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .qty-buttons {
+        display: flex;
+        gap: 6px;
       }
       .qty {
         font-size: 1.8rem;
@@ -110,14 +130,42 @@ export class CacheAmmunitionView extends LitElement {
         flex-wrap: wrap;
         margin: 6px 0;
       }
-      .ammo-actions {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-        margin-top: 8px;
-      }
     `,
   ];
+
+  /** Which ammo card's ⋮ menu is open (its id), if any - only one at a
+   * time. Closed by picking an item, clicking anywhere outside a menu, or
+   * Escape. */
+  @state() private _menuFor: string | null = null;
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    document.addEventListener("click", this._closeMenuOnOutsideClick);
+    document.addEventListener("keydown", this._closeMenuOnEscape);
+  }
+
+  disconnectedCallback(): void {
+    document.removeEventListener("click", this._closeMenuOnOutsideClick);
+    document.removeEventListener("keydown", this._closeMenuOnEscape);
+    super.disconnectedCallback();
+  }
+
+  private _closeMenuOnOutsideClick = (e: MouseEvent): void => {
+    if (!this._menuFor) return;
+    const insideMenu = e
+      .composedPath()
+      .some((el) => el instanceof HTMLElement && el.classList.contains("card-menu"));
+    if (!insideMenu) this._menuFor = null;
+  };
+
+  private _closeMenuOnEscape = (e: KeyboardEvent): void => {
+    if (e.key === "Escape") this._menuFor = null;
+  };
+
+  private _menuAction(action: () => void): void {
+    this._menuFor = null;
+    action();
+  }
 
   private get _filtered(): Ammunition[] {
     const s = this._search.toLowerCase();
@@ -317,7 +365,7 @@ export class CacheAmmunitionView extends LitElement {
             <div class="grid">
               ${items.map(
                 (a) => html`
-                  <ha-card class="ammo">
+                  <ha-card class="ammo ${this._menuFor === a.id ? "menu-open" : ""}">
                     <div class="ammo-header">
                       <div>
                         <div style="font-weight:600">${a.caliber}</div>
@@ -327,25 +375,65 @@ export class CacheAmmunitionView extends LitElement {
                             .join(" · ") || "—"}
                         </div>
                       </div>
-                      ${a.isLow ? html`<ha-icon icon="mdi:alert" style="color:#f57f17"></ha-icon>` : ""}
+                      <div class="header-icons">
+                        ${a.isLow
+                          ? html`<ha-icon icon="mdi:alert" title="Low inventory" style="color:#f57f17"></ha-icon>`
+                          : ""}
+                        <div class="card-menu">
+                          <button
+                            class="icon bare"
+                            title="More options"
+                            aria-label="More options"
+                            aria-haspopup="menu"
+                            aria-expanded=${this._menuFor === a.id ? "true" : "false"}
+                            @click=${() => (this._menuFor = this._menuFor === a.id ? null : a.id)}
+                          >
+                            <ha-icon icon="mdi:dots-vertical"></ha-icon>
+                          </button>
+                          ${this._menuFor === a.id
+                            ? html`<div class="menu" role="menu">
+                                <button role="menuitem" @click=${() => this._menuAction(() => this._openEdit(a))}>
+                                  <ha-icon icon="mdi:pencil"></ha-icon>Edit
+                                </button>
+                                <button
+                                  role="menuitem"
+                                  class="danger"
+                                  @click=${() => this._menuAction(() => (this._deleteTarget = a))}
+                                >
+                                  <ha-icon icon="mdi:delete"></ha-icon>Delete
+                                </button>
+                              </div>`
+                            : ""}
+                        </div>
+                      </div>
                     </div>
-                    <div class="qty">${formatNumber(a.quantity)} <small>rounds</small></div>
+                    <div class="qty-row">
+                      <div class="qty">${formatNumber(a.quantity)} <small>rounds</small></div>
+                      <div class="qty-buttons">
+                        <button
+                          class="icon"
+                          title="Remove rounds"
+                          aria-label="Remove rounds"
+                          @click=${() => this._openAdjust(a, "remove")}
+                        >
+                          <ha-icon icon="mdi:minus"></ha-icon>
+                        </button>
+                        <button
+                          class="icon"
+                          title="Add rounds"
+                          aria-label="Add rounds"
+                          @click=${() => this._openAdjust(a, "add")}
+                        >
+                          <ha-icon icon="mdi:plus"></ha-icon>
+                        </button>
+                      </div>
+                    </div>
                     <div class="chips">
                       ${a.storageLocationName ? html`<span class="badge">${a.storageLocationName}</span>` : ""}
                       ${a.costPerRound != null
                         ? html`<span class="badge info">${formatCurrency(a.costPerRound)}/rd</span>`
                         : ""}
                       ${a.speedClass ? html`<span class="badge">${a.speedClass}</span>` : ""}
-                    </div>
-                    <div class="ammo-actions">
-                      <button class="link" @click=${() => this._openAdjust(a, "add")}>
-                        Add
-                      </button>
-                      <button class="link" @click=${() => this._openAdjust(a, "remove")}>
-                        Remove
-                      </button>
-                      <button class="link" @click=${() => this._openEdit(a)}>Edit</button>
-                      <button class="link danger" @click=${() => (this._deleteTarget = a)}>Delete</button>
                     </div>
                   </ha-card>
                 `
