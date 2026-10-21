@@ -13,3 +13,8 @@ then install whichever add-ons you want. Nothing installs until you pick it.
 | --- | --- |
 | [Cache](cache/DOCS.md) | Firearm, parts, ammunition, maintenance and range tracking |
 | [Relay](relay/DOCS.md) | One chat for your Claude Pro and ChatGPT Plus subscriptions |
+## AI assistance
+
+These add-ons were built with AI assistance (Anthropic's Claude and
+OpenAI's ChatGPT). All code is reviewed and tested before release, but
+please report any issues you run into.
