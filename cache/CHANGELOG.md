@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.10
+
+- Firearms have an "NFA item" checkbox (Add/Edit Firearm). NFA counts on the
+  dashboard are now checked firearms plus suppressors, so SBSs, machine
+  guns, AOWs and destructive devices can be counted, not just SBRs.
+  Firearms already saved as type SBR start out checked.
+- NFA firearms show an "NFA" badge on their card and detail page.
+
 ## 1.0.9
 
 - Recent Activity: a wishlist firearm marked as purchased now gets its own

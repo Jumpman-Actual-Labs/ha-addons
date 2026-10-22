@@ -19,6 +19,8 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from .const import NFA_FIREARM_TYPES
+
 
 def new_id() -> str:
     return uuid.uuid4().hex
@@ -230,6 +232,9 @@ class Firearm:
     # complete new order in one call, not per-item deltas).
     is_wishlist: bool = False
     wishlist_rank: int | None = None
+    # User-checked "this is an NFA item" (SBR, SBS, machine gun, DD, AOW...).
+    # Counted in dashboard_stats' nfa_items along with Suppressor parts.
+    is_nfa: bool = False
     # When a wishlist record was marked owned ("Mark as Purchased") - set
     # by the coordinator on the is_wishlist True->False transition, cleared
     # if it goes back on the wishlist. None for records that were never on
@@ -280,6 +285,7 @@ class Firearm:
             "primary_photo_id": self.primary_photo_id,
             "is_wishlist": self.is_wishlist,
             "wishlist_rank": self.wishlist_rank,
+            "is_nfa": self.is_nfa,
             "acquired_at": self.acquired_at,
             "photos": [p.to_dict() for p in self.photos],
             "documents": [d.to_dict() for d in self.documents],
@@ -324,6 +330,8 @@ class Firearm:
             primary_photo_id=data.get("primary_photo_id"),
             is_wishlist=data.get("is_wishlist", False),
             wishlist_rank=_as_int(data.get("wishlist_rank")),
+            # Saved before is_nfa existed: an SBR-type firearm starts checked.
+            is_nfa=bool(data.get("is_nfa", data["firearm_type"] in NFA_FIREARM_TYPES)),
             acquired_at=data.get("acquired_at"),
             photos=[Photo.from_dict(p) for p in data.get("photos", [])],
             documents=[Document.from_dict(d) for d in data.get("documents", [])],

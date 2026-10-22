@@ -12,7 +12,6 @@ from .const import (
     CATEGORY_FOR_PART,
     FIREARM_DIAGRAM_MAP,
     HANDGUN_TYPES,
-    NFA_FIREARM_TYPES,
     PART_TYPES,
     RANGE_SCHEDULE_FREQUENCY_DAYS,
     RIFLE_TYPES,
@@ -329,7 +328,7 @@ def dashboard_stats(
         total_value += _effective_value(f.purchase_price, f.current_estimated_value) or 0
 
     suppressor_count = sum(1 for i in owned_items if i.part_type == "Suppressor")
-    nfa_firearms = sum(1 for f in owned_firearms if f.firearm_type in NFA_FIREARM_TYPES)
+    nfa_firearms = sum(1 for f in owned_firearms if f.is_nfa)
     nfa_items = nfa_firearms + suppressor_count
 
     total_value += sum(
@@ -345,9 +344,7 @@ def dashboard_stats(
     wishlist_suppressor_count = sum(
         1 for i in wishlist_items if i.part_type == "Suppressor"
     )
-    wishlist_nfa_firearms = sum(
-        1 for f in wishlist_firearms if f.firearm_type in NFA_FIREARM_TYPES
-    )
+    wishlist_nfa_firearms = sum(1 for f in wishlist_firearms if f.is_nfa)
     wishlist_nfa_items = wishlist_nfa_firearms + wishlist_suppressor_count
 
     # The single wishlist entry (firearm or part) the dashboard highlights

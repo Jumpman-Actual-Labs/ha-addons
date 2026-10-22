@@ -2,7 +2,6 @@ import { LitElement, css, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "../ha-api";
 import type { CacheState, DashboardStats, Firearm } from "../types";
-import { NFA_FIREARM_TYPES } from "../types";
 import { glassCardStyle, formStyles } from "../styles";
 import { formatCurrency, formatDate, formatNumber } from "../utils/format";
 import { firearmHeroImage } from "../utils/hero-image";
@@ -903,18 +902,14 @@ export class CacheDashboardView extends LitElement {
     // parts, which live on different pages - so Armory Status shows them
     // as two rows, each opening its own filtered list. Same definition as
     // the backend's dashboard_stats: owned records only.
-    const nfaFirearms = this.cacheState.firearms.filter(
-      (f) => !f.isWishlist && NFA_FIREARM_TYPES.includes(f.firearmType)
-    ).length;
+    const nfaFirearms = this.cacheState.firearms.filter((f) => !f.isWishlist && f.isNfa).length;
     const suppressors = this.cacheState.inventoryItems.filter(
       (i) => !i.isWishlist && i.partType === "Suppressor"
     ).length;
     // The Firearms/Wishlist KPI cards' "NFA" counts are firearms only, for
     // the same reason - a suppressor part isn't a firearm.
     const standardFirearms = stats.totalFirearms - nfaFirearms;
-    const wishlistNfaFirearms = this.cacheState.firearms.filter(
-      (f) => f.isWishlist && NFA_FIREARM_TYPES.includes(f.firearmType)
-    ).length;
+    const wishlistNfaFirearms = this.cacheState.firearms.filter((f) => f.isWishlist && f.isNfa).length;
     const lastSessionDate = this.cacheState.rangeSessions.reduce<string | null>(
       (latest, s) => (!latest || s.date > latest ? s.date : latest),
       null

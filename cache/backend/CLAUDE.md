@@ -363,9 +363,13 @@ registration, read it as the add-on equivalent: `storage.py`'s
   mixing wishlist entries into "what I own" - they get their own separate
   `wishlist_firearms_count`/`wishlist_items_count`/`wishlist_total_value`
   aggregates instead, still using the same `_effective_value` fallback for
-  consistency. `wishlist_nfa_items` mirrors `nfa_items`' own definition
-  (SBR firearms + Suppressor parts, via the same `NFA_FIREARM_TYPES` set),
-  just scoped to the wishlist instead of owned. `top_wishlist_item_name`/
+  consistency. `nfa_items` counts firearms the user checked as NFA
+  (`Firearm.is_nfa`, a plain boolean - Jordan wanted a simple checkbox,
+  not a classification) plus owned Suppressor parts; nothing is inferred
+  from firearm type. The one exception is loading a firearm saved before
+  `is_nfa` existed: `Firearm.from_dict` defaults it to `firearm_type in
+  NFA_FIREARM_TYPES` ("SBR"), so an existing SBR stays counted.
+  `wishlist_nfa_items` uses the same definition, scoped to the wishlist. `top_wishlist_item_name`/
   `top_wishlist_item_priority` pick the single wishlist entry (firearm OR
   part) the dashboard sensor exposes - since firearms and parts now use
   two incomparable schemes (a rank position vs. a priority tier), comparing

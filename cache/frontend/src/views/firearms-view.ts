@@ -5,7 +5,7 @@ import { cacheApi } from "../ha-api";
 import type { CacheState, Firearm, InventoryItem, UsedValueEstimate } from "../types";
 import { installedBySlot } from "../utils/installed-items";
 import { firearmHeroImage } from "../utils/hero-image";
-import { CONDITIONS, FIREARM_TYPES, FIREARM_USES, NFA_FIREARM_TYPES } from "../types";
+import { CONDITIONS, FIREARM_TYPES, FIREARM_USES } from "../types";
 import { glassCardStyle, formStyles } from "../styles";
 import { formatCurrency, formatDate, formatNumber, todayIso } from "../utils/format";
 import { knownCalibers, knownManufacturers } from "../utils/options";
@@ -44,6 +44,7 @@ interface FirearmDraft {
   storageLocationId: string;
   notes: string;
   isWishlist: boolean;
+  isNfa: boolean;
 }
 
 const EMPTY_DRAFT: FirearmDraft = {
@@ -72,6 +73,7 @@ const EMPTY_DRAFT: FirearmDraft = {
   storageLocationId: "",
   notes: "",
   isWishlist: false,
+  isNfa: false,
 };
 
 function draftFromFirearm(f: Firearm): FirearmDraft {
@@ -101,6 +103,7 @@ function draftFromFirearm(f: Firearm): FirearmDraft {
     storageLocationId: f.storageLocationId ?? "",
     notes: f.notes ?? "",
     isWishlist: f.isWishlist,
+    isNfa: f.isNfa,
   };
 }
 
@@ -137,6 +140,7 @@ function draftToPayload(d: FirearmDraft): Record<string, unknown> {
     // dedicated reorder_wishlist_firearms service (wishlist-reorder-
     // dialog.ts), never this form.
     is_wishlist: d.isWishlist,
+    is_nfa: d.isNfa,
   };
 }
 
@@ -552,7 +556,7 @@ export class CacheFirearmsView extends LitElement {
       if (this._typeFilter && f.firearmType !== this._typeFilter) return false;
       if (this._conditionFilter && f.condition !== this._conditionFilter) return false;
       if (this._preset === "cleaning-due" && !f.needsCleaning) return false;
-      if (this._preset === "nfa" && !NFA_FIREARM_TYPES.includes(f.firearmType)) return false;
+      if (this._preset === "nfa" && !f.isNfa) return false;
       if (!s) return true;
       return (
         f.customName.toLowerCase().includes(s) ||
@@ -862,6 +866,7 @@ export class CacheFirearmsView extends LitElement {
               ${f.isWishlist
                 ? html`<span class="badge wishlist">Wishlist${f.wishlistRank !== null ? ` · #${f.wishlistRank + 1}` : ""}</span>`
                 : ""}
+              ${f.isNfa ? html`<span class="badge warning">NFA</span>` : ""}
               ${f.uses.map((u) => html`<span class="badge info">${u}</span>`)}
             </div>
 
@@ -1183,6 +1188,11 @@ export class CacheFirearmsView extends LitElement {
           </div>
         </div>
 
+        <div class="checkbox-row">
+          <input type="checkbox" .checked=${d.isNfa} @change=${(e: Event) => set({ isNfa: (e.target as HTMLInputElement).checked })} />
+          <label style="margin:0">NFA item (SBR, SBS, machine gun, AOW, destructive device)</label>
+        </div>
+
         <p class="small muted" style="text-transform:uppercase;letter-spacing:0.5px;margin-top:16px">Photos</p>
         ${this._editing ? this._renderEditPhotosSection(this._editing) : this._renderAddPhotosSection()}
 
@@ -1332,6 +1342,7 @@ export class CacheFirearmsView extends LitElement {
                           : ""}
                         <span class="badge">${f.firearmType}</span>
                         ${f.caliber ? html`<span class="badge">${f.caliber}</span>` : ""}
+                        ${f.isNfa ? html`<span class="badge warning">NFA</span>` : ""}
                       </div>
                       <div class="row-bottom">
                         <span>${formatNumber(f.lifetimeRoundCount)} rounds</span>

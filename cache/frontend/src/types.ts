@@ -57,10 +57,6 @@ export const CALIBERS_BY_FIREARM_TYPE: Record<string, string[]> = {
   Shotgun: SHOTGUN_CALIBERS,
 };
 
-// Mirrors the backend const.py NFA_FIREARM_TYPES - firearm types that count
-// toward the dashboard's NFA total (suppressor parts count too).
-export const NFA_FIREARM_TYPES: string[] = ["SBR"];
-
 export const FIREARM_USES: string[] = ["Training", "Home Defense", "Hunting", "Collectible"];
 
 export const WISHLIST_PRIORITIES: string[] = ["High", "Medium", "Low"];
@@ -212,6 +208,9 @@ export interface Firearm {
   // reassigned via cacheApi.reorderWishlistFirearms.
   isWishlist: boolean;
   wishlistRank: number | null;
+  // User-checked "NFA item" - counted with Suppressor parts in the
+  // dashboard's NFA totals. Nothing is inferred from firearm type.
+  isNfa: boolean;
   // When this wishlist record was marked owned (backend-managed, null if it
   // was never on the wishlist or still is) - see the backend's models.py.
   acquiredAt: string | null;

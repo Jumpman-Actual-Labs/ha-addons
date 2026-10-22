@@ -338,7 +338,11 @@ def test_dashboard_stats_counts_by_type_and_value():
             current_estimated_value=2000,
         ),
         _firearm(
-            id="f3", firearm_type="SBR", manufacturer="BCM", current_estimated_value=1500
+            id="f3",
+            firearm_type="SBR",
+            is_nfa=True,
+            manufacturer="BCM",
+            current_estimated_value=1500,
         ),
     ]
     items = [
@@ -396,8 +400,8 @@ def test_dashboard_stats_excludes_wishlist_from_owned_totals():
 def test_dashboard_stats_wishlist_nfa_items_mirrors_owned_definition():
     settings = CacheSettings()
     firearms = [
-        _firearm(id="f1", firearm_type="SBR", is_wishlist=False),
-        _firearm(id="f2", firearm_type="SBR", is_wishlist=True),
+        _firearm(id="f1", firearm_type="SBR", is_nfa=True, is_wishlist=False),
+        _firearm(id="f2", firearm_type="SBR", is_nfa=True, is_wishlist=True),
     ]
     items = [
         InventoryItem(id="i1", custom_name="Owned Can", category="Muzzle", part_type="Suppressor"),
@@ -1057,3 +1061,30 @@ def test_training_plan_advance_noop_when_already_completed_after_date():
     logic.training_plan_advance(plan, "2026-07-01")
     assert plan.steps[0].last_completed_date == "2026-08-01"
     assert plan.current_step_index == 0
+
+
+def test_dashboard_stats_nfa_counts_only_checked_firearms_and_suppressors():
+    firearms = [
+        _firearm(id="f1", firearm_type="Rifle", is_nfa=True),  # e.g. a machine gun
+        _firearm(id="f2", firearm_type="Shotgun", is_nfa=True),  # e.g. an SBS
+        _firearm(id="f3", firearm_type="SBR"),  # unchecked: not counted
+        _firearm(id="f4", firearm_type="Rifle"),
+    ]
+    items = [
+        InventoryItem(id="i1", custom_name="Can", category="Muzzle", part_type="Suppressor")
+    ]
+    stats = logic.dashboard_stats(firearms, items, [], CacheSettings())
+    assert stats["nfa_items"] == 3
+
+
+def test_firearm_saved_before_is_nfa_existed_keeps_sbr_counted():
+    from cache_addon.models import Firearm
+
+    old_sbr = Firearm.from_dict({"id": "a", "custom_name": "PDW", "firearm_type": "SBR"})
+    old_rifle = Firearm.from_dict({"id": "b", "custom_name": "AR", "firearm_type": "Rifle"})
+    unchecked_sbr = Firearm.from_dict(
+        {"id": "c", "custom_name": "X", "firearm_type": "SBR", "is_nfa": False}
+    )
+    assert old_sbr.is_nfa is True
+    assert old_rifle.is_nfa is False
+    assert unchecked_sbr.is_nfa is False  # an explicit choice wins

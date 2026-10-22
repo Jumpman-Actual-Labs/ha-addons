@@ -1096,7 +1096,9 @@ issues") is simply not shown, rather than invented.
    Wishlist filter already uses elsewhere, not a new tab-control.
 3. **Armory Status** - every row opens exactly the records it counts:
    "Need Cleaning" opens Firearms filtered to `needsCleaning`, "NFA
-   Firearms" opens Firearms filtered to `NFA_FIREARM_TYPES`, "Suppressors"
+   Firearms" opens Firearms filtered to `isNfa` (the Add/Edit Firearm form's
+   "NFA item" checkbox - Jordan wanted a plain checkbox, not inferred from
+   firearm type or a classification picker), "Suppressors"
    opens Parts filtered to `partType === "Suppressor"` (owned only, all
    computed client-side). The backend's `nfaItems` total mixes SBR
    firearms with suppressor parts, which live on different pages, so the

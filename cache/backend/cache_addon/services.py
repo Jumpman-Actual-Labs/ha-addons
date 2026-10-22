@@ -64,6 +64,7 @@ FIREARM_FIELDS = {
     # async_add_firearm/async_update_firearm/async_reorder_wishlist_
     # firearms). InventoryItem still has wishlist_priority below.
     vol.Optional("is_wishlist"): cv.boolean,
+    vol.Optional("is_nfa"): cv.boolean,
 }
 
 INVENTORY_ITEM_FIELDS = {

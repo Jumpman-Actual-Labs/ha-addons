@@ -425,6 +425,7 @@ export function parseCacheState(hass: HomeAssistant): CacheState {
     needsCleaning: bool(e.attributes.needs_cleaning),
     isWishlist: bool(e.attributes.is_wishlist),
     wishlistRank: numOrNull(e.attributes.wishlist_rank),
+    isNfa: bool(e.attributes.is_nfa),
     acquiredAt: strOrNull(e.attributes.acquired_at),
     installedItems: asArray(e.attributes.installed_items).map(parseInstalledItem),
     photos: asArray(e.attributes.photos).map(parsePhoto),

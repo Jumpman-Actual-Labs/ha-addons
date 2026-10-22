@@ -186,8 +186,10 @@ DOCUMENT_TYPES: list[str] = ["Manual", "Receipt", "Warranty Information", "Tax S
 
 AMMO_TRANSACTION_TYPES: list[str] = ["add", "remove", "adjust", "range_session"]
 
-# Legal/regulatory categories rolled into the dashboard's "NFA Items" count:
-# SBR firearms plus any Suppressor inventory item.
+# The dashboard's "NFA Items" count is firearms the user has checked as NFA
+# (Firearm.is_nfa) plus Suppressor inventory parts. NFA_FIREARM_TYPES is only
+# used once, when loading a firearm saved before is_nfa existed: one of these
+# types starts out checked, so it doesn't drop out of the count.
 NFA_FIREARM_TYPES: set[str] = {"SBR"}
 HANDGUN_TYPES: set[str] = {"Handgun", "Revolver"}
 RIFLE_TYPES: set[str] = {"Rifle", "PCC", "Bolt Action", "Lever Action"}

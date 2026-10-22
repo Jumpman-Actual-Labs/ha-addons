@@ -329,3 +329,19 @@ async def test_requests_outside_ingress_are_refused(aiohttp_client, config, coor
         client = await aiohttp_client(create_app(config, coordinator, services, session))
         resp = await client.get("/api/states")
         assert resp.status == 403
+
+
+async def test_is_nfa_round_trips_through_services_and_states(client, coordinator):
+    resp = await client.post(
+        "/api/services/add_firearm",
+        json={"custom_name": "M16", "firearm_type": "Rifle", "is_nfa": True},
+    )
+    firearm_id = (await resp.json())["response"]["firearm_id"]
+    states = build_states(coordinator.data)
+    assert states[f"sensor.cache_firearm_{firearm_id}"]["attributes"]["is_nfa"] is True
+    assert coordinator.data["dashboard_stats"]["nfa_items"] == 1
+
+    await client.post(
+        "/api/services/update_firearm", json={"firearm_id": firearm_id, "is_nfa": False}
+    )
+    assert coordinator.data["dashboard_stats"]["nfa_items"] == 0
