@@ -1111,24 +1111,26 @@ issues") is simply not shown, rather than invented.
    inventing one would violate the same "don't fabricate telemetry" rule
    `cache-panel.ts`'s sidebar bullet already documents.
 4. **Recent Activity** - a single chronological feed (`_activityFeed`
-   getter) merging FOUR real event types pulled from the raw collection
-   (not the old `recentlyAddedIds`/`recentlyFiredIds` - those only cover
-   ~8 IDs each with no per-event date granularity once a firearm has
-   multiple range sessions): a firearm's `createdAt` ("Added to
-   collection"), each `CleaningLogEntry.cleanedDate` ("Cleaned"), each
-   range session's PER-FIREARM `roundsFired` entry (one activity line
-   per firearm per session, since one session can cover several - this
-   is why the mock reference showed the same date twice), and each
-   `AmmoTransaction` NOT tagged with a `rangeSessionId` (`changeType ===
-   "range_session"` transactions are skipped outright - that's the same
-   real-world event as the range session line itself, so showing both
-   would double-log one action). Sorted newest-first (date-only vs.
-   datetime strings compared by their first 10 chars first, so same-day
-   events group correctly regardless of which source format they came
-   from), grouped by date for display, capped at 8. No "View All" link -
-   there's no dedicated activity/log page to send it to, and inventing a
-   destination is worse than omitting the link (same reasoning as the
-   Most Used panel below).
+   getter) built from the raw collection: firearm and part adds (wishlist
+   records say "Added to wishlist" / "Part added to wishlist" instead of
+   "Added to collection" - only `createdAt` is stored, so a wishlist entry
+   later marked purchased still shows its original add), part installs
+   (`InventoryItem.installedAt`, "Installed on <firearm>", or "Wishlist part
+   added to <firearm> build" for a wishlist part on a planned build), storage
+   locations added, cleanings (`CleaningLogEntry.cleanedDate`), ONE row
+   per range session (total rounds + firearm count, location in the
+   title - it used to be one row per firearm, which buried everything
+   else), and ammo transactions NOT tagged with a `rangeSessionId`
+   (`changeType === "range_session"` ones are the range session itself).
+   Sorted newest day first; within a day, by `loggedAt` when the event's
+   own date is date-only (a session's/cleaning's `createdAt`), else its
+   timestamp - otherwise date-only events always sank below that day's
+   timestamped ones. Each row carries an `open` callback: firearms/
+   cleanings open the firearm, parts open the part (`cache-view-item`),
+   locations/sessions/ammo switch to their tab. Shows 6 rows
+   (`ACTIVITY_COLLAPSED`); the footer's "Show more / Show less" expands
+   in place to 30 (`ACTIVITY_EXPANDED`) - there's no separate activity
+   page to link to.
 5. **Most Used** - a top-3-to-5 RANKING (`_mostUsed` getter reads
    `DashboardStats.mostUsedIds`, already sorted desc server-side, then
    filters out zero-round entries UNLESS fewer than 3 firearms would be
@@ -1195,13 +1197,10 @@ versa. Ammunition Status spans the full width at the bottom (`"ammo
 ammo"`) rather than pairing with Wishlist, since its per-caliber bars
 benefit from the horizontal room. Stacks to one column below 900px
 (area order becomes breakdown/status/activity/rightstack/ammo). Recent
-Activity shows up to 6 events (was 8) with tightened internal spacing
-and a "View All" footer link (jumps to the Firearms tab, same as every
-other dashboard link - there's no dedicated activity page) when more
-exist; each event with a known firearm (`ActivityEvent.firearmId` - set
-for added/fired/cleaned events, not ammo transactions) is clickable to
-open that firearm's detail view, with a subtle hover background rather
-than a full card treatment. Armory Status's header carries a small
+Activity shows 6 events with tightened internal spacing and a "Show
+more" footer toggle when more exist (see item 4 above); every row is
+clickable, with a subtle hover background rather than a full card
+treatment. Armory Status's header carries a small
 `.status-pill` (a dot + "Nominal"/"Attention", `--hud-good` green or
 `--secondary-color` amber, no glow) reflecting the same `cleaningDue
 === 0 && trainingDue === 0` check the body rows use - the body no

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.7
+
+- Dashboard Recent Activity is more complete and specific:
+  - Wishlist firearms and parts say "Added to wishlist" instead of
+    "Added to collection".
+  - Now also shows parts added, parts installed on a firearm (and wishlist
+    parts added to a firearm's build), and storage locations added.
+  - Range sessions are one line each (total rounds and firearms) instead of
+    one line per firearm, so they no longer crowd out everything else.
+  - Every row opens what it refers to, and "Show more" expands the list in
+    place instead of jumping to the Firearms tab.
+
 ## 1.0.6
 
 - Add/Edit Firearm: the caliber suggestions now match the selected firearm

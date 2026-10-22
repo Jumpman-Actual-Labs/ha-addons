@@ -11,8 +11,18 @@ interface ActivityEvent {
   icon: string;
   title: string;
   desc: string;
-  firearmId?: string;
+  /** Full timestamp for ordering events on the same day, when `date` is
+   * date-only (a range session's or cleaning's own date) - their
+   * createdAt, so they don't all sink below that day's timestamped
+   * events. */
+  loggedAt?: string;
+  /** Where clicking the row goes - the firearm/part itself, or the tab
+   * that lists this kind of record. Omitted rows aren't clickable. */
+  open?: () => void;
 }
+
+const ACTIVITY_COLLAPSED = 6;
+const ACTIVITY_EXPANDED = 30;
 
 /** The Dashboard - Cache's "home screen," not a grid of individual
  * database stats. SEVEN consolidated glass surfaces (Armory Overview's 4
@@ -43,6 +53,7 @@ export class CacheDashboardView extends LitElement {
   @property({ attribute: false }) cacheState!: CacheState;
 
   @state() private _breakdownTab: "type" | "caliber" | "manufacturer" = "type";
+  @state() private _activityExpanded = false;
 
   static styles = [
     glassCardStyle,
@@ -512,6 +523,12 @@ export class CacheDashboardView extends LitElement {
     );
   }
 
+  private _openItem(id: string): void {
+    this.dispatchEvent(
+      new CustomEvent("cache-view-item", { detail: { itemId: id }, bubbles: true, composed: true })
+    );
+  }
+
   // Plain tab switches (no specific record) - "View Wishlist" and every
   // status/panel link on this dashboard use this, same bubbling-event
   // pattern as cache-open-firearm. The optional `wishlist` flag only
@@ -579,15 +596,26 @@ export class CacheDashboardView extends LitElement {
   // to a range session (range_session-tagged transactions are the same
   // real-world event as the range session itself - showing both would
   // double up one action as two log lines).
+  //
+  // Wishlist records say "Added to wishlist", not "Added to collection" -
+  // only createdAt is stored, so a wishlist entry later marked purchased
+  // still shows its original add (there's no separate purchase timestamp
+  // to log). A range session is ONE row (total rounds/firearms), not one
+  // row per firearm - several identical-date rows per session drowned out
+  // everything else.
   private get _activityFeed(): ActivityEvent[] {
     const events: ActivityEvent[] = [];
+    const openFirearm = (id: string) => () => this._openFirearm(id);
+    const openItem = (id: string) => () => this._openItem(id);
+    const tab = (id: string) => () => this._switchTab(id);
+
     for (const f of this.cacheState.firearms) {
       events.push({
         date: f.createdAt,
-        icon: "mdi:plus-circle-outline",
+        icon: f.isWishlist ? "mdi:bookmark-outline" : "mdi:plus-circle-outline",
         title: f.customName,
-        desc: "Added to collection",
-        firearmId: f.id,
+        desc: f.isWishlist ? "Added to wishlist" : "Added to collection",
+        open: openFirearm(f.id),
       });
       for (const c of f.cleaningHistory) {
         events.push({
@@ -595,23 +623,56 @@ export class CacheDashboardView extends LitElement {
           icon: "mdi:water-outline",
           title: f.customName,
           desc: c.notes ? `Cleaned · ${c.notes}` : "Cleaned",
-          firearmId: f.id,
+          loggedAt: c.createdAt,
+          open: openFirearm(f.id),
         });
       }
     }
-    for (const s of this.cacheState.rangeSessions) {
-      for (const entry of s.firearms) {
-        if (entry.roundsFired <= 0) continue;
+    for (const i of this.cacheState.inventoryItems) {
+      events.push({
+        date: i.createdAt,
+        icon: i.isWishlist ? "mdi:bookmark-outline" : "mdi:puzzle-outline",
+        title: i.customName,
+        desc: i.isWishlist
+          ? "Part added to wishlist"
+          : `Part added${i.partType ? ` · ${i.partType}` : ""}`,
+        open: openItem(i.id),
+      });
+      // A wishlist part "installed" on a firearm is a planned build, not
+      // a real install - say so, so it doesn't read like hardware moved.
+      if (i.installedAt && i.installedFirearmName) {
         events.push({
-          date: s.date,
-          icon: "mdi:target",
-          title: entry.firearmName ?? "Unknown Firearm",
-          desc: `${formatNumber(entry.roundsFired)} rounds fired${
-            entry.ammunitionLabel ? ` · ${entry.ammunitionLabel}` : ""
-          }`,
-          firearmId: entry.firearmId,
+          date: i.installedAt,
+          icon: i.isWishlist ? "mdi:bookmark-outline" : "mdi:link-variant",
+          title: i.customName,
+          desc: i.isWishlist
+            ? `Wishlist part added to ${i.installedFirearmName} build`
+            : `Installed on ${i.installedFirearmName}`,
+          open: openItem(i.id),
         });
       }
+    }
+    for (const loc of this.cacheState.storageLocations) {
+      events.push({
+        date: loc.createdAt,
+        icon: "mdi:warehouse",
+        title: loc.name,
+        desc: "Storage location added",
+        open: tab("storage-locations"),
+      });
+    }
+    for (const s of this.cacheState.rangeSessions) {
+      const firearmCount = s.firearms.length;
+      events.push({
+        date: s.date,
+        icon: "mdi:target",
+        title: s.location ? `Range session · ${s.location}` : "Range session",
+        desc: `${formatNumber(s.totalRounds)} rounds · ${firearmCount} ${
+          firearmCount === 1 ? "firearm" : "firearms"
+        }`,
+        loggedAt: s.createdAt,
+        open: tab("range-sessions"),
+      });
     }
     for (const a of this.cacheState.ammunition) {
       const label = [a.manufacturer, a.caliber].filter(Boolean).join(" ") || a.caliber;
@@ -623,12 +684,13 @@ export class CacheDashboardView extends LitElement {
           icon: t.changeType === "add" ? "mdi:tray-arrow-down" : "mdi:tray-arrow-up",
           title: label,
           desc: `${formatNumber(Math.abs(t.quantityDelta))} rounds ${verb}`,
+          open: tab("ammunition"),
         });
       }
     }
     events.sort((x, y) => {
       const cmp = y.date.slice(0, 10).localeCompare(x.date.slice(0, 10));
-      return cmp !== 0 ? cmp : y.date.localeCompare(x.date);
+      return cmp !== 0 ? cmp : (y.loggedAt ?? y.date).localeCompare(x.loggedAt ?? x.date);
     });
     return events;
   }
@@ -638,7 +700,7 @@ export class CacheDashboardView extends LitElement {
     if (all.length === 0) {
       return html`<div class="empty">Nothing logged yet.</div>`;
     }
-    const shown = all.slice(0, 6);
+    const shown = all.slice(0, this._activityExpanded ? ACTIVITY_EXPANDED : ACTIVITY_COLLAPSED);
     const groups: { date: string; events: ActivityEvent[] }[] = [];
     for (const ev of shown) {
       const dateKey = ev.date.slice(0, 10);
@@ -656,10 +718,7 @@ export class CacheDashboardView extends LitElement {
             <div class="activity-date">${formatDate(g.date)}</div>
             ${g.events.map(
               (ev) => html`
-                <div
-                  class="activity-item ${ev.firearmId ? "clickable" : ""}"
-                  @click=${ev.firearmId ? () => this._openFirearm(ev.firearmId!) : undefined}
-                >
+                <div class="activity-item ${ev.open ? "clickable" : ""}" @click=${ev.open}>
                   <div class="activity-icon"><ha-icon icon=${ev.icon}></ha-icon></div>
                   <div>
                     <div class="activity-title">${ev.title}</div>
@@ -671,9 +730,12 @@ export class CacheDashboardView extends LitElement {
           </div>
         `
       )}
-      ${all.length > shown.length
+      ${all.length > ACTIVITY_COLLAPSED
         ? html`<div class="panel-footer">
-            <a @click=${() => this._switchTab("firearms")}>View All <ha-icon icon="mdi:arrow-right"></ha-icon></a>
+            <a @click=${() => (this._activityExpanded = !this._activityExpanded)}>
+              ${this._activityExpanded ? "Show less" : "Show more"}
+              <ha-icon icon=${this._activityExpanded ? "mdi:chevron-up" : "mdi:chevron-down"}></ha-icon>
+            </a>
           </div>`
         : ""}
     `;
