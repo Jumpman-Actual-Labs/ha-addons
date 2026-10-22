@@ -6,6 +6,24 @@ Add-on Store once; every top-level folder with a `config.yaml` shows up as
 its own installable add-on. (Renamed from `ha-cache-addon` so new add-ons
 don't each need their own repository.)
 
+## Commit identity (check before every commit)
+
+Every commit here must be authored and committed as:
+
+```
+jumpmanactual <75352153+jumpmanactual@users.noreply.github.com>
+```
+
+Run `git config user.name` / `git config user.email` first; if they're
+unset or anything else, set them for this repo with `git config user.name
+jumpmanactual` and `git config user.email
+75352153+jumpmanactual@users.noreply.github.com`. Never invent an identity:
+GitHub credits a commit to whichever account owns its email, and a guessed
+`<name>@users.noreply.github.com` belongs to a real stranger (this happened
+once - three commits were credited to an unrelated user "jordan" and had to
+be rewritten). `commit-identity.yml` fails CI on any push or PR whose
+commits use a different author or committer email.
+
 ## Adding a new add-on
 
 1. Create a top-level folder named after the add-on's `slug`
