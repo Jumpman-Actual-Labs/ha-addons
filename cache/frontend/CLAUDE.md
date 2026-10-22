@@ -1094,7 +1094,20 @@ issues") is simply not shown, rather than invented.
    the shared `_bars()` helper, replacing three separate always-visible
    panels. Reuses the same `.segmented` component the Owned/Both/
    Wishlist filter already uses elsewhere, not a new tab-control.
-3. **Armory Status** - answers "does anything need attention?", not
+3. **Armory Status** - every row opens exactly the records it counts:
+   "Need Cleaning" opens Firearms filtered to `needsCleaning`, "NFA
+   Firearms" opens Firearms filtered to `NFA_FIREARM_TYPES`, "Suppressors"
+   opens Parts filtered to `partType === "Suppressor"` (owned only, all
+   computed client-side). The backend's `nfaItems` total mixes SBR
+   firearms with suppressor parts, which live on different pages, so the
+   row is split in two - and the Firearms/Wishlist KPI cards' "NFA" counts
+   use firearms only for the same reason. The filter rides on
+   `cache-switch-tab`'s `filter` -> cache-panel's `_pendingFilter` -> the
+   view's `initialFilter` prop -> a `_preset` state rendered as a
+   removable `.filter-chip` (styles.ts); applying a preset resets that
+   view's other filters to owned/no search so nothing hides what was
+   counted. Picking a tab from the sidebar clears it. Original intent:
+   answers "does anything need attention?", not
    another stats dump. `_statusMetric()` rows for `cleaningDueCount`
    ("Need Cleaning", clickable -> Firearms tab) and `trainingDueCount`
    ("Training Due", clickable -> Training Schedule tab) - collapsed into
@@ -1112,9 +1125,11 @@ issues") is simply not shown, rather than invented.
    `cache-panel.ts`'s sidebar bullet already documents.
 4. **Recent Activity** - a single chronological feed (`_activityFeed`
    getter) built from the raw collection: firearm adds (a wishlist firearm
-   says "Added to wishlist" instead of "Added to collection" - only
-   `createdAt` is stored, so one later marked purchased still shows its
-   original add), part adds and part installs (`InventoryItem.installedAt`,
+   says "Added to wishlist" instead of "Added to collection"; when it's
+   later marked purchased, the backend's `acquiredAt` adds a second
+   "Added to collection" row at that moment - records converted before
+   `acquired_at` existed have no such row), part adds (an owned part
+   bought off the wishlist is dated by `acquiredAt`, not `createdAt`) and part installs (`InventoryItem.installedAt`,
    "Installed on <firearm>") for OWNED parts only - wishlist parts are
    skipped entirely, neither their add nor a planned-build install counts
    as collection activity (Jordan asked for that explicitly), storage
@@ -1128,10 +1143,10 @@ issues") is simply not shown, rather than invented.
    timestamp - otherwise date-only events always sank below that day's
    timestamped ones. Each row carries an `open` callback: firearms/
    cleanings open the firearm, parts open the part (`cache-view-item`),
-   locations/sessions/ammo switch to their tab. Shows 6 rows
-   (`ACTIVITY_COLLAPSED`); the footer's "Show more / Show less" expands
-   in place to 30 (`ACTIVITY_EXPANDED`) - there's no separate activity
-   page to link to.
+   locations/sessions/ammo switch to their tab. Shows the 10 newest rows
+   (`ACTIVITY_COLLAPSED`); "Show more / Show less" expands in place to 20
+   (`ACTIVITY_EXPANDED`), and anything older than that isn't shown at all
+   (Jordan's spec) - there's no separate activity page.
 5. **Most Used** - a top-3-to-5 RANKING (`_mostUsed` getter reads
    `DashboardStats.mostUsedIds`, already sorted desc server-side, then
    filters out zero-round entries UNLESS fewer than 3 firearms would be

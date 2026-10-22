@@ -2,6 +2,7 @@ import { LitElement, css, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "../ha-api";
 import type { CacheState, DashboardStats, Firearm } from "../types";
+import { NFA_FIREARM_TYPES } from "../types";
 import { glassCardStyle, formStyles } from "../styles";
 import { formatCurrency, formatDate, formatNumber } from "../utils/format";
 import { firearmHeroImage } from "../utils/hero-image";
@@ -21,8 +22,10 @@ interface ActivityEvent {
   open?: () => void;
 }
 
-const ACTIVITY_COLLAPSED = 6;
-const ACTIVITY_EXPANDED = 30;
+// The feed shows the 10 newest events; "Show more" reveals the next 10.
+// Anything older than those 20 isn't shown at all.
+const ACTIVITY_COLLAPSED = 10;
+const ACTIVITY_EXPANDED = 20;
 
 /** The Dashboard - Cache's "home screen," not a grid of individual
  * database stats. SEVEN consolidated glass surfaces (Armory Overview's 4
@@ -534,9 +537,9 @@ export class CacheDashboardView extends LitElement {
   // pattern as cache-open-firearm. The optional `wishlist` flag only
   // does anything when `tab` is "firearms" - see cache-panel.ts's
   // _handleSwitchTab.
-  private _switchTab(tab: string, wishlist = false): void {
+  private _switchTab(tab: string, wishlist = false, filter?: string): void {
     this.dispatchEvent(
-      new CustomEvent("cache-switch-tab", { detail: { tab, wishlist }, bubbles: true, composed: true })
+      new CustomEvent("cache-switch-tab", { detail: { tab, wishlist, filter }, bubbles: true, composed: true })
     );
   }
 
@@ -578,10 +581,12 @@ export class CacheDashboardView extends LitElement {
     );
   }
 
-  private _statusMetric(count: number, label: string, tab?: string) {
+  /** One Armory Status row. `filter` opens `tab` pre-filtered to exactly
+   * the records this row counts (see cache-panel's _pendingFilter). */
+  private _statusMetric(count: number, label: string, tab?: string, filter?: string) {
     const body = html`<span class="status-count">${count}</span><span class="status-label">${label}</span>`;
     return tab
-      ? html`<button class="status-metric clickable" @click=${() => this._switchTab(tab)}>${body}</button>`
+      ? html`<button class="status-metric clickable" @click=${() => this._switchTab(tab, false, filter)}>${body}</button>`
       : html`<div class="status-metric">${body}</div>`;
   }
 
@@ -617,6 +622,17 @@ export class CacheDashboardView extends LitElement {
         desc: f.isWishlist ? "Added to wishlist" : "Added to collection",
         open: openFirearm(f.id),
       });
+      // Bought off the wishlist - its own "Added to collection" row at the
+      // moment it was marked owned (the add above stays as history).
+      if (f.acquiredAt && !f.isWishlist) {
+        events.push({
+          date: f.acquiredAt,
+          icon: "mdi:plus-circle-outline",
+          title: f.customName,
+          desc: "Added to collection",
+          open: openFirearm(f.id),
+        });
+      }
       for (const c of f.cleaningHistory) {
         events.push({
           date: c.cleanedDate,
@@ -634,7 +650,9 @@ export class CacheDashboardView extends LitElement {
     for (const i of this.cacheState.inventoryItems) {
       if (i.isWishlist) continue;
       events.push({
-        date: i.createdAt,
+        // A part bought off the wishlist joins the collection when it was
+        // marked owned, not when it was first wishlisted.
+        date: i.acquiredAt ?? i.createdAt,
         icon: "mdi:puzzle-outline",
         title: i.customName,
         desc: `Part added${i.partType ? ` · ${i.partType}` : ""}`,
@@ -878,10 +896,25 @@ export class CacheDashboardView extends LitElement {
       `;
     }
 
-    const standardFirearms = stats.totalFirearms - stats.nfaItems;
     const caliberCount = Object.keys(stats.ammunitionByCaliber).length;
     const cleaningDue = this.cacheState.cleaningDueCount;
     const trainingDue = this.cacheState.trainingDueCount;
+    // The NFA total (stats.nfaItems) mixes SBR firearms with suppressor
+    // parts, which live on different pages - so Armory Status shows them
+    // as two rows, each opening its own filtered list. Same definition as
+    // the backend's dashboard_stats: owned records only.
+    const nfaFirearms = this.cacheState.firearms.filter(
+      (f) => !f.isWishlist && NFA_FIREARM_TYPES.includes(f.firearmType)
+    ).length;
+    const suppressors = this.cacheState.inventoryItems.filter(
+      (i) => !i.isWishlist && i.partType === "Suppressor"
+    ).length;
+    // The Firearms/Wishlist KPI cards' "NFA" counts are firearms only, for
+    // the same reason - a suppressor part isn't a firearm.
+    const standardFirearms = stats.totalFirearms - nfaFirearms;
+    const wishlistNfaFirearms = this.cacheState.firearms.filter(
+      (f) => f.isWishlist && NFA_FIREARM_TYPES.includes(f.firearmType)
+    ).length;
     const lastSessionDate = this.cacheState.rangeSessions.reduce<string | null>(
       (latest, s) => (!latest || s.date > latest ? s.date : latest),
       null
@@ -893,7 +926,7 @@ export class CacheDashboardView extends LitElement {
           "mdi:target",
           "Firearms",
           formatNumber(stats.totalFirearms),
-          stats.nfaItems > 0 ? `${formatNumber(standardFirearms)} Standard · ${formatNumber(stats.nfaItems)} NFA` : "Standard"
+          nfaFirearms > 0 ? `${formatNumber(standardFirearms)} Standard · ${formatNumber(nfaFirearms)} NFA` : "Standard"
         )}
         ${this._kpiCard(
           "mdi:ammunition",
@@ -912,7 +945,7 @@ export class CacheDashboardView extends LitElement {
           "Wishlist",
           formatCurrency(stats.wishlistTotalValue),
           `${formatNumber(stats.wishlistFirearmsCount)} Firearm${stats.wishlistFirearmsCount === 1 ? "" : "s"}`,
-          stats.wishlistNfaItems > 0 ? `${stats.wishlistNfaItems} NFA` : undefined
+          wishlistNfaFirearms > 0 ? `${wishlistNfaFirearms} NFA` : undefined
         )}
       </div>
 
@@ -957,9 +990,14 @@ export class CacheDashboardView extends LitElement {
               ? html`<span class="status-pill nominal"><span class="status-dot"></span>Nominal</span>`
               : html`<span class="status-pill attention"><span class="status-dot"></span>Attention</span>`}
           </div>
-          ${cleaningDue > 0 ? this._statusMetric(cleaningDue, "Need Cleaning", "firearms") : ""}
+          ${cleaningDue > 0 ? this._statusMetric(cleaningDue, "Need Cleaning", "firearms", "cleaning-due") : ""}
           ${trainingDue > 0 ? this._statusMetric(trainingDue, "Training Due", "training-schedule") : ""}
-          ${stats.nfaItems > 0 ? this._statusMetric(stats.nfaItems, "NFA Item" + (stats.nfaItems === 1 ? "" : "s"), "firearms") : ""}
+          ${nfaFirearms > 0
+            ? this._statusMetric(nfaFirearms, nfaFirearms === 1 ? "NFA Firearm" : "NFA Firearms", "firearms", "nfa")
+            : ""}
+          ${suppressors > 0
+            ? this._statusMetric(suppressors, suppressors === 1 ? "Suppressor" : "Suppressors", "inventory", "suppressors")
+            : ""}
           <div class="status-divider"></div>
           <div class="status-footer-label">Last Range Session</div>
           <div class="status-footer-value">${lastSessionDate ? formatDate(lastSessionDate) : "No sessions logged"}</div>

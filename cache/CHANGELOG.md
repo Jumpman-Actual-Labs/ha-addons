@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.9
+
+- Recent Activity: a wishlist firearm marked as purchased now gets its own
+  "Added to collection" line at the moment it was bought (from now on -
+  ones bought before this update have no recorded purchase time). Parts
+  bought off the wishlist are dated the same way.
+- Recent Activity shows the 10 newest events; "Show more" adds 10 more, and
+  anything older drops off.
+- Armory Status rows now open exactly what they count: "Need Cleaning"
+  opens Firearms filtered to the ones needing cleaning, and the NFA count
+  is split into "NFA Firearms" (opens Firearms filtered to them) and
+  "Suppressors" (opens Parts filtered to them). A chip shows the active
+  filter and clears it.
+- The Firearms and Wishlist cards' "NFA" counts no longer include
+  suppressor parts.
+
 ## 1.0.8
 
 - Recent Activity no longer lists wishlist parts - neither adding one nor

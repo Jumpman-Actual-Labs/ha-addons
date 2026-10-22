@@ -54,6 +54,10 @@ export class CacheInventoryView extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @property({ attribute: false }) cacheState!: CacheState;
   @property({ type: String }) initialItemId: string | null = null;
+  /** Preset filter from the dashboard's Armory Status (see cache-panel's
+   * _pendingFilter) - currently only "suppressors". Removable chip. */
+  @property({ type: String }) initialFilter: string | null = null;
+  @state() private _preset: "suppressors" | null = null;
 
   @state() private _search = "";
   @state() private _category = "";
@@ -246,6 +250,13 @@ export class CacheInventoryView extends LitElement {
     if (changed.has("initialItemId") && this.initialItemId) {
       this._selectedId = this.initialItemId;
     }
+    if (changed.has("initialFilter") && this.initialFilter === "suppressors") {
+      this._preset = "suppressors";
+      this._wishlistFilter = "owned";
+      this._search = "";
+      this._category = "";
+      this._selectedId = null;
+    }
     if (changed.has("_selectedId")) {
       this._estimating = false;
       this._valueEstimate = null;
@@ -259,6 +270,7 @@ export class CacheInventoryView extends LitElement {
       if (this._wishlistFilter === "owned" && i.isWishlist) return false;
       if (this._wishlistFilter === "wishlist" && !i.isWishlist) return false;
       if (this._category && i.category !== this._category) return false;
+      if (this._preset === "suppressors" && i.partType !== "Suppressor") return false;
       if (!s) return true;
       return (
         i.customName.toLowerCase().includes(s) ||
@@ -627,6 +639,15 @@ export class CacheInventoryView extends LitElement {
         <h1 style="margin:0;font-size:1.4rem;font-weight:600">Parts Inventory</h1>
         <button class="primary" @click=${this._openAdd}>+ Add Item</button>
       </div>
+
+      ${this._preset
+        ? html`<div class="filter-chip">
+            Suppressors
+            <button title="Clear filter" aria-label="Clear filter" @click=${() => (this._preset = null)}>
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>`
+        : ""}
 
       <div class="filters">
         <input

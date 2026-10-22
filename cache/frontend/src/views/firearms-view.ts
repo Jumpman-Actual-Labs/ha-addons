@@ -5,7 +5,7 @@ import { cacheApi } from "../ha-api";
 import type { CacheState, Firearm, InventoryItem, UsedValueEstimate } from "../types";
 import { installedBySlot } from "../utils/installed-items";
 import { firearmHeroImage } from "../utils/hero-image";
-import { CONDITIONS, FIREARM_TYPES, FIREARM_USES } from "../types";
+import { CONDITIONS, FIREARM_TYPES, FIREARM_USES, NFA_FIREARM_TYPES } from "../types";
 import { glassCardStyle, formStyles } from "../styles";
 import { formatCurrency, formatDate, formatNumber, todayIso } from "../utils/format";
 import { knownCalibers, knownManufacturers } from "../utils/options";
@@ -149,6 +149,10 @@ export class CacheFirearmsView extends LitElement {
   // via cache-panel.ts's cache-switch-tab wishlist flag, to land directly
   // on the Wishlist segment instead of the default Owned one.
   @property({ type: Boolean }) initialWishlistFilter = false;
+  /** Preset filter from the dashboard's Armory Status (see cache-panel's
+   * _pendingFilter): "cleaning-due" or "nfa". Shown as a removable chip. */
+  @property({ type: String }) initialFilter: string | null = null;
+  @state() private _preset: "cleaning-due" | "nfa" | null = null;
 
   @state() private _search = "";
   @state() private _typeFilter = "";
@@ -521,6 +525,16 @@ export class CacheFirearmsView extends LitElement {
     if (changed.has("initialWishlistFilter") && this.initialWishlistFilter) {
       this._wishlistFilter = "wishlist";
     }
+    if (changed.has("initialFilter") && (this.initialFilter === "cleaning-due" || this.initialFilter === "nfa")) {
+      // Both presets are about owned firearms - start from a clean slate so
+      // a leftover search/type filter can't hide what the dashboard counted.
+      this._preset = this.initialFilter;
+      this._wishlistFilter = "owned";
+      this._search = "";
+      this._typeFilter = "";
+      this._conditionFilter = "";
+      this._selectedId = null;
+    }
     if (changed.has("_selectedId")) {
       this._valueExpanded = false;
       this._priceExpanded = false;
@@ -537,6 +551,8 @@ export class CacheFirearmsView extends LitElement {
       if (this._wishlistFilter === "wishlist" && !f.isWishlist) return false;
       if (this._typeFilter && f.firearmType !== this._typeFilter) return false;
       if (this._conditionFilter && f.condition !== this._conditionFilter) return false;
+      if (this._preset === "cleaning-due" && !f.needsCleaning) return false;
+      if (this._preset === "nfa" && !NFA_FIREARM_TYPES.includes(f.firearmType)) return false;
       if (!s) return true;
       return (
         f.customName.toLowerCase().includes(s) ||
@@ -1246,6 +1262,15 @@ export class CacheFirearmsView extends LitElement {
           <button class="primary" @click=${this._openAdd}>+ Add Firearm</button>
         </div>
       </div>
+
+      ${this._preset
+        ? html`<div class="filter-chip">
+            ${this._preset === "cleaning-due" ? "Needs cleaning" : "NFA firearms"}
+            <button title="Clear filter" aria-label="Clear filter" @click=${() => (this._preset = null)}>
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>`
+        : ""}
 
       <div class="filters">
         <input

@@ -365,8 +365,10 @@ class CacheCoordinator:
         # rather than leaving a stale rank behind on an owned firearm.
         if firearm.is_wishlist and not was_wishlist:
             firearm.wishlist_rank = self._next_wishlist_firearm_rank()
+            firearm.acquired_at = None
         elif not firearm.is_wishlist and was_wishlist:
             firearm.wishlist_rank = None
+            firearm.acquired_at = now_iso()
         firearm.updated_at = now_iso()
         await self._async_save()
         return firearm
@@ -541,6 +543,7 @@ class CacheCoordinator:
             raise CacheError(
                 "Item is installed on a firearm; remove it before changing storage location"
             )
+        was_wishlist = item.is_wishlist
         for key, value in fields.items():
             if key == "custom_name":
                 normalized = _normalize(value)
@@ -553,6 +556,11 @@ class CacheCoordinator:
                 item.custom_name = normalized
                 continue
             setattr(item, key, _normalize(value))
+        # Same transition bookkeeping as async_update_firearm's acquired_at.
+        if item.is_wishlist and not was_wishlist:
+            item.acquired_at = None
+        elif not item.is_wishlist and was_wishlist:
+            item.acquired_at = now_iso()
         item.updated_at = now_iso()
         await self._async_save()
         return item

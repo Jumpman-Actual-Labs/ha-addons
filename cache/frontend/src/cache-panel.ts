@@ -51,6 +51,10 @@ export class CachePanel extends LitElement {
   @state() private _pendingFirearmId: string | null = null;
   @state() private _pendingItemId: string | null = null;
   @state() private _pendingWishlistFilter = false;
+  // A preset list filter for the target tab (e.g. "cleaning-due" on
+  // Firearms, "suppressors" on Parts) - from the dashboard's Armory
+  // Status rows. See cache-switch-tab's `filter`.
+  @state() private _pendingFilter: string | null = null;
 
   // Shared tactical tokens inherit through every Lit shadow root.
   static styles = css`
@@ -371,6 +375,7 @@ export class CachePanel extends LitElement {
     this._pendingFirearmId = null;
     this._pendingItemId = null;
     this._pendingWishlistFilter = false;
+    this._pendingFilter = null;
   }
 
   /** Lets other views (e.g. a range session card, an inventory item's
@@ -379,6 +384,7 @@ export class CachePanel extends LitElement {
   private _handleOpenFirearm(e: Event): void {
     const firearmId = (e as CustomEvent<{ firearmId: string }>).detail.firearmId;
     this._pendingFirearmId = firearmId;
+    this._pendingFilter = null;
     this._tab = "firearms";
   }
 
@@ -387,6 +393,7 @@ export class CachePanel extends LitElement {
   private _handleViewItem(e: Event): void {
     const itemId = (e as CustomEvent<{ itemId: string }>).detail.itemId;
     this._pendingItemId = itemId;
+    this._pendingFilter = null;
     this._tab = "inventory";
   }
 
@@ -399,11 +406,12 @@ export class CachePanel extends LitElement {
    * would immediately clear the pending flag this handler just set) -
    * same reasoning as `_handleOpenFirearm`/`_handleViewItem` below. */
   private _handleSwitchTab(e: Event): void {
-    const detail = (e as CustomEvent<{ tab: string; wishlist?: boolean }>).detail;
+    const detail = (e as CustomEvent<{ tab: string; wishlist?: boolean; filter?: string }>).detail;
     if (!TABS.some((t) => t.id === detail.tab)) return;
     this._pendingFirearmId = null;
     this._pendingItemId = null;
     this._pendingWishlistFilter = detail.wishlist ?? false;
+    this._pendingFilter = detail.filter ?? null;
     this._tab = detail.tab as Tab;
   }
 
@@ -475,6 +483,7 @@ export class CachePanel extends LitElement {
               .cacheState=${state}
               .initialFirearmId=${this._pendingFirearmId}
               .initialWishlistFilter=${this._pendingWishlistFilter}
+              .initialFilter=${this._pendingFilter}
             ></cache-firearms-view>`
           : ""}
         ${this._tab === "inventory"
@@ -482,6 +491,7 @@ export class CachePanel extends LitElement {
               .hass=${this.hass}
               .cacheState=${state}
               .initialItemId=${this._pendingItemId}
+              .initialFilter=${this._pendingFilter}
             ></cache-inventory-view>`
           : ""}
         ${this._tab === "ammunition"

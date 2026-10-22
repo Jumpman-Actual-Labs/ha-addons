@@ -230,6 +230,13 @@ class Firearm:
     # complete new order in one call, not per-item deltas).
     is_wishlist: bool = False
     wishlist_rank: int | None = None
+    # When a wishlist record was marked owned ("Mark as Purchased") - set
+    # by the coordinator on the is_wishlist True->False transition, cleared
+    # if it goes back on the wishlist. None for records that were never on
+    # the wishlist (their created_at is when they joined the collection).
+    # Not a settable service field. Drives the dashboard's "Added to
+    # collection" activity row for converted wishlist entries.
+    acquired_at: str | None = None
 
     photos: list[Photo] = field(default_factory=list)
     documents: list[Document] = field(default_factory=list)
@@ -273,6 +280,7 @@ class Firearm:
             "primary_photo_id": self.primary_photo_id,
             "is_wishlist": self.is_wishlist,
             "wishlist_rank": self.wishlist_rank,
+            "acquired_at": self.acquired_at,
             "photos": [p.to_dict() for p in self.photos],
             "documents": [d.to_dict() for d in self.documents],
             "cleaning_history": [c.to_dict() for c in self.cleaning_history],
@@ -316,6 +324,7 @@ class Firearm:
             primary_photo_id=data.get("primary_photo_id"),
             is_wishlist=data.get("is_wishlist", False),
             wishlist_rank=_as_int(data.get("wishlist_rank")),
+            acquired_at=data.get("acquired_at"),
             photos=[Photo.from_dict(p) for p in data.get("photos", [])],
             documents=[Document.from_dict(d) for d in data.get("documents", [])],
             cleaning_history=[
@@ -365,6 +374,13 @@ class InventoryItem:
     # actually spent.
     is_wishlist: bool = False
     wishlist_priority: str | None = None
+    # When a wishlist record was marked owned ("Mark as Purchased") - set
+    # by the coordinator on the is_wishlist True->False transition, cleared
+    # if it goes back on the wishlist. None for records that were never on
+    # the wishlist (their created_at is when they joined the collection).
+    # Not a settable service field. Drives the dashboard's "Added to
+    # collection" activity row for converted wishlist entries.
+    acquired_at: str | None = None
 
     # Same idea as Firearm.product_url - a link to buy/reference this
     # part, most useful while it's still on the wishlist.
@@ -395,6 +411,7 @@ class InventoryItem:
             "installed_at": self.installed_at,
             "is_wishlist": self.is_wishlist,
             "wishlist_priority": self.wishlist_priority,
+            "acquired_at": self.acquired_at,
             "product_url": self.product_url,
             "photos": [p.to_dict() for p in self.photos],
             "created_at": self.created_at,
@@ -422,6 +439,7 @@ class InventoryItem:
             installed_at=data.get("installed_at"),
             is_wishlist=data.get("is_wishlist", False),
             wishlist_priority=data.get("wishlist_priority"),
+            acquired_at=data.get("acquired_at"),
             product_url=data.get("product_url"),
             photos=[Photo.from_dict(p) for p in data.get("photos", [])],
             created_at=data.get("created_at", now_iso()),

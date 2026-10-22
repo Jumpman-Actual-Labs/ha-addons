@@ -164,6 +164,33 @@ export const formStyles = css`
   button.link.danger:hover {
     background: color-mix(in srgb, var(--error-color, #e5484d) 10%, transparent);
   }
+  /* A removable "this list is filtered" chip, shown above a list opened
+     pre-filtered from elsewhere (e.g. the dashboard's Armory Status). */
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 12px;
+    padding: 4px 6px 4px 12px;
+    border: 1px solid var(--hud-border-hover, rgba(255, 255, 255, 0.16));
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--primary-text-color, #f2f4f6);
+    background: color-mix(in srgb, var(--primary-color, #f2f4f6) 8%, transparent);
+  }
+  .filter-chip button {
+    display: inline-flex;
+    padding: 2px;
+    background: none;
+    border: none;
+    color: var(--secondary-text-color, #a1a7b0);
+    cursor: pointer;
+    --mdc-icon-size: 16px;
+  }
+  .filter-chip button:hover {
+    color: var(--primary-text-color, #f2f4f6);
+  }
   /* Square icon-only button (an ha-icon inside, plus a title/aria-label
      for the text it doesn't show) - for small, frequent card actions where
      a labelled button would crowd the card. */

@@ -149,6 +149,31 @@ async def test_mark_firearm_purchased_clears_wishlist_rank(coordinator):
     assert updated.purchase_date == "2026-01-01"
 
 
+async def test_mark_firearm_purchased_records_acquired_at(coordinator):
+    owned = await _add_firearm(coordinator)
+    assert owned.acquired_at is None  # never on the wishlist
+
+    firearm = await _add_firearm(coordinator, is_wishlist=True)
+    assert firearm.acquired_at is None
+    await coordinator.async_update_firearm(firearm.id, notes="still wanted")
+    assert firearm.acquired_at is None  # unrelated edits don't count
+
+    await coordinator.async_update_firearm(firearm.id, is_wishlist=False)
+    assert firearm.acquired_at is not None
+    assert firearm.acquired_at >= firearm.created_at
+
+    await coordinator.async_update_firearm(firearm.id, is_wishlist=True)
+    assert firearm.acquired_at is None  # back on the wishlist
+
+
+async def test_mark_part_purchased_records_acquired_at(coordinator):
+    item = await _add_item(coordinator, is_wishlist=True)
+    assert item.acquired_at is None
+    await coordinator.async_update_inventory_item(item.id, is_wishlist=False)
+    assert item.acquired_at is not None
+    assert item.to_dict()["acquired_at"] == item.acquired_at
+
+
 async def test_reorder_wishlist_firearms(coordinator):
     a = await _add_firearm(coordinator, is_wishlist=True)
     b = await _add_firearm(coordinator, is_wishlist=True)

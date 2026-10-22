@@ -322,7 +322,12 @@ registration, read it as the add-on equivalent: `storage.py`'s
   frontend just calls the existing `update_firearm`/`update_inventory_item`
   with `is_wishlist: false` (and usually `purchase_date`/`purchase_price`
   filled in at the same time), since flipping a flag on an existing record
-  is all "purchasing" a wishlist entry actually is.
+  is all "purchasing" a wishlist entry actually is. The coordinator does record
+  WHEN it happened: `acquired_at` (Firearm and InventoryItem) is set to
+  now on the `is_wishlist` True->False transition in `async_update_firearm`
+  / `async_update_inventory_item`, cleared on False->True, and `None` for
+  records never on the wishlist. Not a settable service field; it drives the
+  dashboard's "Added to collection" activity row for bought wishlist items.
   **`Firearm` and `InventoryItem` now use TWO DIFFERENT wishlist-priority
   schemes**, deliberately - firearms got a full drag-and-drop reorder UI,
   parts didn't (yet):

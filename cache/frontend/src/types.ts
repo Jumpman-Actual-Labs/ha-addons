@@ -57,6 +57,10 @@ export const CALIBERS_BY_FIREARM_TYPE: Record<string, string[]> = {
   Shotgun: SHOTGUN_CALIBERS,
 };
 
+// Mirrors the backend const.py NFA_FIREARM_TYPES - firearm types that count
+// toward the dashboard's NFA total (suppressor parts count too).
+export const NFA_FIREARM_TYPES: string[] = ["SBR"];
+
 export const FIREARM_USES: string[] = ["Training", "Home Defense", "Hunting", "Collectible"];
 
 export const WISHLIST_PRIORITIES: string[] = ["High", "Medium", "Low"];
@@ -208,6 +212,9 @@ export interface Firearm {
   // reassigned via cacheApi.reorderWishlistFirearms.
   isWishlist: boolean;
   wishlistRank: number | null;
+  // When this wishlist record was marked owned (backend-managed, null if it
+  // was never on the wishlist or still is) - see the backend's models.py.
+  acquiredAt: string | null;
   installedItems: InstalledItemSummary[];
   photos: Photo[];
   documents: DocumentEntry[];
@@ -239,6 +246,9 @@ export interface InventoryItem {
   effectiveLocationName: string | null;
   isWishlist: boolean;
   wishlistPriority: string | null;
+  // When this wishlist record was marked owned (backend-managed, null if it
+  // was never on the wishlist or still is) - see the backend's models.py.
+  acquiredAt: string | null;
   // Same idea as Firearm.productUrl - a link to buy/reference this part.
   productUrl: string | null;
   photos: Photo[];
