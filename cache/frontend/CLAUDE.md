@@ -424,7 +424,14 @@ pure white/opaque, per the brief's "avoid making it pure white").
   These are suggestion dropdowns, not enforced enums - free typing still
   works, since there's no closed list of every manufacturer/caliber that
   could exist. Caliber seeds from `COMMON_CALIBERS` in `types.ts` plus
-  whatever's already in the collection; manufacturer is purely from
+  whatever's already in the collection. The Add/Edit Firearm form passes
+  its selected Firearm Type to `knownCalibers()`, which then narrows to
+  that type's `CALIBERS_BY_FIREARM_TYPE` list (handgun/rifle/shotgun
+  groups; AR Pistol/SBR and Lever Action add common pistol calibers) plus
+  calibers already used on firearms of that type - ammo calibers are left
+  out there, since ammo has no firearm type. "Other" isn't mapped, so it
+  gets everything. Ammo and training forms still call it without a type
+  and get the full list. Manufacturer is purely from
   whatever's already in the collection (no baseline list - too broad a
   category to seed usefully).
 - Custom Name is optional on the firearm/inventory-item forms - leave it

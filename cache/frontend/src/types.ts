@@ -18,19 +18,44 @@ export const FIREARM_TYPES: string[] = [
 // a starting point. Any caliber already used in the collection is merged in
 // too (see utils/options.ts), so entering something not on this list works
 // fine and gets remembered as a suggestion from then on.
-export const COMMON_CALIBERS: string[] = [
-  // Handgun
+const HANDGUN_CALIBERS: string[] = [
   ".22 LR", ".25 ACP", ".32 ACP", ".380 ACP", "9mm", ".38 Special", ".357 Magnum",
   ".357 SIG", ".40 S&W", "10mm Auto", ".44 Magnum", ".44 Special", ".45 ACP", ".45 Colt", ".50 AE",
-  // Rifle
-  ".17 HMR", ".22-250 Rem", ".223 Remington", "5.56 NATO", "300 BLK", "6.5 Grendel",
+];
+const RIFLE_CALIBERS: string[] = [
+  ".17 HMR", ".22 LR", ".22-250 Rem", ".223 Remington", "5.56 NATO", "300 BLK", "6.5 Grendel",
   "6.5 Creedmoor", "6.8 SPC", "7.62x39mm", ".243 Winchester", ".270 Winchester",
   "7mm-08 Remington", "7mm Remington Magnum", ".308 Winchester", "7.62 NATO",
   "30-06 Springfield", ".300 Winchester Magnum", ".300 PRC", ".338 Lapua Magnum",
   ".450 Bushmaster", ".50 BMG",
-  // Shotgun
+];
+const SHOTGUN_CALIBERS: string[] = [
   ".410 Bore", "28 Gauge", "20 Gauge", "16 Gauge", "12 Gauge", "10 Gauge",
 ];
+// Pistol calibers commonly chambered in AR-pattern pistols/SBRs and lever
+// guns, on top of those platforms' rifle calibers.
+const AR_PISTOL_CALIBERS: string[] = ["9mm", ".40 S&W", "10mm Auto", ".45 ACP"];
+const LEVER_PISTOL_CALIBERS: string[] = [".22 LR", ".38 Special", ".357 Magnum", ".44 Magnum", ".45 Colt"];
+
+export const COMMON_CALIBERS: string[] = Array.from(
+  new Set([...HANDGUN_CALIBERS, ...RIFLE_CALIBERS, ...SHOTGUN_CALIBERS])
+);
+
+/** Which baseline calibers the firearm form suggests for each firearm type
+ * (see utils/options.ts's knownCalibers). A type missing from this map
+ * ("Other") gets every caliber. Suggestions only - any caliber can still be
+ * typed in. */
+export const CALIBERS_BY_FIREARM_TYPE: Record<string, string[]> = {
+  Handgun: HANDGUN_CALIBERS,
+  PCC: HANDGUN_CALIBERS,
+  Revolver: [...HANDGUN_CALIBERS, ".410 Bore"],
+  Rifle: RIFLE_CALIBERS,
+  "Bolt Action": RIFLE_CALIBERS,
+  "Lever Action": [...RIFLE_CALIBERS, ...LEVER_PISTOL_CALIBERS],
+  "AR Pistol": [...RIFLE_CALIBERS, ...AR_PISTOL_CALIBERS],
+  SBR: [...RIFLE_CALIBERS, ...AR_PISTOL_CALIBERS],
+  Shotgun: SHOTGUN_CALIBERS,
+};
 
 export const FIREARM_USES: string[] = ["Training", "Home Defense", "Hunting", "Collectible"];
 

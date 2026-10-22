@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.6
+
+- Add/Edit Firearm: the caliber suggestions now match the selected firearm
+  type (e.g. Handgun shows only handgun calibers, Shotgun only gauges).
+  Any caliber can still be typed in.
+
 ## 1.0.5
 
 - Sidebar icon is now an ammunition icon instead of a safe.

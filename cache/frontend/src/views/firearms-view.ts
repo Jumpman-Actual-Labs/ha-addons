@@ -1144,7 +1144,7 @@ export class CacheFirearmsView extends LitElement {
             <label>Caliber</label>
             <input list="firearm-caliber-list" .value=${d.caliber} @input=${(e: Event) => set({ caliber: (e.target as HTMLInputElement).value })} />
             <datalist id="firearm-caliber-list">
-              ${knownCalibers(this.cacheState).map((c) => html`<option value=${c}></option>`)}
+              ${knownCalibers(this.cacheState, d.firearmType).map((c) => html`<option value=${c}></option>`)}
             </datalist>
           </div>
         </div>

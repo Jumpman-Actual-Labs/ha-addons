@@ -1,4 +1,4 @@
-import { COMMON_CALIBERS } from "../types";
+import { CALIBERS_BY_FIREARM_TYPE, COMMON_CALIBERS } from "../types";
 import type { CacheState } from "../types";
 
 /** Manufacturer/caliber fields render as a <datalist>-backed input (browser-
@@ -22,15 +22,27 @@ export function knownManufacturers(state: CacheState): string[] {
 // canonical casing always wins over a user-typed variant. This only
 // merges case/whitespace variants of the SAME string; a genuinely
 // different spelling like "12 GA" has its own key and stays separate.
-export function knownCalibers(state: CacheState): string[] {
+//
+// Pass `firearmType` (the firearm form does) to narrow the list to calibers
+// that fit that type: the type's baseline list from CALIBERS_BY_FIREARM_TYPE
+// plus calibers already used on firearms of the same type. Ammunition
+// calibers are left out then, since ammo isn't tied to a firearm type. A
+// type with no mapping ("Other") falls back to the full list.
+export function knownCalibers(state: CacheState, firearmType?: string): string[] {
   const byKey = new Map<string, string>();
   const add = (value: string) => {
     const key = value.trim().toLowerCase();
     if (!byKey.has(key)) byKey.set(key, value);
   };
-  for (const c of COMMON_CALIBERS) add(c);
-  for (const f of state.firearms) if (f.caliber) add(f.caliber);
-  for (const a of state.ammunition) if (a.caliber) add(a.caliber);
+  const forType = firearmType ? CALIBERS_BY_FIREARM_TYPE[firearmType] : undefined;
+  if (forType) {
+    for (const c of forType) add(c);
+    for (const f of state.firearms) if (f.caliber && f.firearmType === firearmType) add(f.caliber);
+  } else {
+    for (const c of COMMON_CALIBERS) add(c);
+    for (const f of state.firearms) if (f.caliber) add(f.caliber);
+    for (const a of state.ammunition) if (a.caliber) add(a.caliber);
+  }
   return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b));
 }
 
