@@ -42,8 +42,9 @@ commits use a different author or committer email.
 Don't leave scratch/template folders containing a `config.yaml` at the
 top level - Supervisor would list them as add-ons.
 
-Each add-on keeps its own CLAUDE.md for its internals. The rest of this
-file is about Cache.
+Each add-on keeps its own CLAUDE.md for its internals (Garage, ported
+from an integration the same way as Cache: `garage/CLAUDE.md`). The rest
+of this file is about Cache.
 
 # Cache add-on
 

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Garage</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #111315;
+        color: rgba(255, 255, 255, 0.6);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+      body > .loading {
+        display: flex;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+        letter-spacing: 0.04em;
+      }
+      /* Height only - display comes from garage-panel's own :host. */
+      garage-panel {
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="loading">Loading Garage…</div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

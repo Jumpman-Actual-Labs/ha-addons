@@ -1,0 +1,32 @@
+name: Garage
+version: "1.0.0"
+slug: garage
+description: Vehicles, fuel, maintenance and documents for your household
+url: https://github.com/Jumpman-Actual-Labs/ha-addons
+arch:
+  - aarch64
+  - amd64
+init: false
+ingress: true
+ingress_stream: true
+panel_icon: mdi:garage
+panel_title: Garage
+# Stash (finance) sync, driver notify.* reminders and the HA user list all
+# go through Home Assistant Core's API.
+homeassistant_api: true
+# Read-only, only so the first start can import the old integration's
+# .storage/garage_data_* document and www/garage_documents|garage_vehicles/
+# files, and fall back to secrets.yaml's openai_api_key. Nothing is ever
+# written there.
+map:
+  - homeassistant_config:ro
+services:
+  - mqtt:want
+options:
+  openai_api_key: ""
+  mqtt_enabled: true
+  log_level: info
+schema:
+  openai_api_key: password?
+  mqtt_enabled: bool
+  log_level: list(debug|info|warning|error)

@@ -13,6 +13,7 @@ then install whichever add-ons you want. Nothing installs until you pick it.
 | --- | --- |
 | [Cache](cache/DOCS.md) | Firearm, parts, ammunition, maintenance and range tracking |
 | [Relay](relay/DOCS.md) | One chat for your Claude Pro and ChatGPT Plus subscriptions |
+| [Garage](garage/DOCS.md) | Vehicles, fuel, maintenance and documents for your household |
 ## AI assistance
 
 These add-ons were built with AI assistance (Anthropic's Claude and
