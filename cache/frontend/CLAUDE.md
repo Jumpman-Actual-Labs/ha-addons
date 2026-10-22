@@ -1111,12 +1111,13 @@ issues") is simply not shown, rather than invented.
    inventing one would violate the same "don't fabricate telemetry" rule
    `cache-panel.ts`'s sidebar bullet already documents.
 4. **Recent Activity** - a single chronological feed (`_activityFeed`
-   getter) built from the raw collection: firearm and part adds (wishlist
-   records say "Added to wishlist" / "Part added to wishlist" instead of
-   "Added to collection" - only `createdAt` is stored, so a wishlist entry
-   later marked purchased still shows its original add), part installs
-   (`InventoryItem.installedAt`, "Installed on <firearm>", or "Wishlist part
-   added to <firearm> build" for a wishlist part on a planned build), storage
+   getter) built from the raw collection: firearm adds (a wishlist firearm
+   says "Added to wishlist" instead of "Added to collection" - only
+   `createdAt` is stored, so one later marked purchased still shows its
+   original add), part adds and part installs (`InventoryItem.installedAt`,
+   "Installed on <firearm>") for OWNED parts only - wishlist parts are
+   skipped entirely, neither their add nor a planned-build install counts
+   as collection activity (Jordan asked for that explicitly), storage
    locations added, cleanings (`CleaningLogEntry.cleanedDate`), ONE row
    per range session (total rounds + firearm count, location in the
    title - it used to be one row per firearm, which buried everything

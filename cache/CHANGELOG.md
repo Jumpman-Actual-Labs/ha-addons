@@ -1,12 +1,18 @@
 # Changelog
 
+## 1.0.8
+
+- Recent Activity no longer lists wishlist parts - neither adding one nor
+  putting one on a firearm's planned build. Wishlist firearms still show as
+  "Added to wishlist".
+
 ## 1.0.7
 
 - Dashboard Recent Activity is more complete and specific:
   - Wishlist firearms and parts say "Added to wishlist" instead of
     "Added to collection".
-  - Now also shows parts added, parts installed on a firearm (and wishlist
-    parts added to a firearm's build), and storage locations added.
+  - Now also shows parts added, parts installed on a firearm, and storage
+    locations added.
   - Range sessions are one line each (total rounds and firearms) instead of
     one line per firearm, so they no longer crowd out everything else.
   - Every row opens what it refers to, and "Show more" expands the list in

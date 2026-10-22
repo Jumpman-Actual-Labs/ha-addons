@@ -628,26 +628,24 @@ export class CacheDashboardView extends LitElement {
         });
       }
     }
+    // Wishlist parts are left out entirely - adding one, or putting one on
+    // a firearm's planned build, isn't activity in the collection. (Wishlist
+    // FIREARMS still show, as "Added to wishlist".)
     for (const i of this.cacheState.inventoryItems) {
+      if (i.isWishlist) continue;
       events.push({
         date: i.createdAt,
-        icon: i.isWishlist ? "mdi:bookmark-outline" : "mdi:puzzle-outline",
+        icon: "mdi:puzzle-outline",
         title: i.customName,
-        desc: i.isWishlist
-          ? "Part added to wishlist"
-          : `Part added${i.partType ? ` · ${i.partType}` : ""}`,
+        desc: `Part added${i.partType ? ` · ${i.partType}` : ""}`,
         open: openItem(i.id),
       });
-      // A wishlist part "installed" on a firearm is a planned build, not
-      // a real install - say so, so it doesn't read like hardware moved.
       if (i.installedAt && i.installedFirearmName) {
         events.push({
           date: i.installedAt,
-          icon: i.isWishlist ? "mdi:bookmark-outline" : "mdi:link-variant",
+          icon: "mdi:link-variant",
           title: i.customName,
-          desc: i.isWishlist
-            ? `Wishlist part added to ${i.installedFirearmName} build`
-            : `Installed on ${i.installedFirearmName}`,
+          desc: `Installed on ${i.installedFirearmName}`,
           open: openItem(i.id),
         });
       }
