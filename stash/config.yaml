@@ -1,0 +1,28 @@
+name: Stash
+version: "1.0.0"
+slug: stash
+description: Household bills, income, budgets, savings and settlements
+url: https://github.com/Jumpman-Actual-Labs/ha-addons
+arch:
+  - aarch64
+  - amd64
+init: false
+ingress: true
+ingress_stream: true
+panel_icon: mdi:cash-multiple
+panel_title: Stash
+# Only for Home Assistant's user list - linking a member to an account, and
+# knowing which viewers are admins.
+homeassistant_api: true
+# Read-only, only so the first start can import the old integration's
+# .storage/finance_data_* document. Nothing is ever written there.
+map:
+  - homeassistant_config:ro
+services:
+  - mqtt:want
+options:
+  mqtt_enabled: true
+  log_level: info
+schema:
+  mqtt_enabled: bool
+  log_level: list(debug|info|warning|error)

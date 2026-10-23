@@ -16,6 +16,7 @@ from .migrate import migrate_from_integration
 from .mqtt import MqttPublisher, async_get_broker
 from .reminders import run_daily_tasks
 from .services import build_handlers
+from .stash_client import StashClient, stash_base_url
 from .storage import GarageStore
 from .web import create_app
 
@@ -37,7 +38,9 @@ async def main() -> None:
             if config.supervisor_token
             else None
         )
-        coordinator = GarageCoordinator(GarageStore(config.store_path), ha)
+        stash_url = stash_base_url(config.hostname)
+        stash = StashClient(session, stash_url) if stash_url else None
+        coordinator = GarageCoordinator(GarageStore(config.store_path), ha, stash)
         await coordinator.async_load()
 
         handlers = build_handlers(coordinator, config)

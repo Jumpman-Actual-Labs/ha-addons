@@ -385,3 +385,50 @@ async def test_requests_outside_ingress_are_refused(aiohttp_client, config, coor
         client = await aiohttp_client(app)
         resp = await client.get("/api/states")
         assert resp.status == 403
+
+
+# ------------------------------------------------------------ stash client
+
+
+def test_stash_base_url():
+    from garage_addon.stash_client import stash_base_url
+
+    assert stash_base_url("a1b2c3d4-garage") == "http://a1b2c3d4-stash:8099"
+    assert stash_base_url("my-laptop") is None
+    assert stash_base_url("") is None
+
+
+async def test_stash_client_against_a_stash_shaped_server(aiohttp_server):
+    from aiohttp import web as aioweb
+
+    from garage_addon.stash_client import StashClient, StashError, StashUnavailable
+
+    calls = []
+
+    async def categories(request):
+        return aioweb.json_response([{"id": "c1", "name": "Transportation"}])
+
+    async def service(request):
+        calls.append((request.match_info["service"], await request.json()))
+        if request.match_info["service"] == "delete_member":
+            return aioweb.json_response({"error": "Unknown service"}, status=404)
+        return aioweb.json_response({"response": {"expense_id": "e1"}})
+
+    app = aioweb.Application()
+    app.router.add_get("/internal/categories", categories)
+    app.router.add_post("/internal/services/{service}", service)
+    server = await aiohttp_server(app)
+
+    async with aiohttp.ClientSession() as session:
+        client = StashClient(session, str(server.make_url("/")))
+        assert await client.find_category_id(" transportation ") == "c1"
+        assert await client.find_category_id("Food") is None
+        assert await client.call_service("add_category_expense", {"a": 1}) == {"expense_id": "e1"}
+        assert calls == [("add_category_expense", {"a": 1})]
+        with pytest.raises(StashError) as err:
+            await client.call_service("delete_member", {})
+        assert not isinstance(err.value, StashUnavailable)
+
+        await server.close()
+        with pytest.raises(StashUnavailable):
+            await client.find_category_id("Transportation")

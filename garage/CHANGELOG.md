@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0
+
+- Stash sync works with the new Stash add-on (talking to it directly), and
+  still with the old Stash integration if that's what's installed.
+
 ## 1.0.0
 
 - Garage is now a Home Assistant add-on instead of a custom integration +

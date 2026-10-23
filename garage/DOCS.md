@@ -30,9 +30,10 @@ Published via MQTT discovery under a **Garage** device:
 
 ## Stash and reminders
 
-- **Stash sync** (Settings tab): when on and the Stash integration is
-  installed, logging fuel or paid maintenance adds an expense to the Stash
-  category you name, and edits/deletes follow it.
+- **Stash sync** (Settings tab): when on and Stash is installed (the Stash
+  add-on from this repository, or the old Stash integration), logging fuel
+  or paid maintenance adds an expense to the Stash category you name, and
+  edits/deletes follow it.
 - **Driver reminders**: every day at 8am, each vehicle's primary driver gets
   overdue-maintenance and low-fuel reminders on their notify target (e.g.
   `notify.mobile_app_phone`).

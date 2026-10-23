@@ -1,0 +1,5 @@
+#!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
+bashio::log.info "Starting Stash"
+cd /app || bashio::exit.nok "App directory missing"
+exec python3 -m stash_addon

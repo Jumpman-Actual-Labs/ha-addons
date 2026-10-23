@@ -29,6 +29,7 @@ from .models import (
     Vehicle,
     new_id,
 )
+from .stash_client import StashClient, StashError, StashUnavailable
 from .storage import GarageStore, default_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -62,19 +63,59 @@ async def _async_finance_loaded(ha: HomeAssistantClient | None) -> bool:
         return False
 
 
+async def _async_stash_addon_call(
+    stash: StashClient | None, service: str, data: dict[str, Any], category_name: str | None = None
+) -> tuple[bool, dict[str, Any] | None]:
+    """Tries the Stash add-on (see stash_client.py). Returns (handled,
+    response): handled is False only when there's no Stash add-on to talk
+    to, so the caller should fall back to the old integration. With
+    `category_name`, looks the category up first and fills in `category_id`.
+    Never raises, same reasoning as _async_sync_to_finance."""
+    if stash is None:
+        return False, None
+    try:
+        if category_name is not None:
+            category_id = await stash.find_category_id(category_name)
+            if category_id is None:
+                _LOGGER.warning(
+                    "Stash sync skipped - no Stash category named %r found", category_name
+                )
+                return True, None
+            data = {**data, "category_id": category_id}
+        return True, await stash.call_service(service, data)
+    except StashUnavailable:
+        return False, None
+    except StashError:
+        _LOGGER.warning("Stash %s failed", service, exc_info=True)
+        return True, None
+
+
 async def _async_sync_to_finance(
     ha: HomeAssistantClient | None,
     name: str,
     amount: float,
     vehicle_name: str,
     category_name: str,
+    stash: StashClient | None = None,
 ) -> str | None:
-    """Optional soft-dependency sync into the Finance (Stash) integration, if
-    installed. Never raises - Finance being absent or erroring must not block
-    a fuel/maintenance log in Garage. Returns the created expense's id (so the
-    caller can store it on the FuelEntry/MaintenanceRecord and later propagate
-    an edit/delete), or None if the sync didn't happen for any reason.
+    """Optional soft-dependency sync into Stash, if installed - the Stash
+    add-on, or failing that the old Finance (Stash) integration. Never
+    raises - Stash being absent or erroring must not block a fuel/
+    maintenance log in Garage. Returns the created expense's id (so the
+    caller can store it on the FuelEntry/MaintenanceRecord and later
+    propagate an edit/delete), or None if the sync didn't happen for any
+    reason.
     """
+    expense = {
+        "name": f"{name} - {vehicle_name}",
+        "amount": amount,
+        "expense_date": date.today().isoformat(),
+    }
+    handled, response = await _async_stash_addon_call(
+        stash, "add_category_expense", expense, category_name
+    )
+    if handled:
+        return (response or {}).get("expense_id")
     if not await _async_finance_loaded(ha):
         return None
     try:
@@ -87,12 +128,7 @@ async def _async_sync_to_finance(
         response = await ha.call_service(
             "finance",
             "add_category_expense",
-            {
-                "category_id": category_id,
-                "name": f"{name} - {vehicle_name}",
-                "amount": amount,
-                "expense_date": date.today().isoformat(),
-            },
+            {"category_id": category_id, **expense},
             return_response=True,
         )
     except HomeAssistantError:
@@ -102,29 +138,36 @@ async def _async_sync_to_finance(
 
 
 async def _async_edit_finance_expense(
-    ha: HomeAssistantClient | None, expense_id: str, **fields: Any
+    ha: HomeAssistantClient | None,
+    expense_id: str,
+    stash: StashClient | None = None,
+    **fields: Any,
 ) -> None:
-    """Best-effort propagation of a Garage-side edit to the linked Finance
+    """Best-effort propagation of a Garage-side edit to the linked Stash
     expense - never raises, same reasoning as _async_sync_to_finance.
     """
-    if not await _async_finance_loaded(ha):
+    data = {"expense_id": expense_id, **fields}
+    handled, _ = await _async_stash_addon_call(stash, "edit_category_expense", data)
+    if handled or not await _async_finance_loaded(ha):
         return
     try:
-        await ha.call_service(
-            "finance", "edit_category_expense", {"expense_id": expense_id, **fields}
-        )
+        await ha.call_service("finance", "edit_category_expense", data)
     except HomeAssistantError:
         _LOGGER.warning("Failed to update linked Finance expense %s", expense_id, exc_info=True)
 
 
-async def _async_delete_finance_expense(ha: HomeAssistantClient | None, expense_id: str) -> None:
-    """Best-effort propagation of a Garage-side delete to the linked Finance
+async def _async_delete_finance_expense(
+    ha: HomeAssistantClient | None, expense_id: str, stash: StashClient | None = None
+) -> None:
+    """Best-effort propagation of a Garage-side delete to the linked Stash
     expense - never raises, same reasoning as _async_sync_to_finance.
     """
-    if not await _async_finance_loaded(ha):
+    data = {"expense_id": expense_id}
+    handled, _ = await _async_stash_addon_call(stash, "delete_category_expense", data)
+    if handled or not await _async_finance_loaded(ha):
         return
     try:
-        await ha.call_service("finance", "delete_category_expense", {"expense_id": expense_id})
+        await ha.call_service("finance", "delete_category_expense", data)
     except HomeAssistantError:
         _LOGGER.warning("Failed to delete linked Finance expense %s", expense_id, exc_info=True)
 
@@ -135,12 +178,18 @@ class GarageCoordinator:
     Not polling-based - state changes are pushed in by services.py calling
     the mutation methods below, each of which persists to storage and
     notifies listeners (web.py's websocket push and mqtt.py's publisher).
-    `ha` is None when running outside Supervisor - Finance sync is then
-    simply skipped.
+    `ha` and `stash` are None when running outside Supervisor - Stash sync
+    is then simply skipped.
     """
 
-    def __init__(self, store: GarageStore, ha: HomeAssistantClient | None = None) -> None:
+    def __init__(
+        self,
+        store: GarageStore,
+        ha: HomeAssistantClient | None = None,
+        stash: StashClient | None = None,
+    ) -> None:
         self.ha = ha
+        self.stash = stash
         self.data: dict[str, Any] | None = None
         self._listeners: list[Callable[[], None]] = []
         self.store = store
@@ -478,6 +527,7 @@ class GarageCoordinator:
                 amount_dollars,
                 vehicle.nickname,
                 self.settings.get("finance_category_name", "Transportation"),
+                self.stash,
             )
         await self._async_save()
         return entry
@@ -514,6 +564,7 @@ class GarageCoordinator:
             await _async_edit_finance_expense(
                 self.ha,
                 entry.finance_expense_id,
+                self.stash,
                 amount=entry.amount_dollars,
                 date=entry.date,
             )
@@ -523,7 +574,7 @@ class GarageCoordinator:
     async def async_delete_fuel_entry(self, entry_id: str) -> None:
         entry = self._get_fuel_entry(entry_id)
         if entry.finance_expense_id:
-            await _async_delete_finance_expense(self.ha, entry.finance_expense_id)
+            await _async_delete_finance_expense(self.ha, entry.finance_expense_id, self.stash)
         self.fuel_entries = [f for f in self.fuel_entries if f.id != entry_id]
         await self._async_save()
 
@@ -595,6 +646,7 @@ class GarageCoordinator:
                 cost,
                 vehicle.nickname,
                 self.settings.get("finance_category_name", "Transportation"),
+                self.stash,
             )
         await self._async_save()
         return record
@@ -602,7 +654,9 @@ class GarageCoordinator:
     async def async_delete_maintenance_record(self, record_id: str) -> None:
         record = next((m for m in self.maintenance_records if m.id == record_id), None)
         if record and record.finance_expense_id:
-            await _async_delete_finance_expense(self.ha, record.finance_expense_id)
+            await _async_delete_finance_expense(
+                self.ha, record.finance_expense_id, self.stash
+            )
         self.maintenance_records = [
             m for m in self.maintenance_records if m.id != record_id
         ]

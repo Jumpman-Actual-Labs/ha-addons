@@ -29,6 +29,10 @@ class AddonConfig:
     # `homeassistant_api: true`) - used for Stash sync, driver
     # notifications and the HA user list.
     core_api_url: str = "http://supervisor/core"
+    # This container's hostname on Supervisor's add-on network,
+    # `<repository hash>-garage` - the Stash add-on's is the same with
+    # `-stash` (see stash_client.py).
+    hostname: str = ""
 
     @property
     def store_path(self) -> Path:
@@ -56,4 +60,5 @@ def load_config() -> AddonConfig:
         log_level=str(options.get("log_level") or "info"),
         supervisor_token=os.environ.get("SUPERVISOR_TOKEN", ""),
         core_api_url=os.environ.get("GARAGE_CORE_API_URL", "http://supervisor/core"),
+        hostname=os.environ.get("HOSTNAME", ""),
     )

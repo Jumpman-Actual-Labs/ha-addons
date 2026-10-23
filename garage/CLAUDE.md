@@ -28,10 +28,15 @@ byte-for-byte the integration's (`validation.py` stands in for HA's `cv`);
 a new service field needs updating there AND in the coordinator.
 
 Add-on layers around them:
+- `stash_client.py` - the Stash add-on's `internal/` API, called directly
+  on Supervisor's add-on network (see `stash/CLAUDE.md`). Stash sync in
+  `coordinator.py` tries it first and falls back to the old integration
+  through `ha_client.py` only when the add-on is unreachable; still
+  best-effort - never blocks a mutation.
 - `ha_client.py` - Core's REST/websocket API via Supervisor
   (`SUPERVISOR_TOKEN`). Replaces every `hass` call the integration made:
-  `finance.*` services + reading Stash category sensors (Finance sync in
-  `coordinator.py`, still best-effort - never blocks a mutation),
+  `finance.*` services + reading Stash category sensors (the old Stash
+  integration fallback),
   `notify.*` (driver reminders), `config/auth/list` (driver ↔ HA user).
   `None` outside Supervisor; Finance sync and reminders are then skipped.
 - `reminders.py` - the integration's daily 8am `async_track_time_change`

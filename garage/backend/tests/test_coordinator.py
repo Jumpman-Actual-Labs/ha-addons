@@ -369,3 +369,90 @@ def test_delete_fuel_entry_propagates_delete_to_linked_expense():
     assert call[1] == "delete_category_expense"
     assert call[2] == {"expense_id": "exp-1"}
     assert coordinator.fuel_entries == []
+
+
+# ------------------------------------------------- Stash add-on (stash_client.py)
+
+
+class _FakeStash:
+    """Stands in for StashClient. `error` is raised from every call."""
+
+    def __init__(self, error: Exception | None = None) -> None:
+        self.calls: list[tuple[str, dict]] = []
+        self._error = error
+
+    async def find_category_id(self, category_name: str) -> str | None:
+        if self._error:
+            raise self._error
+        return "addon-gas" if category_name.lower() == "gas" else None
+
+    async def call_service(self, service: str, data: dict) -> dict | None:
+        if self._error:
+            raise self._error
+        self.calls.append((service, dict(data)))
+        return {"expense_id": "addon-exp"} if service == "add_category_expense" else None
+
+
+def _with_vehicle(coordinator: GarageCoordinator) -> GarageCoordinator:
+    coordinator.vehicles = [
+        Vehicle(id="v1", nickname="Ram", year=2022, make="Ram", model="1500", current_mileage=1000)
+    ]
+    return coordinator
+
+
+def _log_fuel(coordinator: GarageCoordinator) -> FuelEntry:
+    return asyncio.run(
+        coordinator.async_add_fuel_entry("v1", "2026-01-01", 1200, 40.0, full_tank=True)
+    )
+
+
+def test_stash_addon_is_preferred_over_the_integration():
+    coordinator = _with_vehicle(make_coordinator_with_finance({"expense_id": "exp-1"}))
+    coordinator.stash = _FakeStash()
+    entry = _log_fuel(coordinator)
+    assert entry.finance_expense_id == "addon-exp"
+    service, data = coordinator.stash.calls[0]
+    assert service == "add_category_expense"
+    assert data["category_id"] == "addon-gas"
+    assert data["name"] == "Fuel - Ram"
+    assert coordinator.ha.calls == []
+
+    asyncio.run(coordinator.async_edit_fuel_entry(entry.id, amount_dollars=55.0))
+    asyncio.run(coordinator.async_delete_fuel_entry(entry.id))
+    assert [c[0] for c in coordinator.stash.calls[1:]] == [
+        "edit_category_expense",
+        "delete_category_expense",
+    ]
+    assert coordinator.stash.calls[1][1] == {
+        "expense_id": "addon-exp",
+        "amount": 55.0,
+        "date": "2026-01-01",
+    }
+    assert coordinator.ha.calls == []
+
+
+def test_falls_back_to_the_integration_when_the_stash_addon_is_missing():
+    from garage_addon.stash_client import StashUnavailable
+
+    coordinator = _with_vehicle(make_coordinator_with_finance({"expense_id": "exp-1"}))
+    coordinator.stash = _FakeStash(StashUnavailable("no such host"))
+    assert _log_fuel(coordinator).finance_expense_id == "exp-1"
+    assert coordinator.ha.calls[0][:2] == ("finance", "add_category_expense")
+
+
+def test_stash_addon_errors_never_block_garage_or_hit_the_integration():
+    from garage_addon.stash_client import StashError
+
+    coordinator = _with_vehicle(make_coordinator_with_finance({"expense_id": "exp-1"}))
+    coordinator.stash = _FakeStash(StashError("400"))
+    assert _log_fuel(coordinator).finance_expense_id is None
+    assert coordinator.ha.calls == []
+
+
+def test_stash_addon_without_the_category_skips_the_sync():
+    coordinator = _with_vehicle(make_coordinator_with_finance())
+    coordinator.settings["finance_category_name"] = "Transportation"
+    coordinator.stash = _FakeStash()
+    assert _log_fuel(coordinator).finance_expense_id is None
+    assert coordinator.stash.calls == []
+    assert coordinator.ha.calls == []

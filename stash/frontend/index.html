@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stash</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0f151f;
+        color: #a5b3c8;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      body > .loading {
+        display: flex;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+        letter-spacing: 0.04em;
+      }
+      /* Height only - display comes from finance-panel's own :host. */
+      finance-panel {
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="loading">Loading Stash…</div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
