@@ -86,49 +86,99 @@ export class CacheAmmunitionView extends LitElement {
     glassCardStyle,
     formStyles,
     css`
+      /* Wider than the shared .grid's 260px minimum - a caliber card holds
+         several loads per row, and narrow columns made every name wrap. */
+      .ammo-grid {
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+        align-items: start;
+      }
       ha-card.ammo {
-        padding: 16px;
+        padding: 16px 18px 6px;
       }
       ha-card.ammo.menu-open {
         z-index: 5;
       }
-      .ammo-header {
+      /* One card per caliber: a header (caliber, total rounds), then one
+         compact row per load - text on the left, count and -/+/menu on the
+         right. Plain muted text instead of chips keeps rows quiet. */
+      .caliber-head {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
-        gap: 8px;
+        align-items: baseline;
+        gap: 12px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--divider-color, rgba(255, 255, 255, 0.1));
       }
-      .header-icons {
+      .caliber-name {
+        font-weight: 700;
+        font-size: 1.1rem;
+        letter-spacing: 0.01em;
+      }
+      .caliber-sub {
+        margin-left: 8px;
+        font-size: 0.8rem;
+        color: var(--secondary-text-color, #a1a7b0);
+      }
+      .caliber-total {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+        font-size: 1.5rem;
+        font-weight: 700;
+      }
+      .caliber-total small {
+        font-size: 0.8rem;
+        font-weight: 400;
+        color: var(--secondary-text-color, #a1a7b0);
+      }
+      .low-icon {
+        color: var(--hud-amber, #f5a524);
+        --mdc-icon-size: 18px;
+      }
+      .ammo-line {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 0;
+      }
+      .ammo-line + .ammo-line {
+        border-top: 1px solid color-mix(in srgb, var(--divider-color, rgba(255, 255, 255, 0.1)) 60%, transparent);
+      }
+      .line-name {
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .line-meta {
+        margin-top: 2px;
+        font-size: 0.8rem;
+        line-height: 1.35;
+        color: var(--secondary-text-color, #a1a7b0);
+      }
+      .line-meta.dim {
+        opacity: 0.75;
+      }
+      .line-qty {
+        font-size: 1.1rem;
+        font-weight: 700;
+        white-space: nowrap;
+        text-align: right;
+        min-width: 3ch;
+      }
+      .line-qty.low {
+        color: var(--hud-amber, #f5a524);
+      }
+      .line-actions {
         display: flex;
         align-items: center;
         gap: 2px;
-        margin: -6px -8px 0 0;
       }
-      .qty-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-      }
-      .qty-buttons {
-        display: flex;
-        gap: 6px;
-      }
-      .qty {
-        font-size: 1.8rem;
-        font-weight: 700;
-        margin: 6px 0;
-      }
-      .qty small {
-        font-size: 0.9rem;
-        font-weight: 400;
-        color: var(--secondary-text-color, #727272);
-      }
-      .chips {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-        margin: 6px 0;
+      .line-actions button.icon {
+        width: 28px;
+        height: 28px;
       }
     `,
   ];
@@ -165,6 +215,101 @@ export class CacheAmmunitionView extends LitElement {
   private _menuAction(action: () => void): void {
     this._menuFor = null;
     action();
+  }
+
+  /** One card per caliber. Calibers are free text, so "9mm"/"9MM " share a
+   * card (keyed trimmed + lowercased, labelled by the first spelling seen);
+   * a genuinely different spelling like "9x19" stays separate. Cards are
+   * sorted by caliber; loads within a card by manufacturer/product. */
+  private _groupByCaliber(items: Ammunition[]): { caliber: string; loads: Ammunition[] }[] {
+    const groups = new Map<string, { caliber: string; loads: Ammunition[] }>();
+    for (const a of items) {
+      const key = a.caliber.trim().toLowerCase();
+      const group = groups.get(key) ?? { caliber: a.caliber.trim(), loads: [] };
+      group.loads.push(a);
+      groups.set(key, group);
+    }
+    const label = (a: Ammunition) => [a.manufacturer, a.productName].filter(Boolean).join(" ");
+    for (const g of groups.values()) g.loads.sort((x, y) => label(x).localeCompare(label(y)));
+    return [...groups.values()].sort((x, y) => x.caliber.localeCompare(y.caliber));
+  }
+
+  private _renderCaliberCard(g: { caliber: string; loads: Ammunition[] }) {
+    const total = g.loads.reduce((sum, a) => sum + a.quantity, 0);
+    const anyLow = g.loads.some((a) => a.isLow);
+    const menuOpen = g.loads.some((a) => a.id === this._menuFor);
+    return html`
+      <ha-card class="ammo ${menuOpen ? "menu-open" : ""}">
+        <div class="caliber-head">
+          <div>
+            <span class="caliber-name">${g.caliber}</span>
+            ${g.loads.length > 1 ? html`<span class="caliber-sub">${g.loads.length} loads</span>` : ""}
+          </div>
+          <div class="caliber-total">
+            ${anyLow ? html`<ha-icon icon="mdi:alert" title="Some of this caliber is low" class="low-icon"></ha-icon>` : ""}
+            ${formatNumber(total)}<small>rounds</small>
+          </div>
+        </div>
+        ${g.loads.map((a) => this._renderLoad(a))}
+      </ha-card>
+    `;
+  }
+
+  /** One load = one row: name, a specs line (weight/type/velocity), a
+   * details line (location/$ per round/speed class), then the count (amber
+   * when low) and bare -/+/menu buttons. */
+  private _renderLoad(a: Ammunition) {
+    const name = [a.manufacturer, a.productName].filter(Boolean).join(" ") || "Unspecified";
+    const specs = [a.bulletWeight, a.bulletType, a.muzzleVelocity].filter(Boolean).join(" · ");
+    const details = [
+      a.storageLocationName,
+      a.costPerRound != null ? `${formatCurrency(a.costPerRound)}/rd` : null,
+      a.speedClass,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return html`
+      <div class="ammo-line">
+        <div>
+          <div class="line-name" title=${name}>${name}</div>
+          ${specs ? html`<div class="line-meta">${specs}</div>` : ""}
+          ${details ? html`<div class="line-meta dim">${details}</div>` : ""}
+        </div>
+        <div class="line-qty ${a.isLow ? "low" : ""}" title=${a.isLow ? "Low inventory" : ""}>
+          ${formatNumber(a.quantity)}
+        </div>
+        <div class="line-actions">
+          <button class="icon bare" title="Remove rounds" aria-label="Remove rounds" @click=${() => this._openAdjust(a, "remove")}>
+            <ha-icon icon="mdi:minus"></ha-icon>
+          </button>
+          <button class="icon bare" title="Add rounds" aria-label="Add rounds" @click=${() => this._openAdjust(a, "add")}>
+            <ha-icon icon="mdi:plus"></ha-icon>
+          </button>
+          <div class="card-menu">
+            <button
+              class="icon bare"
+              title="More options"
+              aria-label="More options"
+              aria-haspopup="menu"
+              aria-expanded=${this._menuFor === a.id ? "true" : "false"}
+              @click=${() => (this._menuFor = this._menuFor === a.id ? null : a.id)}
+            >
+              <ha-icon icon="mdi:dots-vertical"></ha-icon>
+            </button>
+            ${this._menuFor === a.id
+              ? html`<div class="menu" role="menu">
+                  <button role="menuitem" @click=${() => this._menuAction(() => this._openEdit(a))}>
+                    <ha-icon icon="mdi:pencil"></ha-icon>Edit
+                  </button>
+                  <button role="menuitem" class="danger" @click=${() => this._menuAction(() => (this._deleteTarget = a))}>
+                    <ha-icon icon="mdi:delete"></ha-icon>Delete
+                  </button>
+                </div>`
+              : ""}
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   private get _filtered(): Ammunition[] {
@@ -362,82 +507,8 @@ export class CacheAmmunitionView extends LitElement {
             ${this._search || this._lowOnly ? "No ammunition matches your search." : "No ammunition tracked yet."}
           </div>`
         : html`
-            <div class="grid">
-              ${items.map(
-                (a) => html`
-                  <ha-card class="ammo ${this._menuFor === a.id ? "menu-open" : ""}">
-                    <div class="ammo-header">
-                      <div>
-                        <div style="font-weight:600">${a.caliber}</div>
-                        <div class="small muted">
-                          ${[a.manufacturer, a.productName, a.bulletWeight, a.bulletType, a.muzzleVelocity]
-                            .filter(Boolean)
-                            .join(" · ") || "—"}
-                        </div>
-                      </div>
-                      <div class="header-icons">
-                        ${a.isLow
-                          ? html`<ha-icon icon="mdi:alert" title="Low inventory" style="color:#f57f17"></ha-icon>`
-                          : ""}
-                        <div class="card-menu">
-                          <button
-                            class="icon bare"
-                            title="More options"
-                            aria-label="More options"
-                            aria-haspopup="menu"
-                            aria-expanded=${this._menuFor === a.id ? "true" : "false"}
-                            @click=${() => (this._menuFor = this._menuFor === a.id ? null : a.id)}
-                          >
-                            <ha-icon icon="mdi:dots-vertical"></ha-icon>
-                          </button>
-                          ${this._menuFor === a.id
-                            ? html`<div class="menu" role="menu">
-                                <button role="menuitem" @click=${() => this._menuAction(() => this._openEdit(a))}>
-                                  <ha-icon icon="mdi:pencil"></ha-icon>Edit
-                                </button>
-                                <button
-                                  role="menuitem"
-                                  class="danger"
-                                  @click=${() => this._menuAction(() => (this._deleteTarget = a))}
-                                >
-                                  <ha-icon icon="mdi:delete"></ha-icon>Delete
-                                </button>
-                              </div>`
-                            : ""}
-                        </div>
-                      </div>
-                    </div>
-                    <div class="qty-row">
-                      <div class="qty">${formatNumber(a.quantity)} <small>rounds</small></div>
-                      <div class="qty-buttons">
-                        <button
-                          class="icon"
-                          title="Remove rounds"
-                          aria-label="Remove rounds"
-                          @click=${() => this._openAdjust(a, "remove")}
-                        >
-                          <ha-icon icon="mdi:minus"></ha-icon>
-                        </button>
-                        <button
-                          class="icon"
-                          title="Add rounds"
-                          aria-label="Add rounds"
-                          @click=${() => this._openAdjust(a, "add")}
-                        >
-                          <ha-icon icon="mdi:plus"></ha-icon>
-                        </button>
-                      </div>
-                    </div>
-                    <div class="chips">
-                      ${a.storageLocationName ? html`<span class="badge">${a.storageLocationName}</span>` : ""}
-                      ${a.costPerRound != null
-                        ? html`<span class="badge info">${formatCurrency(a.costPerRound)}/rd</span>`
-                        : ""}
-                      ${a.speedClass ? html`<span class="badge">${a.speedClass}</span>` : ""}
-                    </div>
-                  </ha-card>
-                `
-              )}
+            <div class="grid ammo-grid">
+              ${this._groupByCaliber(items).map((g) => this._renderCaliberCard(g))}
             </div>
           `}
 

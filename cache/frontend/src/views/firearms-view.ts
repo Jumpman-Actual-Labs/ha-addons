@@ -159,8 +159,11 @@ export class CacheFirearmsView extends LitElement {
   @state() private _preset: "cleaning-due" | "nfa" | null = null;
 
   @state() private _search = "";
-  @state() private _typeFilter = "";
-  @state() private _conditionFilter = "";
+  // Two-step filter: _filterField picks WHAT to filter by, _filterValue the
+  // value within it ("" = all). The value dropdown's options follow the
+  // field (see _filterOptions), and changing the field resets the value.
+  @state() private _filterField: "type" | "caliber" | "condition" = "type";
+  @state() private _filterValue = "";
   @state() private _wishlistFilter: "owned" | "wishlist" | "all" = "owned";
   @state() private _sort: "custom_name" | "purchase_date" | "current_estimated_value" | "lifetime_round_count" = "custom_name";
   @state() private _selectedId: string | null = null;
@@ -535,8 +538,7 @@ export class CacheFirearmsView extends LitElement {
       this._preset = this.initialFilter;
       this._wishlistFilter = "owned";
       this._search = "";
-      this._typeFilter = "";
-      this._conditionFilter = "";
+      this._filterValue = "";
       this._selectedId = null;
     }
     if (changed.has("_selectedId")) {
@@ -548,13 +550,45 @@ export class CacheFirearmsView extends LitElement {
     }
   }
 
+  private _matchesFilter(f: Firearm): boolean {
+    switch (this._filterField) {
+      case "type":
+        return f.firearmType === this._filterValue;
+      case "condition":
+        return f.condition === this._filterValue;
+      case "caliber":
+        // Calibers are free text - match the same case/whitespace-insensitive
+        // way _filterOptions de-duplicates them.
+        return (f.caliber ?? "").trim().toLowerCase() === this._filterValue.trim().toLowerCase();
+    }
+  }
+
+  /** Values for the second filter dropdown, given the first. Types and
+   * conditions are the fixed lists; calibers are whatever this collection's
+   * firearms actually use (case/whitespace variants merged). */
+  private get _filterOptions(): string[] {
+    switch (this._filterField) {
+      case "type":
+        return FIREARM_TYPES;
+      case "condition":
+        return CONDITIONS;
+      case "caliber": {
+        const byKey = new Map<string, string>();
+        for (const f of this.cacheState.firearms) {
+          const c = f.caliber?.trim();
+          if (c && !byKey.has(c.toLowerCase())) byKey.set(c.toLowerCase(), c);
+        }
+        return [...byKey.values()].sort((a, b) => a.localeCompare(b));
+      }
+    }
+  }
+
   private get _filtered(): Firearm[] {
     const s = this._search.toLowerCase();
     let list = this.cacheState.firearms.filter((f) => {
       if (this._wishlistFilter === "owned" && f.isWishlist) return false;
       if (this._wishlistFilter === "wishlist" && !f.isWishlist) return false;
-      if (this._typeFilter && f.firearmType !== this._typeFilter) return false;
-      if (this._conditionFilter && f.condition !== this._conditionFilter) return false;
+      if (this._filterValue && !this._matchesFilter(f)) return false;
       if (this._preset === "cleaning-due" && !f.needsCleaning) return false;
       if (this._preset === "nfa" && !f.isNfa) return false;
       if (!s) return true;
@@ -1288,13 +1322,25 @@ export class CacheFirearmsView extends LitElement {
           .value=${this._search}
           @input=${(e: Event) => (this._search = (e.target as HTMLInputElement).value)}
         />
-        <select .value=${this._typeFilter} @change=${(e: Event) => (this._typeFilter = (e.target as HTMLSelectElement).value)}>
-          <option value="">All Types</option>
-          ${FIREARM_TYPES.map((t) => html`<option value=${t} ?selected=${t === this._typeFilter}>${t}</option>`)}
+        <select
+          aria-label="Filter by"
+          .value=${this._filterField}
+          @change=${(e: Event) => {
+            this._filterField = (e.target as HTMLSelectElement).value as typeof this._filterField;
+            this._filterValue = "";
+          }}
+        >
+          <option value="type" ?selected=${this._filterField === "type"}>Filter: Type</option>
+          <option value="caliber" ?selected=${this._filterField === "caliber"}>Filter: Caliber</option>
+          <option value="condition" ?selected=${this._filterField === "condition"}>Filter: Condition</option>
         </select>
-        <select .value=${this._conditionFilter} @change=${(e: Event) => (this._conditionFilter = (e.target as HTMLSelectElement).value)}>
-          <option value="">All Conditions</option>
-          ${CONDITIONS.map((c) => html`<option value=${c} ?selected=${c === this._conditionFilter}>${c}</option>`)}
+        <select
+          aria-label="Filter value"
+          .value=${this._filterValue}
+          @change=${(e: Event) => (this._filterValue = (e.target as HTMLSelectElement).value)}
+        >
+          <option value="">All ${({ type: "Types", caliber: "Calibers", condition: "Conditions" })[this._filterField]}</option>
+          ${this._filterOptions.map((o) => html`<option value=${o} ?selected=${o === this._filterValue}>${o}</option>`)}
         </select>
         <div class="segmented">
           <button class=${this._wishlistFilter === "owned" ? "active" : ""} @click=${() => (this._wishlistFilter = "owned")}>Owned</button>
@@ -1311,7 +1357,7 @@ export class CacheFirearmsView extends LitElement {
 
       ${firearms.length === 0
         ? html`<div class="empty">
-            ${this._search || this._typeFilter || this._conditionFilter
+            ${this._search || this._filterValue
               ? "No firearms match your search."
               : "Add your first firearm to start building your collection."}
           </div>`

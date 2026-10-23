@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.11
+
+- Ammunition: one card per caliber, listing every load of that caliber as
+  its own row (with its own -/+ and Edit/Delete menu) and the caliber's
+  total rounds in the header. Cleaner rows: plain text details instead of
+  chips, borderless buttons, and low loads shown with an amber count.
+- Firearms: the filter is now a pair of dropdowns - pick Type, Caliber or
+  Condition, then a value from the matching list.
+
 ## 1.0.10
 
 - Firearms have an "NFA item" checkbox (Add/Edit Firearm). NFA counts on the

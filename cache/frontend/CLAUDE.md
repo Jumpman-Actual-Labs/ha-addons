@@ -518,15 +518,30 @@ pure white/opaque, per the brief's "avoid making it pure white").
   Both `cacheApi` methods return the same `ScannedAmmoFields` shape (see
   `ha-api.ts`'s shared `parseScannedAmmoFields()`), so the view handles
   either scan method identically once the response comes back.
-- Ammunition cards keep their actions compact: a ⋮ button (`.card-menu`,
-  `button.icon.bare`) in the top-right opens an Edit/Delete menu, and
-  Remove/Add rounds are `−`/`+` `button.icon`s beside the round count.
-  `button.icon` and `.card-menu` live in `styles.ts` so other card grids
-  can reuse them. Only one menu is open at a time (`_menuFor`, the ammo
-  id); it closes on picking an item, any click outside a `.card-menu`, or
-  Escape. The card with the open menu gets `.menu-open` (`z-index: 5`) -
-  each glass card is its own stacking context (backdrop-filter), so
-  without it the menu paints under the next card in the grid.
+- Ammunition is shown ONE CARD PER CALIBER (`_groupByCaliber`, keyed on
+  the trimmed lowercased caliber so "9mm"/"9MM " share a card, labelled by
+  the first spelling seen), not one card per `Ammunition` record. The
+  header shows the caliber, "N loads" when there's more than one, the
+  total rounds, and one amber ⚠ if any load is low. Each load is one
+  `.ammo-line` grid row (`_renderLoad`): name, a specs line (weight ·
+  type · velocity), a dimmer details line (location · $/rd · speed class)
+  as plain text rather than badge chips, then the round count (amber when
+  that load `isLow`) and bare `button.icon`s for −/+ and a ⋮ `.card-menu`
+  (Edit/Delete) - Jordan asked for the cleaner plain-text rows over the
+  earlier chip/boxed-button look. `.ammo-grid` widens the shared `.grid`'s
+  column minimum to 340px so names don't wrap. Only one menu is open at a
+  time (`_menuFor`, the ammo id); it closes on picking an item, any click
+  outside a `.card-menu`, or Escape. The card containing the open menu
+  gets `.menu-open` (`z-index: 5`) - each glass card is its own stacking
+  context (backdrop-filter), so without it the menu paints under the next
+  card. `button.icon`/`.card-menu`/`.filter-chip` live in `styles.ts`.
+- The Firearms list filter is a two-step pair: "Filter: Type / Caliber /
+  Condition" (`_filterField`) then that field's values (`_filterValue`,
+  options from `_filterOptions`: `FIREARM_TYPES`, `CONDITIONS`, or the
+  calibers firearms actually use, case/whitespace variants merged).
+  Changing the field resets the value to "All". This replaced separate
+  Type and Condition dropdowns; the Sort dropdown is separate and
+  unchanged.
 - The Add/Remove Rounds dialog (adjusting an existing ammo entry's
   quantity) shows an "Add by" Rounds/Boxes selector only when that entry
   has a `roundsPerBox` on file - entries without a known box size just get
