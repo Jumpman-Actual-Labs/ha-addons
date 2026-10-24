@@ -42,11 +42,11 @@ commits use a different author or committer email.
 Don't leave scratch/template folders containing a `config.yaml` at the
 top level - Supervisor would list them as add-ons.
 
-Each add-on keeps its own CLAUDE.md for its internals (Garage and Stash,
-ported from integrations the same way as Cache: `garage/CLAUDE.md`,
-`stash/CLAUDE.md`). Garage's Stash sync calls the Stash add-on directly
-over Supervisor's add-on network - see `stash/CLAUDE.md`. The rest
-of this file is about Cache.
+Each add-on keeps its own CLAUDE.md for its internals (Garage, Stash and
+Gains, ported from integrations the same way as Cache: `garage/CLAUDE.md`,
+`stash/CLAUDE.md`, `gains/CLAUDE.md`). Garage's Stash sync calls the Stash
+add-on directly over Supervisor's add-on network - see `stash/CLAUDE.md`.
+The rest of this file is about Cache.
 
 # Cache add-on
 
