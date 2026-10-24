@@ -103,9 +103,14 @@ here):
   `scripts/gen-icons.mjs` from every `mdi:` literal - `npm run build` does
   it) and `<ha-dialog>` (a native `<dialog>` keeping mwc-dialog's
   `.open`/`@closed`/`--mdc-dialog-*` contract the views rely on).
-- `theme.ts` sets the panel's own light/dark palette; only the accent
-  (`--primary-color`) came from the HA theme, so `index.html` sets HA's
-  default blue. Dark mode follows the device (`prefers-color-scheme`).
+- `theme.ts` sets the panel's own light/dark palette; the user's HA theme
+  supplies the rest (accent `--primary-color`, `--success-color`,
+  `--ha-card-*`) and `hass.themes.darkMode`. `ha-theme.ts` carries both
+  into the ingress iframe: the iframe is same-origin with HA's page, so it
+  copies the custom properties off the parent's `<html>` and reads
+  `home-assistant`'s `hass.themes.darkMode`, re-syncing when HA rewrites
+  `<html>`'s style. Outside HA, `index.html`'s default blue and the
+  device's `prefers-color-scheme` apply.
 - `dev/` is the synthetic preview host (`npm run dev`, open `/dev/`) - no
   backend needed. `npm test` runs `tests/*.test.mjs`.
 

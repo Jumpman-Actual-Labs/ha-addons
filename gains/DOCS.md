@@ -53,6 +53,4 @@ the panel only - the integration's sensors carried them as attributes.
    MQTT ones take over the same entity ids, so automations keep working.
 
 The `gains.*` services are gone - Gains is managed from its panel. Data
-lives in the add-on and is included in add-on backups. The panel uses Home
-Assistant's default blue accent rather than your theme's, and follows your
-device's light/dark setting.
+lives in the add-on and is included in add-on backups.
