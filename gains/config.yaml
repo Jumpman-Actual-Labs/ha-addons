@@ -1,0 +1,36 @@
+name: Gains
+version: "1.0.0"
+slug: gains
+description: AI-assisted workout planning and tracking for your household
+url: https://github.com/Jumpman-Actual-Labs/ha-addons
+arch:
+  - aarch64
+  - amd64
+init: false
+ingress: true
+ingress_stream: true
+panel_icon: mdi:dumbbell
+panel_title: Gains
+# Read-only, only so the first start can import the old integration's
+# .storage/gains_data document and its AI provider options. Nothing is ever
+# written there.
+map:
+  - homeassistant_config:ro
+services:
+  - mqtt:want
+# The provider and models have no defaults here on purpose: a blank one
+# falls back to what the old integration had configured (imported once),
+# then to Anthropic / claude-sonnet-4-5 / gpt-4o - see backend config.py.
+options:
+  anthropic_api_key: ""
+  openai_api_key: ""
+  mqtt_enabled: true
+  log_level: info
+schema:
+  ai_provider: list(anthropic|openai)?
+  anthropic_api_key: password?
+  anthropic_model: str?
+  openai_api_key: password?
+  openai_model: str?
+  mqtt_enabled: bool
+  log_level: list(debug|info|warning|error)

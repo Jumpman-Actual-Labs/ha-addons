@@ -1,0 +1,1950 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "2026-09-14.1",
+  "description": "Generalized muscle-group involvement, not measured activation or recovery. Mobility-only exercises are deliberately unmapped.",
+  "muscles": {
+    "pectoralis_major": {
+      "label": "Chest",
+      "anatomicalName": "Pectoralis major"
+    },
+    "latissimus_dorsi": {
+      "label": "Lats",
+      "anatomicalName": "Latissimus dorsi"
+    },
+    "trapezius": {
+      "label": "Traps",
+      "anatomicalName": "Trapezius"
+    },
+    "rhomboids": {
+      "label": "Upper back",
+      "anatomicalName": "Rhomboid major and minor"
+    },
+    "erector_spinae": {
+      "label": "Spinal erectors",
+      "anatomicalName": "Erector spinae"
+    },
+    "anterior_deltoid": {
+      "label": "Front shoulders",
+      "anatomicalName": "Anterior deltoid"
+    },
+    "lateral_deltoid": {
+      "label": "Side shoulders",
+      "anatomicalName": "Lateral deltoid"
+    },
+    "posterior_deltoid": {
+      "label": "Rear shoulders",
+      "anatomicalName": "Posterior deltoid"
+    },
+    "biceps_brachii": {
+      "label": "Biceps",
+      "anatomicalName": "Biceps brachii"
+    },
+    "triceps_brachii": {
+      "label": "Triceps",
+      "anatomicalName": "Triceps brachii"
+    },
+    "forearms": {
+      "label": "Forearms",
+      "anatomicalName": "Forearm flexor and extensor groups"
+    },
+    "rectus_abdominis": {
+      "label": "Abs",
+      "anatomicalName": "Rectus abdominis"
+    },
+    "obliques": {
+      "label": "Obliques",
+      "anatomicalName": "Internal and external obliques"
+    },
+    "quadriceps": {
+      "label": "Quads",
+      "anatomicalName": "Quadriceps femoris"
+    },
+    "hamstrings": {
+      "label": "Hamstrings",
+      "anatomicalName": "Biceps femoris, semitendinosus, semimembranosus"
+    },
+    "gluteals": {
+      "label": "Glutes",
+      "anatomicalName": "Gluteus maximus, medius and minimus"
+    },
+    "hip_adductors": {
+      "label": "Inner thighs",
+      "anatomicalName": "Hip adductor group"
+    },
+    "calves": {
+      "label": "Calves",
+      "anatomicalName": "Gastrocnemius and soleus"
+    }
+  },
+  "exercises": {
+    "barbell_bench_press": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "dumbbell_bench_press": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "incline_barbell_bench_press": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "incline_dumbbell_bench_press": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "decline_bench_press": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "floor_press": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "push_up": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "incline_push_up": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "decline_push_up": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "wide_push_up": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "archer_push_up": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "plyo_push_up": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "dumbbell_fly": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid"
+      ]
+    },
+    "cable_fly": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid"
+      ]
+    },
+    "pec_deck": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid"
+      ]
+    },
+    "close_grip_bench_press": {
+      "primary": [
+        "triceps_brachii"
+      ],
+      "secondary": [
+        "pectoralis_major",
+        "anterior_deltoid"
+      ]
+    },
+    "diamond_push_up": {
+      "primary": [
+        "triceps_brachii"
+      ],
+      "secondary": [
+        "pectoralis_major",
+        "anterior_deltoid"
+      ]
+    },
+    "close_grip_pushup": {
+      "primary": [
+        "triceps_brachii"
+      ],
+      "secondary": [
+        "pectoralis_major",
+        "anterior_deltoid"
+      ]
+    },
+    "dip": {
+      "primary": [
+        "triceps_brachii"
+      ],
+      "secondary": [
+        "pectoralis_major",
+        "anterior_deltoid"
+      ]
+    },
+    "overhead_press": {
+      "primary": [
+        "anterior_deltoid",
+        "lateral_deltoid"
+      ],
+      "secondary": [
+        "triceps_brachii",
+        "trapezius"
+      ]
+    },
+    "dumbbell_shoulder_press": {
+      "primary": [
+        "anterior_deltoid",
+        "lateral_deltoid"
+      ],
+      "secondary": [
+        "triceps_brachii",
+        "trapezius"
+      ]
+    },
+    "arnold_press": {
+      "primary": [
+        "anterior_deltoid",
+        "lateral_deltoid"
+      ],
+      "secondary": [
+        "triceps_brachii",
+        "trapezius"
+      ]
+    },
+    "pike_push_up": {
+      "primary": [
+        "anterior_deltoid",
+        "lateral_deltoid"
+      ],
+      "secondary": [
+        "triceps_brachii",
+        "trapezius"
+      ]
+    },
+    "handstand_push_up": {
+      "primary": [
+        "anterior_deltoid",
+        "lateral_deltoid"
+      ],
+      "secondary": [
+        "triceps_brachii",
+        "trapezius"
+      ]
+    },
+    "seated_dumbbell_press": {
+      "primary": [
+        "anterior_deltoid",
+        "lateral_deltoid"
+      ],
+      "secondary": [
+        "triceps_brachii",
+        "trapezius"
+      ]
+    },
+    "push_press": {
+      "primary": [
+        "anterior_deltoid",
+        "lateral_deltoid"
+      ],
+      "secondary": [
+        "triceps_brachii",
+        "quadriceps",
+        "gluteals"
+      ]
+    },
+    "landmine_press": {
+      "primary": [
+        "anterior_deltoid",
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "triceps_brachii",
+        "rectus_abdominis"
+      ]
+    },
+    "barbell_row": {
+      "primary": [
+        "latissimus_dorsi",
+        "trapezius",
+        "rhomboids"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "posterior_deltoid",
+        "forearms"
+      ]
+    },
+    "pendlay_row": {
+      "primary": [
+        "latissimus_dorsi",
+        "trapezius",
+        "rhomboids"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "posterior_deltoid",
+        "forearms"
+      ]
+    },
+    "dumbbell_row": {
+      "primary": [
+        "latissimus_dorsi",
+        "trapezius",
+        "rhomboids"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "posterior_deltoid",
+        "forearms"
+      ]
+    },
+    "cable_row": {
+      "primary": [
+        "latissimus_dorsi",
+        "trapezius",
+        "rhomboids"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "posterior_deltoid",
+        "forearms"
+      ]
+    },
+    "chest_supported_row": {
+      "primary": [
+        "latissimus_dorsi",
+        "trapezius",
+        "rhomboids"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "posterior_deltoid",
+        "forearms"
+      ]
+    },
+    "t_bar_row": {
+      "primary": [
+        "latissimus_dorsi",
+        "trapezius",
+        "rhomboids"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "posterior_deltoid",
+        "forearms"
+      ]
+    },
+    "meadows_row": {
+      "primary": [
+        "latissimus_dorsi",
+        "trapezius",
+        "rhomboids"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "posterior_deltoid",
+        "forearms"
+      ]
+    },
+    "inverted_row": {
+      "primary": [
+        "latissimus_dorsi",
+        "trapezius",
+        "rhomboids"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "posterior_deltoid",
+        "forearms"
+      ]
+    },
+    "pull_up": {
+      "primary": [
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "rhomboids",
+        "forearms"
+      ]
+    },
+    "weighted_pull_up": {
+      "primary": [
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "rhomboids",
+        "forearms"
+      ]
+    },
+    "neutral_grip_pull_up": {
+      "primary": [
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "rhomboids",
+        "forearms"
+      ]
+    },
+    "assisted_pull_up": {
+      "primary": [
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "rhomboids",
+        "forearms"
+      ]
+    },
+    "lat_pulldown": {
+      "primary": [
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "rhomboids",
+        "forearms"
+      ]
+    },
+    "close_grip_lat_pulldown": {
+      "primary": [
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "rhomboids",
+        "forearms"
+      ]
+    },
+    "chin_up": {
+      "primary": [
+        "latissimus_dorsi",
+        "biceps_brachii"
+      ],
+      "secondary": [
+        "rhomboids",
+        "forearms"
+      ]
+    },
+    "straight_arm_pulldown": {
+      "primary": [
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "triceps_brachii"
+      ]
+    },
+    "face_pull": {
+      "primary": [
+        "posterior_deltoid",
+        "rhomboids"
+      ],
+      "secondary": [
+        "trapezius"
+      ]
+    },
+    "rear_delt_fly": {
+      "primary": [
+        "posterior_deltoid",
+        "rhomboids"
+      ],
+      "secondary": [
+        "trapezius"
+      ]
+    },
+    "band_pull_apart": {
+      "primary": [
+        "posterior_deltoid",
+        "rhomboids"
+      ],
+      "secondary": [
+        "trapezius"
+      ]
+    },
+    "barbell_back_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hip_adductors",
+        "erector_spinae",
+        "rectus_abdominis"
+      ]
+    },
+    "barbell_front_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hip_adductors",
+        "erector_spinae",
+        "rectus_abdominis"
+      ]
+    },
+    "goblet_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hip_adductors",
+        "erector_spinae",
+        "rectus_abdominis"
+      ]
+    },
+    "bodyweight_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hip_adductors",
+        "erector_spinae",
+        "rectus_abdominis"
+      ]
+    },
+    "box_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hip_adductors",
+        "erector_spinae",
+        "rectus_abdominis"
+      ]
+    },
+    "safety_bar_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hip_adductors",
+        "erector_spinae",
+        "rectus_abdominis"
+      ]
+    },
+    "zercher_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hip_adductors",
+        "erector_spinae",
+        "rectus_abdominis"
+      ]
+    },
+    "hack_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hip_adductors",
+        "erector_spinae",
+        "rectus_abdominis"
+      ]
+    },
+    "leg_press": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hip_adductors",
+        "erector_spinae",
+        "rectus_abdominis"
+      ]
+    },
+    "smith_machine_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hip_adductors",
+        "erector_spinae",
+        "rectus_abdominis"
+      ]
+    },
+    "landmine_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hip_adductors",
+        "erector_spinae",
+        "rectus_abdominis"
+      ]
+    },
+    "pin_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hip_adductors",
+        "erector_spinae",
+        "rectus_abdominis"
+      ]
+    },
+    "sumo_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals",
+        "hip_adductors"
+      ],
+      "secondary": [
+        "erector_spinae"
+      ]
+    },
+    "overhead_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "lateral_deltoid",
+        "erector_spinae",
+        "rectus_abdominis"
+      ]
+    },
+    "wall_sit": {
+      "primary": [
+        "quadriceps"
+      ],
+      "secondary": [
+        "gluteals"
+      ]
+    },
+    "spanish_squat": {
+      "primary": [
+        "quadriceps"
+      ],
+      "secondary": [
+        "gluteals"
+      ]
+    },
+    "leg_extension": {
+      "primary": [
+        "quadriceps"
+      ],
+      "secondary": [
+        "gluteals"
+      ]
+    },
+    "jump_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "calves"
+      ]
+    },
+    "box_jump": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "calves"
+      ]
+    },
+    "barbell_deadlift": {
+      "primary": [
+        "hamstrings",
+        "gluteals",
+        "erector_spinae"
+      ],
+      "secondary": [
+        "quadriceps",
+        "trapezius",
+        "forearms"
+      ]
+    },
+    "deficit_deadlift": {
+      "primary": [
+        "hamstrings",
+        "gluteals",
+        "erector_spinae"
+      ],
+      "secondary": [
+        "quadriceps",
+        "trapezius",
+        "forearms"
+      ]
+    },
+    "snatch_grip_deadlift": {
+      "primary": [
+        "hamstrings",
+        "gluteals",
+        "erector_spinae"
+      ],
+      "secondary": [
+        "quadriceps",
+        "trapezius",
+        "forearms"
+      ]
+    },
+    "romanian_deadlift": {
+      "primary": [
+        "hamstrings",
+        "gluteals"
+      ],
+      "secondary": [
+        "erector_spinae",
+        "forearms"
+      ]
+    },
+    "stiff_leg_deadlift": {
+      "primary": [
+        "hamstrings",
+        "gluteals"
+      ],
+      "secondary": [
+        "erector_spinae",
+        "forearms"
+      ]
+    },
+    "single_leg_rdl": {
+      "primary": [
+        "hamstrings",
+        "gluteals"
+      ],
+      "secondary": [
+        "erector_spinae",
+        "forearms"
+      ]
+    },
+    "good_morning": {
+      "primary": [
+        "hamstrings",
+        "gluteals"
+      ],
+      "secondary": [
+        "erector_spinae",
+        "forearms"
+      ]
+    },
+    "kettlebell_swing": {
+      "primary": [
+        "hamstrings",
+        "gluteals"
+      ],
+      "secondary": [
+        "erector_spinae",
+        "forearms"
+      ]
+    },
+    "cable_pull_through": {
+      "primary": [
+        "hamstrings",
+        "gluteals"
+      ],
+      "secondary": [
+        "erector_spinae",
+        "forearms"
+      ]
+    },
+    "sumo_deadlift": {
+      "primary": [
+        "gluteals",
+        "quadriceps"
+      ],
+      "secondary": [
+        "hamstrings",
+        "erector_spinae",
+        "hip_adductors",
+        "forearms"
+      ]
+    },
+    "trap_bar_deadlift": {
+      "primary": [
+        "gluteals",
+        "quadriceps"
+      ],
+      "secondary": [
+        "hamstrings",
+        "erector_spinae",
+        "hip_adductors",
+        "forearms"
+      ]
+    },
+    "hip_thrust": {
+      "primary": [
+        "gluteals"
+      ],
+      "secondary": [
+        "hamstrings",
+        "rectus_abdominis"
+      ]
+    },
+    "glute_bridge": {
+      "primary": [
+        "gluteals"
+      ],
+      "secondary": [
+        "hamstrings",
+        "rectus_abdominis"
+      ]
+    },
+    "glute_kickback": {
+      "primary": [
+        "gluteals"
+      ],
+      "secondary": [
+        "hamstrings",
+        "rectus_abdominis"
+      ]
+    },
+    "back_extension": {
+      "primary": [
+        "erector_spinae"
+      ],
+      "secondary": [
+        "hamstrings",
+        "gluteals"
+      ]
+    },
+    "rack_pull": {
+      "primary": [
+        "erector_spinae",
+        "gluteals",
+        "trapezius"
+      ],
+      "secondary": [
+        "forearms",
+        "hamstrings"
+      ]
+    },
+    "walking_lunge": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hamstrings",
+        "calves",
+        "hip_adductors"
+      ]
+    },
+    "reverse_lunge": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hamstrings",
+        "calves",
+        "hip_adductors"
+      ]
+    },
+    "forward_lunge": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hamstrings",
+        "calves",
+        "hip_adductors"
+      ]
+    },
+    "curtsy_lunge": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hamstrings",
+        "calves",
+        "hip_adductors"
+      ]
+    },
+    "bulgarian_split_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hamstrings",
+        "calves",
+        "hip_adductors"
+      ]
+    },
+    "step_up": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hamstrings",
+        "calves",
+        "hip_adductors"
+      ]
+    },
+    "pistol_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hamstrings",
+        "calves",
+        "hip_adductors"
+      ]
+    },
+    "skater_squat": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hamstrings",
+        "calves",
+        "hip_adductors"
+      ]
+    },
+    "single_leg_press": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hamstrings",
+        "calves",
+        "hip_adductors"
+      ]
+    },
+    "lateral_lunge": {
+      "primary": [
+        "quadriceps",
+        "gluteals",
+        "hip_adductors"
+      ],
+      "secondary": [
+        "hamstrings"
+      ]
+    },
+    "plank": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": [
+        "obliques",
+        "anterior_deltoid"
+      ]
+    },
+    "ab_wheel_rollout": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": [
+        "obliques",
+        "anterior_deltoid"
+      ]
+    },
+    "hollow_hold": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": [
+        "obliques",
+        "anterior_deltoid"
+      ]
+    },
+    "dead_bug": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": [
+        "obliques",
+        "anterior_deltoid"
+      ]
+    },
+    "dragon_flag": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": [
+        "obliques",
+        "anterior_deltoid"
+      ]
+    },
+    "side_plank": {
+      "primary": [
+        "obliques"
+      ],
+      "secondary": [
+        "rectus_abdominis",
+        "gluteals"
+      ]
+    },
+    "pallof_press": {
+      "primary": [
+        "obliques"
+      ],
+      "secondary": [
+        "rectus_abdominis",
+        "gluteals"
+      ]
+    },
+    "russian_twist": {
+      "primary": [
+        "obliques"
+      ],
+      "secondary": [
+        "rectus_abdominis",
+        "gluteals"
+      ]
+    },
+    "hanging_leg_raise": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": [
+        "obliques"
+      ]
+    },
+    "hanging_knee_raise": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": [
+        "obliques"
+      ]
+    },
+    "cable_crunch": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": [
+        "obliques"
+      ]
+    },
+    "sit_up": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": [
+        "obliques"
+      ]
+    },
+    "weighted_situp": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": [
+        "obliques"
+      ]
+    },
+    "v_up": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": [
+        "obliques"
+      ]
+    },
+    "bird_dog": {
+      "primary": [
+        "erector_spinae",
+        "gluteals"
+      ],
+      "secondary": [
+        "rectus_abdominis",
+        "obliques"
+      ]
+    },
+    "mountain_climber": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": [
+        "quadriceps",
+        "anterior_deltoid"
+      ]
+    },
+    "farmers_carry": {
+      "primary": [
+        "forearms",
+        "trapezius"
+      ],
+      "secondary": [
+        "rectus_abdominis",
+        "obliques",
+        "gluteals"
+      ]
+    },
+    "suitcase_carry": {
+      "primary": [
+        "forearms",
+        "obliques"
+      ],
+      "secondary": [
+        "trapezius",
+        "rectus_abdominis"
+      ]
+    },
+    "overhead_carry": {
+      "primary": [
+        "anterior_deltoid",
+        "lateral_deltoid"
+      ],
+      "secondary": [
+        "triceps_brachii",
+        "trapezius",
+        "rectus_abdominis",
+        "obliques"
+      ]
+    },
+    "front_rack_carry": {
+      "primary": [
+        "rectus_abdominis",
+        "obliques"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "trapezius",
+        "gluteals"
+      ]
+    },
+    "yoke_walk": {
+      "primary": [
+        "rectus_abdominis",
+        "obliques"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "trapezius",
+        "gluteals"
+      ]
+    },
+    "power_clean": {
+      "primary": [
+        "quadriceps",
+        "gluteals",
+        "trapezius"
+      ],
+      "secondary": [
+        "hamstrings",
+        "erector_spinae",
+        "calves",
+        "forearms"
+      ]
+    },
+    "hang_clean": {
+      "primary": [
+        "quadriceps",
+        "gluteals",
+        "trapezius"
+      ],
+      "secondary": [
+        "hamstrings",
+        "erector_spinae",
+        "calves",
+        "forearms"
+      ]
+    },
+    "clean": {
+      "primary": [
+        "quadriceps",
+        "gluteals",
+        "trapezius"
+      ],
+      "secondary": [
+        "hamstrings",
+        "erector_spinae",
+        "calves",
+        "forearms"
+      ]
+    },
+    "high_pull": {
+      "primary": [
+        "quadriceps",
+        "gluteals",
+        "trapezius"
+      ],
+      "secondary": [
+        "hamstrings",
+        "erector_spinae",
+        "calves",
+        "forearms"
+      ]
+    },
+    "power_snatch": {
+      "primary": [
+        "quadriceps",
+        "gluteals",
+        "trapezius"
+      ],
+      "secondary": [
+        "hamstrings",
+        "erector_spinae",
+        "lateral_deltoid",
+        "triceps_brachii",
+        "calves"
+      ]
+    },
+    "hang_snatch": {
+      "primary": [
+        "quadriceps",
+        "gluteals",
+        "trapezius"
+      ],
+      "secondary": [
+        "hamstrings",
+        "erector_spinae",
+        "lateral_deltoid",
+        "triceps_brachii",
+        "calves"
+      ]
+    },
+    "snatch": {
+      "primary": [
+        "quadriceps",
+        "gluteals",
+        "trapezius"
+      ],
+      "secondary": [
+        "hamstrings",
+        "erector_spinae",
+        "lateral_deltoid",
+        "triceps_brachii",
+        "calves"
+      ]
+    },
+    "clean_and_jerk": {
+      "primary": [
+        "quadriceps",
+        "gluteals",
+        "trapezius"
+      ],
+      "secondary": [
+        "hamstrings",
+        "erector_spinae",
+        "lateral_deltoid",
+        "triceps_brachii",
+        "calves"
+      ]
+    },
+    "barbell_curl": {
+      "primary": [
+        "biceps_brachii"
+      ],
+      "secondary": [
+        "forearms"
+      ]
+    },
+    "dumbbell_curl": {
+      "primary": [
+        "biceps_brachii"
+      ],
+      "secondary": [
+        "forearms"
+      ]
+    },
+    "hammer_curl": {
+      "primary": [
+        "biceps_brachii"
+      ],
+      "secondary": [
+        "forearms"
+      ]
+    },
+    "preacher_curl": {
+      "primary": [
+        "biceps_brachii"
+      ],
+      "secondary": [
+        "forearms"
+      ]
+    },
+    "concentration_curl": {
+      "primary": [
+        "biceps_brachii"
+      ],
+      "secondary": [
+        "forearms"
+      ]
+    },
+    "cable_curl": {
+      "primary": [
+        "biceps_brachii"
+      ],
+      "secondary": [
+        "forearms"
+      ]
+    },
+    "overhead_tricep_extension": {
+      "primary": [
+        "triceps_brachii"
+      ],
+      "secondary": []
+    },
+    "skull_crusher": {
+      "primary": [
+        "triceps_brachii"
+      ],
+      "secondary": []
+    },
+    "tricep_pushdown": {
+      "primary": [
+        "triceps_brachii"
+      ],
+      "secondary": []
+    },
+    "tricep_kickback": {
+      "primary": [
+        "triceps_brachii"
+      ],
+      "secondary": []
+    },
+    "lateral_raise": {
+      "primary": [
+        "lateral_deltoid"
+      ],
+      "secondary": [
+        "trapezius"
+      ]
+    },
+    "cable_lateral_raise": {
+      "primary": [
+        "lateral_deltoid"
+      ],
+      "secondary": [
+        "trapezius"
+      ]
+    },
+    "front_raise": {
+      "primary": [
+        "anterior_deltoid"
+      ],
+      "secondary": [
+        "pectoralis_major"
+      ]
+    },
+    "upright_row": {
+      "primary": [
+        "lateral_deltoid",
+        "trapezius"
+      ],
+      "secondary": [
+        "biceps_brachii"
+      ]
+    },
+    "barbell_shrug": {
+      "primary": [
+        "trapezius"
+      ],
+      "secondary": [
+        "forearms"
+      ]
+    },
+    "dumbbell_shrug": {
+      "primary": [
+        "trapezius"
+      ],
+      "secondary": [
+        "forearms"
+      ]
+    },
+    "seated_leg_curl": {
+      "primary": [
+        "hamstrings"
+      ],
+      "secondary": []
+    },
+    "lying_leg_curl": {
+      "primary": [
+        "hamstrings"
+      ],
+      "secondary": []
+    },
+    "standing_calf_raise": {
+      "primary": [
+        "calves"
+      ],
+      "secondary": []
+    },
+    "seated_calf_raise": {
+      "primary": [
+        "calves"
+      ],
+      "secondary": []
+    },
+    "jump_rope": {
+      "primary": [
+        "calves"
+      ],
+      "secondary": []
+    },
+    "hip_abduction_machine": {
+      "primary": [
+        "gluteals"
+      ],
+      "secondary": []
+    },
+    "hip_adduction_machine": {
+      "primary": [
+        "hip_adductors"
+      ],
+      "secondary": []
+    },
+    "burpee": {
+      "primary": [
+        "quadriceps",
+        "gluteals",
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "triceps_brachii",
+        "rectus_abdominis",
+        "calves"
+      ]
+    },
+    "battle_ropes": {
+      "primary": [
+        "anterior_deltoid"
+      ],
+      "secondary": [
+        "forearms",
+        "rectus_abdominis"
+      ]
+    },
+    "sled_push": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "calves",
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "sled_pull": {
+      "primary": [
+        "quadriceps",
+        "gluteals",
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "biceps_brachii",
+        "forearms"
+      ]
+    },
+    "assault_bike": {
+      "primary": [
+        "quadriceps",
+        "gluteals"
+      ],
+      "secondary": [
+        "hamstrings",
+        "calves",
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "rowing_machine": {
+      "primary": [
+        "quadriceps",
+        "gluteals",
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "hamstrings",
+        "biceps_brachii",
+        "erector_spinae"
+      ]
+    },
+    "smith_machine_incline_press": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "smith_machine_flat_press": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "incline_machine_chest_press": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "decline_machine_chest_press": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "triceps_brachii"
+      ]
+    },
+    "single_arm_cable_chest_press": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "standing_cable_chest_press": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid",
+        "triceps_brachii"
+      ]
+    },
+    "low_to_high_cable_fly": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "anterior_deltoid"
+      ]
+    },
+    "high_to_low_cable_fly": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": []
+    },
+    "dumbbell_squeeze_press": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "triceps_brachii"
+      ]
+    },
+    "single_arm_dumbbell_floor_press": {
+      "primary": [
+        "pectoralis_major"
+      ],
+      "secondary": [
+        "triceps_brachii"
+      ]
+    },
+    "kneeling_single_arm_lat_pulldown": {
+      "primary": [
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "biceps_brachii"
+      ]
+    },
+    "neutral_grip_lat_pulldown": {
+      "primary": [
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "biceps_brachii"
+      ]
+    },
+    "underhand_lat_pulldown": {
+      "primary": [
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "biceps_brachii"
+      ]
+    },
+    "wide_grip_cable_row": {
+      "primary": [
+        "rhomboids"
+      ],
+      "secondary": [
+        "latissimus_dorsi",
+        "biceps_brachii"
+      ]
+    },
+    "single_arm_cable_row": {
+      "primary": [
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "rhomboids",
+        "biceps_brachii"
+      ]
+    },
+    "chest_supported_t_bar_row": {
+      "primary": [
+        "rhomboids"
+      ],
+      "secondary": [
+        "latissimus_dorsi",
+        "biceps_brachii"
+      ]
+    },
+    "iso_lateral_machine_row": {
+      "primary": [
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "rhomboids",
+        "biceps_brachii"
+      ]
+    },
+    "dumbbell_meadows_row": {
+      "primary": [
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "rhomboids"
+      ]
+    },
+    "reverse_grip_barbell_row": {
+      "primary": [
+        "latissimus_dorsi"
+      ],
+      "secondary": [
+        "biceps_brachii"
+      ]
+    },
+    "incline_dumbbell_row": {
+      "primary": [
+        "rhomboids"
+      ],
+      "secondary": [
+        "latissimus_dorsi"
+      ]
+    },
+    "smith_machine_split_squat": {
+      "primary": [
+        "quadriceps"
+      ],
+      "secondary": [
+        "gluteals"
+      ]
+    },
+    "rear_foot_elevated_split_squat": {
+      "primary": [
+        "quadriceps"
+      ],
+      "secondary": [
+        "gluteals"
+      ]
+    },
+    "dumbbell_step_down": {
+      "primary": [
+        "quadriceps"
+      ],
+      "secondary": [
+        "gluteals"
+      ]
+    },
+    "lateral_lunge_dumbbell": {
+      "primary": [
+        "quadriceps"
+      ],
+      "secondary": [
+        "gluteals",
+        "hip_adductors"
+      ]
+    },
+    "walking_barbell_lunge": {
+      "primary": [
+        "quadriceps"
+      ],
+      "secondary": [
+        "gluteals"
+      ]
+    },
+    "reverse_hack_squat": {
+      "primary": [
+        "gluteals"
+      ],
+      "secondary": [
+        "quadriceps"
+      ]
+    },
+    "heel_elevated_goblet_squat": {
+      "primary": [
+        "quadriceps"
+      ],
+      "secondary": [
+        "gluteals"
+      ]
+    },
+    "cyclist_squat": {
+      "primary": [
+        "quadriceps"
+      ],
+      "secondary": [
+        "gluteals"
+      ]
+    },
+    "dumbbell_sumo_squat": {
+      "primary": [
+        "quadriceps"
+      ],
+      "secondary": [
+        "gluteals",
+        "hip_adductors"
+      ]
+    },
+    "single_leg_leg_press": {
+      "primary": [
+        "quadriceps"
+      ],
+      "secondary": [
+        "gluteals"
+      ]
+    },
+    "single_leg_leg_extension": {
+      "primary": [
+        "quadriceps"
+      ],
+      "secondary": []
+    },
+    "single_leg_seated_leg_curl": {
+      "primary": [
+        "hamstrings"
+      ],
+      "secondary": []
+    },
+    "single_leg_lying_leg_curl": {
+      "primary": [
+        "hamstrings"
+      ],
+      "secondary": []
+    },
+    "dumbbell_staggered_stance_rdl": {
+      "primary": [
+        "hamstrings"
+      ],
+      "secondary": [
+        "gluteals"
+      ]
+    },
+    "single_leg_dumbbell_rdl": {
+      "primary": [
+        "hamstrings"
+      ],
+      "secondary": [
+        "gluteals"
+      ]
+    },
+    "smith_machine_romanian_deadlift": {
+      "primary": [
+        "hamstrings"
+      ],
+      "secondary": [
+        "gluteals"
+      ]
+    },
+    "barbell_good_morning_seated": {
+      "primary": [
+        "erector_spinae"
+      ],
+      "secondary": [
+        "hamstrings"
+      ]
+    },
+    "machine_lateral_raise": {
+      "primary": [
+        "lateral_deltoid"
+      ],
+      "secondary": []
+    },
+    "leaning_cable_lateral_raise": {
+      "primary": [
+        "lateral_deltoid"
+      ],
+      "secondary": []
+    },
+    "single_arm_cable_rear_delt_fly": {
+      "primary": [
+        "posterior_deltoid"
+      ],
+      "secondary": [
+        "rhomboids"
+      ]
+    },
+    "incline_dumbbell_rear_delt_raise": {
+      "primary": [
+        "posterior_deltoid"
+      ],
+      "secondary": []
+    },
+    "single_arm_landmine_press": {
+      "primary": [
+        "anterior_deltoid"
+      ],
+      "secondary": [
+        "triceps_brachii"
+      ]
+    },
+    "bayesian_cable_curl": {
+      "primary": [
+        "biceps_brachii"
+      ],
+      "secondary": []
+    },
+    "cross_body_hammer_curl": {
+      "primary": [
+        "biceps_brachii"
+      ],
+      "secondary": [
+        "forearms"
+      ]
+    },
+    "machine_preacher_curl": {
+      "primary": [
+        "biceps_brachii"
+      ],
+      "secondary": []
+    },
+    "single_arm_cable_triceps_extension": {
+      "primary": [
+        "triceps_brachii"
+      ],
+      "secondary": []
+    },
+    "cross_body_cable_triceps_extension": {
+      "primary": [
+        "triceps_brachii"
+      ],
+      "secondary": []
+    },
+    "dumbbell_tate_press": {
+      "primary": [
+        "triceps_brachii"
+      ],
+      "secondary": []
+    },
+    "weighted_dead_bug": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": [
+        "obliques"
+      ]
+    },
+    "cable_pallof_press": {
+      "primary": [
+        "obliques"
+      ],
+      "secondary": [
+        "rectus_abdominis"
+      ]
+    },
+    "kneeling_cable_crunch": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": []
+    },
+    "hollow_body_rock": {
+      "primary": [
+        "rectus_abdominis"
+      ],
+      "secondary": []
+    },
+    "dumbbell_suitcase_carry": {
+      "primary": [
+        "obliques"
+      ],
+      "secondary": [
+        "forearms"
+      ]
+    },
+    "single_arm_overhead_carry": {
+      "primary": [
+        "obliques"
+      ],
+      "secondary": [
+        "anterior_deltoid"
+      ]
+    }
+  }
+}

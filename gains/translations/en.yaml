@@ -1,0 +1,22 @@
+configuration:
+  ai_provider:
+    name: AI provider
+    description: Which provider answers Ask Geoffrey and builds programs. Leave empty for Anthropic (or whatever the old Gains integration used).
+  anthropic_api_key:
+    name: Anthropic API key
+    description: From console.anthropic.com. Needed when the provider is Anthropic.
+  anthropic_model:
+    name: Anthropic model
+    description: Leave empty for claude-sonnet-4-5.
+  openai_api_key:
+    name: OpenAI API key
+    description: From platform.openai.com. Needed when the provider is OpenAI.
+  openai_model:
+    name: OpenAI model
+    description: Leave empty for gpt-4o.
+  mqtt_enabled:
+    name: Home Assistant entities
+    description: Publish the profile count and one sensor per athlete over MQTT (needs the Mosquitto broker add-on).
+  log_level:
+    name: Log level
+    description: How much Gains writes to the add-on log.
