@@ -319,3 +319,87 @@ async def test_index_is_never_cached(client):
     resp = await client.get("/")
     assert resp.headers["Cache-Control"] == "no-cache"
     assert "gains" in await resp.text()
+
+
+# ------------------------------------------------------- runs switched off
+
+
+async def test_runs_off_rejects_the_run_builder_and_run_services(coordinator):
+    from gains_addon import training
+
+    with pytest.raises(ValueError, match="workout or program"):
+        training.build_request({"type": "run", "source": "wizard", "answers": {}})
+    handlers = build_handlers(coordinator)
+    for name in ("create_run", "log_run", "skip_run", "share_run"):
+        assert name not in handlers
+    assert training.actions(
+        [
+            {"type": "start_builder", "builder": "run"},
+            {"type": "start_builder", "builder": "workout"},
+        ]
+    ) == [{"type": "start_builder", "builder": "workout", "prefill": {}}]
+
+
+async def test_runs_off_programs_get_no_run_days(coordinator):
+    from gains_addon import training
+    from tests.inventory_fixtures import equip
+
+    athlete = await coordinator.async_ensure_profile("u", "Jordan")
+    equip(athlete, coordinator.data)
+    request = training.build_request(
+        {"type": "program", "source": "wizard", "answers": {"lifting_days": 3, "running_days": 2}}
+    )
+    assert request["answers"]["running_days"] == 0
+    program = training.fallback_program(request, athlete, coordinator.data)
+    kinds = {s["type"] for week in program["weeks"] for s in week["sessions"]}
+    assert "run" not in kinds
+
+
+async def test_runs_off_geoffrey_is_told_and_run_proposals_are_dropped(coordinator):
+    from gains_addon import training
+    from tests.test_coordinator import FakeAIProvider
+
+    athlete = await coordinator.async_ensure_profile("u", "Jordan")
+    assert training.RUNS_OFF_PROMPT in training.system_prompt(athlete, coordinator.data, athlete)
+    coordinator.ai_provider = FakeAIProvider(
+        reply='{"reply": "Go run.", "proposed_workouts": [], '
+        '"proposed_runs": [{"name": "Easy Run", "run_type": "easy"}]}'
+    )
+    result = await coordinator.async_ai_chat("u", "plan a run")
+    assert result.proposed_runs == []
+
+
+# ---------------------------------------------------------------- pictures
+
+
+async def test_coach_athletes_carry_their_home_assistant_picture(coordinator):
+    from gains_addon.ha_client import person_pictures
+
+    pictures = person_pictures(
+        [
+            {
+                "entity_id": "person.june",
+                "attributes": {"user_id": "user-june", "entity_picture": "/api/image/j"},
+            },
+            {"entity_id": "person.nouser", "attributes": {"entity_picture": "/x.png"}},
+            {"entity_id": "sensor.other", "attributes": {"user_id": "u", "entity_picture": "/y"}},
+        ]
+    )
+    assert pictures == {"user-june": "/api/image/j"}
+
+    coach = await coordinator.async_ensure_profile("user-coach", "Coach")
+    june = await coordinator.async_ensure_profile("user-june", "June")
+    jody = await coordinator.async_ensure_profile("user-jody", "jody")
+    for athlete in (june, jody):
+        await coordinator.async_set_coach_permissions(
+            athlete.ha_user_id, coach.id, {"view_workouts": True}, "coach"
+        )
+
+    async def source() -> dict[str, str]:
+        return pictures
+
+    snapshot = await async_call_service(
+        build_handlers(coordinator, source), "training_state", "user-coach", {}
+    )
+    by_name = {c["display_name"]: c["picture"] for c in snapshot["coachable_profiles"]}
+    assert by_name == {"June": "/api/image/j", "jody": None}

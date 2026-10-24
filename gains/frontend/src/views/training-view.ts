@@ -25,6 +25,7 @@ import "../components/program-builder";
 import { programDefaults, prepareProgramAnswers } from "../program-builder";
 import "../components/proposal-editor";
 import "../components/muscle-map";
+import { BUILD_KINDS, showSession } from "../features";
 @customElement("gains-training-view")
 export class GainsTrainingView extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
@@ -181,7 +182,7 @@ export class GainsTrainingView extends LitElement {
       this.error = "";
       try {
         const saved = JSON.parse(sessionStorage.getItem(k) || "null");
-        if (saved && ["workout", "run", "program"].includes(saved.kind)) {
+        if (saved && BUILD_KINDS.includes(saved.kind)) {
           this.kind = saved.kind;
           this.answers = saved.answers ?? {};
           this.known = saved.known ?? [];
@@ -578,7 +579,7 @@ export class GainsTrainingView extends LitElement {
           >`
         : html`<h1>Training</h1>
             <div class="quick">
-              ${(["workout", "run", "program"] as const).map((k) => html`<button class="primary" @click=${() => this.openBuilder(k)}>Build ${k}</button>`)}<button
+              ${BUILD_KINDS.map((k) => html`<button class="primary" @click=${() => this.openBuilder(k)}>Build ${k}</button>`)}<button
                 class="secondary"
                 @click=${() => this.dispatchEvent(new CustomEvent("gains-switch-tab", { detail: { tab: "coach" }, bubbles: true, composed: true }))}
               >
@@ -654,7 +655,7 @@ export class GainsTrainingView extends LitElement {
                           class="upcoming"
                           aria-label="Upcoming program sessions"
                         >
-                          ${(p.upcoming_sessions ?? []).map(
+                          ${(p.upcoming_sessions ?? []).filter(showSession).map(
                             (s, index) =>
                               html` <article class="upcoming-card">
                                 <span class="eyebrow"

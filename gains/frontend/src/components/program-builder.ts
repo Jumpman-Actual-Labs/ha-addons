@@ -7,6 +7,7 @@ import { WEEKDAYS, programDefaults, programIssues, preferenceSlots, moveCustomSe
 import { formStyles } from "../styles";
 import "./split-picker";
 import "./builder-question";
+import { RUNS_ENABLED } from "../features";
 
 const STAGES = ["Plan", "Sessions", "Preferences"];
 @customElement("gains-program-builder")
@@ -49,7 +50,12 @@ export class GainsProgramBuilder extends LitElement {
     .pill { display: inline-block; border-radius: 999px; padding: 5px 10px; background: var(--gains-tint); color: var(--primary-color); font-size: 12px; margin: 0 6px 6px 0; }
     @media (max-width: 520px) { .block { padding: 14px; } .field-row { grid-template-columns: 1fr; } .footer .primary { flex: 1; } }
   `];
-  private get value() { return programDefaults(this.answers, 45, this.sequencingPolicy); }
+  private get value() {
+    const answers = programDefaults(this.answers, 45, this.sequencingPolicy);
+    // A run count prefilled by Geoffrey would inflate the session total -
+    // the backend builds no runs while they're switched off.
+    return RUNS_ENABLED ? answers : { ...answers, running_days: 0 };
+  }
   private change(patch: BuilderAnswers) {
     if (this.busy) return;
     this.dispatchEvent(new CustomEvent("program-answers", {detail:{...this.value,...patch}, bubbles:true, composed:true}));
@@ -72,7 +78,7 @@ export class GainsProgramBuilder extends LitElement {
       <div class="field-row">${this.select("Main goal", "goal", ["Get Stronger","Build Muscle","Improve Endurance","Hybrid / Athletic Performance","General Fitness","Other"])}${this.select("Training for", "training_for", ["Nothing Specific","Race/Event","Sport","Fitness Test"])}</div>
       ${!["Get Stronger","Build Muscle","Improve Endurance","Hybrid / Athletic Performance","General Fitness"].includes(String(a.goal)) ? html`<label>Your training goal<input aria-label="Custom training goal" .value=${a.goal === "Other" ? "" : String(a.goal ?? "")} @input=${(e:Event) => this.change({goal:(e.target as HTMLInputElement).value})}></label>` : ""}
       ${builderQuestions("program", a).filter(q => ["race_distance","event_date","goal_time","sport"].includes(q.id)).map(q => html`<gains-builder-question .question=${q} .value=${a[q.id]} .other=${String(a[q.id+"_other"] ?? "")} @answer=${(e:CustomEvent<{id:string;value:unknown}>) => this.change({[e.detail.id]:e.detail.value})}></gains-builder-question>`)}
-      <div class="block"><h3>Sessions per week</h3><div class="field-row">${this.select("Lifting sessions", "lifting_days", [0,1,2,3,4,5,6,7])}${this.select("Running sessions", "running_days", [0,1,2,3,4,5,6,7])}${this.select("HIIT sessions", "hiit", [0,1,2,3,4,5,6,7])}</div><p class="muted small">${Number(a.lifting_days)+Number(a.running_days)+Number(a.hiit)} sessions · one session per selected day.</p></div>
+      <div class="block"><h3>Sessions per week</h3><div class="field-row">${this.select("Lifting sessions", "lifting_days", [0,1,2,3,4,5,6,7])}${RUNS_ENABLED ? this.select("Running sessions", "running_days", [0,1,2,3,4,5,6,7]) : ""}${this.select("HIIT sessions", "hiit", [0,1,2,3,4,5,6,7])}</div><p class="muted small">${Number(a.lifting_days)+Number(a.running_days)+Number(a.hiit)} sessions · one session per selected day.</p></div>
       <div class="block"><h3>Available days</h3><div class="days">${WEEKDAYS.map(day => html`<button aria-label=${day} aria-pressed=${(a.days as string[]).includes(day)} @click=${() => this.change({days:(a.days as string[]).includes(day) ? (a.days as string[]).filter(d => d !== day) : [...a.days as string[], day]})}>${day.slice(0,3)}</button>`)}</div></div>
       <label>Start date (optional)<input aria-label="Program start date" type="date" .value=${String(a.start_date ?? "")} @input=${(e:Event) => this.change({start_date:(e.target as HTMLInputElement).value || undefined})}></label>`;
   }

@@ -14,6 +14,7 @@ import type {
 import { glassCardStyle, formStyles } from "../styles";
 import { muscleCoverage, muscleLabels } from "../muscles";
 import "../components/muscle-map";
+import { RUNS_ENABLED, showSession } from "../features";
 export type NavigableTab = "workouts" | "runs" | "coach" | "equipment";
 @customElement("gains-today-view")
 export class GainsTodayView extends LitElement {
@@ -312,14 +313,14 @@ export class GainsTodayView extends LitElement {
       this.gainsState.workouts.find((w) => w.status === "planned");
     const nextRun = this.gainsState.runs.find((r) => r.status === "planned");
     const program = this.snapshot?.programs.find((p) => p.status === "active");
-    const upcoming = program?.upcoming_sessions ?? [];
+    const upcoming = (program?.upcoming_sessions ?? []).filter(showSession);
     const now = new Date();
     const start = new Date(now);
     start.setHours(0, 0, 0, 0);
     start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
     const finished = [
       ...this.gainsState.workouts,
-      ...this.gainsState.runs,
+      ...(RUNS_ENABLED ? this.gainsState.runs : []),
     ].filter(
       (w) =>
         w.status === "completed" &&
@@ -463,7 +464,7 @@ export class GainsTodayView extends LitElement {
             <p class="muted small">Estimated from your logged sets.</p>
             ${recovery.length ? html`<div class="recovery-list">${recovery.slice(0, 5).map(({id, percent}) => html`<div class="recovery-item"><div class="row"><span>${MUSCLE_DICTIONARY[id].label}</span><strong>${percent}%</strong></div><progress max="100" value=${percent} aria-label=${`${MUSCLE_DICTIONARY[id].label} recovery`}></progress></div>`)}</div><p class="muted small">Showing the least recovered muscles.</p>` : html`<p class="muted">Recovery will appear when your training data is available.</p>`}
           </section>
-          <section class="section">
+          ${RUNS_ENABLED ? html`<section class="section">
             <div class="row">
               <h2>In your run plan</h2>
               <button class="secondary" @click=${() => this._goTo("runs")}>
@@ -476,7 +477,7 @@ export class GainsTodayView extends LitElement {
                 ${nextRun ? `${nextRun.runType}${nextRun.targetDistance !== null ? ` · ${nextRun.targetDistance} ${profile.units === "metric" ? "km" : "mi"} target` : ""}` : "Plan or log a run when you're ready."}
               </p></ha-card
             >
-          </section>
+          </section>` : ""}
           <div class="row section">
             <div>
               <h3>Need a different plan?</h3>

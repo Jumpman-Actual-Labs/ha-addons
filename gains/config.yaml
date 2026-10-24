@@ -1,5 +1,5 @@
 name: Gains
-version: "1.0.1"
+version: "1.0.2"
 slug: gains
 description: AI-assisted workout planning and tracking for your household
 url: https://github.com/Jumpman-Actual-Labs/ha-addons
@@ -11,6 +11,9 @@ ingress: true
 ingress_stream: true
 panel_icon: mdi:dumbbell
 panel_title: Gains
+# Only for account pictures - the Coach tab shows each athlete's Home
+# Assistant person picture.
+homeassistant_api: true
 # Read-only, only so the first start can import the old integration's
 # .storage/gains_data document and its AI provider options. Nothing is ever
 # written there.

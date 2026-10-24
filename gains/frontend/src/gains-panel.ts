@@ -29,6 +29,7 @@ import "./views/runs-view";
 import "./views/coach-view";
 import "./views/equipment-view";
 import "./views/settings-view";
+import { RUNS_ENABLED } from "./features";
 
 type Tab =
   | "training"
@@ -156,9 +157,35 @@ export class GainsPanel extends LitElement {
       background: var(--card-background-color); color: var(--primary-text-color);
     }
     .activity-tabs button[aria-pressed="true"] { background: var(--gains-tint); color: var(--primary-color); font-weight: 700; }
-    .coach-list { display: grid; gap: 12px; max-width: 600px; }
-    .coach-athlete { display: flex; align-items: center; gap: 12px; text-align: left; }
-    .coach-athlete span { flex: 1; }
+    .coach-list { max-width: 760px; }
+    .coach-tiles {
+      display: grid; gap: 12px;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+    .coach-tile {
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      padding: 20px 12px 16px; border: 1px solid var(--divider-color); border-radius: 16px;
+      background: var(--card-background-color); color: var(--primary-text-color);
+      font: inherit; cursor: pointer; text-align: center; min-width: 0;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .coach-tile:hover { border-color: var(--primary-color); transform: translateY(-1px); }
+    .coach-tile:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+    .coach-tile[aria-pressed="true"] { border-color: var(--primary-color); background: var(--gains-tint); }
+    .avatar {
+      position: relative; width: 72px; height: 72px; border-radius: 50%; overflow: hidden;
+      display: grid; place-items: center; flex-shrink: 0;
+      background: var(--gains-tint); color: var(--primary-color);
+      font-size: 1.75rem; font-weight: 700; text-transform: uppercase;
+    }
+    .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .coach-tile .name {
+      font-weight: 700; max-width: 100%;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .coach-tile .status { font-size: 0.8rem; color: var(--secondary-text-color); }
+    .coach-tile[aria-pressed="true"] .status { color: var(--primary-color); font-weight: 600; }
+    .coach-exit { margin-top: 16px; }
     * {
       box-sizing: border-box;
     }
@@ -412,7 +439,8 @@ export class GainsPanel extends LitElement {
   }
   private _navigate(e: CustomEvent<{ tab: Tab; workoutId?: string }>): void {
     this._tab = e.detail.tab === "runs" ? "workouts" : e.detail.tab;
-    if (e.detail.tab === "runs") this._activity = "runs";
+    if (e.detail.tab === "runs" && RUNS_ENABLED) this._activity = "runs";
+    if (e.detail.tab === "runs" && !RUNS_ENABLED) this._activity = "strength";
     if (e.detail.tab === "workouts") this._activity = "strength";
     if (e.detail.workoutId)
       (
@@ -575,7 +603,7 @@ export class GainsPanel extends LitElement {
               <section ?hidden=${this._tab !== "workouts"}>
                 <div class="activity-tabs" role="group" aria-label="Workout type">
                   <button aria-pressed=${this._activity === "strength"} @click=${() => (this._activity = "strength")}>Strength</button>
-                  <button aria-pressed=${this._activity === "runs"} @click=${() => (this._activity = "runs")}>Runs</button>
+                  ${RUNS_ENABLED ? html`<button aria-pressed=${this._activity === "runs"} @click=${() => (this._activity = "runs")}>Runs</button>` : ""}
                   <button aria-pressed="false" @click=${() => (this._tab = "training")}>Programs</button>
                 </div>
                 <div ?hidden=${this._activity !== "strength"}>
@@ -585,23 +613,24 @@ export class GainsPanel extends LitElement {
                   .gainsState=${state}
                 ></gains-workouts-view>
                 </div>
-                <div ?hidden=${this._activity !== "runs"}>
+                ${RUNS_ENABLED ? html`<div ?hidden=${this._activity !== "runs"}>
                 <gains-runs-view
                   .hass=${scoped}
                   .gainsState=${state}
                 ></gains-runs-view>
-                </div>
+                </div>` : ""}
               </section>
               <section ?hidden=${this._tab !== "coaching"}>
                 <h1>Coach</h1>
                 <p>Select an athlete to view and log their training with them.</p>
                 <div class="coach-list">
-                  ${!this._snapshot ? html`<p>Loading athletes…</p>` : this._snapshot.coachable_profiles.length ? this._snapshot.coachable_profiles.map(p => html`
-                    <button class="coach-athlete" @click=${() => void this._selectAthlete(p.profile_id)}>
-                      <ha-icon icon="mdi:account-circle-outline"></ha-icon><span>${p.display_name}</span>
-                      ${this._target === p.profile_id ? "Coaching" : "Coach athlete"}<ha-icon icon="mdi:chevron-right"></ha-icon>
-                    </button>`) : html`<p>No athletes have granted you coaching access yet. They can enable coaching permissions for your linked profile in Account & preferences.</p>`}
-                  ${this._target ? html`<button class="coach-athlete" @click=${() => void this._selectAthlete()}>Exit Coach Mode · Return to my training</button>` : ""}
+                  ${!this._snapshot ? html`<p>Loading athletes…</p>` : this._snapshot.coachable_profiles.length ? html`<div class="coach-tiles">${this._snapshot.coachable_profiles.map(p => html`
+                    <button class="coach-tile" aria-pressed=${this._target === p.profile_id} @click=${() => void this._selectAthlete(p.profile_id)}>
+                      <span class="avatar" aria-hidden="true">${(p.display_name.trim()[0] ?? "?")}${p.picture ? html`<img src=${p.picture} alt="" loading="lazy" @error=${(e: Event) => ((e.target as HTMLElement).hidden = true)} />` : ""}</span>
+                      <span class="name">${p.display_name}</span>
+                      <span class="status">${this._target === p.profile_id ? "Coaching" : "Coach athlete"}</span>
+                    </button>`)}</div>` : html`<p>No athletes have granted you coaching access yet. They can enable coaching permissions for your linked profile in Account & preferences.</p>`}
+                  ${this._target ? html`<button class="coach-athlete coach-exit" @click=${() => void this._selectAthlete()}>Exit Coach Mode · Return to my training</button>` : ""}
                 </div>
               </section>
               <section ?hidden=${this._tab !== "progress"}>

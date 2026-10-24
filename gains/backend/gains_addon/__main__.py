@@ -12,6 +12,7 @@ from aiohttp import web
 from .ai import build_ai_provider
 from .config import load_config
 from .coordinator import GainsCoordinator
+from .ha_client import HomeAssistantClient
 from .migrate import migrate_from_integration
 from .mqtt import MqttPublisher, async_get_broker
 from .services import build_handlers
@@ -44,7 +45,13 @@ async def main() -> None:
                 config.ai_provider,
             )
 
-        runner = web.AppRunner(create_app(config, coordinator, build_handlers(coordinator)))
+        ha = (
+            HomeAssistantClient(session, config.core_api_url, config.supervisor_token)
+            if config.supervisor_token
+            else None
+        )
+        handlers = build_handlers(coordinator, ha.user_pictures if ha else None)
+        runner = web.AppRunner(create_app(config, coordinator, handlers))
         await runner.setup()
         await web.TCPSite(runner, "0.0.0.0", config.port).start()
         _LOGGER.info("Gains listening on port %s", config.port)

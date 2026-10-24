@@ -1,9 +1,9 @@
 # Gains
 
 AI-assisted workout planning and tracking for everyone in your household, in
-its own sidebar panel: strength workouts logged set by set, runs, gym
+its own sidebar panel: strength workouts logged set by set, gym
 equipment, programs from Ask Geoffrey, coach mode, Workout Together and
-progress. Every Home Assistant user who opens Gains gets their own athlete
+progress. (Runs are switched off for now; runs you already logged are kept.) Every Home Assistant user who opens Gains gets their own athlete
 profile; nobody can see or change anyone else's unless they share it or
 grant coach access.
 
