@@ -72,8 +72,9 @@ Add-on layers:
 - `recipes.py`: the recipe box. Recipes are plain dicts in
   `coordinator.recipes` (title unique case-insensitively, because dinners
   link by title); parents add, edit and delete. `generate_recipe` uses
-  meals.py's `_generate_json` to write ingredients, steps, times and tags
-  from a name, saving nothing itself.
+  meals.py's `_generate_json` to complete a recipe from its name plus any
+  fields already written (`known_fields`), which the prompt says to keep
+  and which are put back over the reply regardless. It saves nothing.
 - `states.py`: the panel's read model. These are the exact payloads of the
   integration's `sensor.py` (`hustle_key`/`member_id`/`chore_definition_id`/
   `chore_assignment_id`/`bounty_id` markers), plus `calendar_settings`,
@@ -144,9 +145,15 @@ integration. `test_addon.py` covers the add-on layers against a fake HA.
   Three or more consecutive days with the same dish read as Meal Prep.
 - `views/recipes-view.ts`: the recipe box. It has a searchable card grid, a
   recipe page (with plan for a night, add ingredients to the shopping list,
-  edit, delete), the editor ("Write with AI" calls `generate_recipe`), and
-  Cook mode: a full-screen view, one step at a time, with an ingredient
-  checklist and a Wake Lock while open. meals-view drives it through
+  edit, delete), and the editor. "Fill with AI" at the bottom sends the
+  written fields to `generate_recipe` and fills only the ones that are
+  still blank, so nothing typed is ever replaced. Cook mode is a
+  full-screen view, one step at a time, with an ingredient checklist and a
+  Wake Lock while open. Tapping an amount sets a scale factor
+  (new / original) that every line goes through `utils/quantity.ts`'s
+  `scaleLine`. That file parses leading whole, decimal, fraction, mixed,
+  unicode-fraction and range amounts, formats them back as kitchen
+  fractions, and is tested by `tests/quantity.mjs`. meals-view drives it through
   `openRecipe()` / `newRecipe()` and listens for `meals-changed`.
 - `views/shopping-view.ts`: the shopping list. It re-reads every 30s while
   open, because items also change from the HA app and voice.

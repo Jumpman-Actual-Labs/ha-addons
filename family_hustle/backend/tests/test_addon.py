@@ -765,6 +765,44 @@ async def test_generate_recipe_fills_the_editor(setup, monkeypatch):
     assert result["ingredients"] == ["1 lb lamb"] and result["cook_minutes"] == 40
 
 
+async def test_fill_with_ai_keeps_what_was_written(setup, monkeypatch):
+    _coordinator, _ha, call, _kid = await _family(setup)
+    prompts = []
+
+    async def fake_json(session, config, system, prompt, schema, name):
+        prompts.append(prompt)
+        # The AI "helpfully" rewrites the ingredients anyway.
+        return {
+            "description": "Juicy burgers.",
+            "servings": 4,
+            "prep_minutes": 10,
+            "cook_minutes": 12,
+            "ingredients": ["1 lb beef"],
+            "steps": ["Form patties", "Grill"],
+            "tags": ["Grill"],
+        }
+
+    monkeypatch.setattr(recipes, "_generate_json", fake_json)
+    result = await call(
+        "generate_recipe",
+        {
+            "title": "Burgers",
+            "servings": 3,
+            "ingredients": ["2 lbs Ground Chuck", "1 Egg"],
+            "prep_minutes": 15,
+            "description": "",
+            "steps": [],
+        },
+        ADMIN,
+    )
+    assert "2 lbs Ground Chuck" in prompts[0] and "Keep them exactly" in prompts[0]
+    assert "Steps:" not in prompts[0]  # blank fields aren't sent as "known"
+    assert result["ingredients"] == ["2 lbs Ground Chuck", "1 Egg"]
+    assert result["prep_minutes"] == 15 and result["servings"] == 3
+    assert result["steps"] == ["Form patties", "Grill"]
+    assert result["description"] == "Juicy burgers."
+
+
 async def test_remove_meal_deletes_the_dinner(setup):
     _coordinator, ha, call, _kid = await _family(setup)
     ha.events["calendar.dinners"] = []

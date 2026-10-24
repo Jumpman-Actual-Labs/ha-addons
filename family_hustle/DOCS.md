@@ -20,9 +20,11 @@ panel, laid out like a Skylight Calendar.
     underneath. Check off what you already have and **Add to shopping
     list** sends the rest to the Shopping tab.
   - **Recipes**: the family recipe box. Search it, add and edit recipes
-    (the AI can write one from just its name), **Cook** a recipe step by
-    step with an ingredient checklist (the screen stays on), send its
-    ingredients to the shopping list, or plan it for a night. A dinner with
+    (**Fill with AI** completes whatever you leave blank without touching
+    what you wrote), **Cook** a recipe step by step with an ingredient
+    checklist (the screen stays on, and tapping an amount rescales every
+    ingredient), send its ingredients to the shopping list, or plan it for
+    a night. A dinner with
     the same name as a recipe links to it.
 - **Shopping**: Home Assistant's own shopping list, so it's the same list
   as in the Home Assistant app and Assist ("add milk to the shopping

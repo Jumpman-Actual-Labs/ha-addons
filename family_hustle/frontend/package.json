@@ -9,7 +9,7 @@
     "build": "node scripts/gen-icons.mjs && tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
-    "test": "node tests/assignment-snapshot.mjs"
+    "test": "node tests/assignment-snapshot.mjs && node tests/quantity.mjs"
   },
   "dependencies": {
     "lit": "^3.2.0"

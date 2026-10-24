@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1
+
+- Cook mode: tap any ingredient's amount and type a new one - every other
+  ingredient (and the servings) scales to match, in kitchen-friendly
+  fractions. ½×, 2× and Original buttons too.
+- Recipe editor: "Write with AI" is now "Fill with AI", at the bottom. It
+  only fills fields that are still blank, uses what you've already written
+  to keep the rest consistent, and never changes anything you wrote.
+
 ## 1.1.0
 
 - Light and dark themes. Auto (the default) follows Home Assistant's dark

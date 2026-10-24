@@ -11,9 +11,11 @@ recipe for a night just schedules a dinner with the recipe's title
 (meals.py's `schedule_meals`), and the panel finds the recipe again by
 matching titles.
 
-`generate_recipe` asks the AI provider (meals.py's OpenAI/Anthropic
-plumbing) to write a recipe from just a name, for the editor to fill in -
-it saves nothing itself.
+`generate_recipe` is the editor's "Fill with AI": it asks the AI provider
+(meals.py's OpenAI/Anthropic plumbing) to complete a recipe from its name
+and whatever the family has already written, which is kept exactly as is
+(the AI is told to keep it, and it's put back over the reply regardless).
+It saves nothing itself.
 """
 from __future__ import annotations
 
@@ -87,11 +89,18 @@ SCHEMAS = {
         {vol.Required("recipe_id"): cv.string, vol.Optional("title"): cv.string, **RECIPE_FIELDS}
     ),
     SERVICE_DELETE_RECIPE: vol.Schema({vol.Required("recipe_id"): cv.string}),
+    # Whatever the editor already has goes along, so the AI fills in only the
+    # rest and keeps it consistent (steps that use the ingredients given).
     SERVICE_GENERATE_RECIPE: vol.Schema(
         {
             vol.Required("title"): cv.string,
-            vol.Optional("description", default=""): cv.string,
             vol.Optional("servings", default=4): _SERVINGS,
+            vol.Optional("description", default=""): cv.string,
+            vol.Optional("prep_minutes"): _minutes,
+            vol.Optional("cook_minutes"): _minutes,
+            vol.Optional("ingredients", default=list): _lines,
+            vol.Optional("steps", default=list): _lines,
+            vol.Optional("tags", default=list): _lines,
         }
     ),
 }
@@ -127,10 +136,39 @@ _RECIPE_SYSTEM_PROMPT = (
 )
 
 
-def _recipe_prompt(title: str, description: str, servings: int) -> str:
+_KNOWN_LABELS = {
+    "description": "Description",
+    "prep_minutes": "Prep time (minutes)",
+    "cook_minutes": "Cook time (minutes)",
+    "ingredients": "Ingredients",
+    "steps": "Steps",
+    "tags": "Tags",
+}
+
+
+def known_fields(data: dict[str, Any]) -> dict[str, Any]:
+    """The fields the family has already filled in (blank ones left out)."""
+    return {
+        key: data[key]
+        for key in _KNOWN_LABELS
+        if data.get(key) not in (None, "", [])
+    }
+
+
+def _recipe_prompt(title: str, servings: int, known: dict[str, Any]) -> str:
     lines = [f'Write a recipe for "{title}" that serves {servings}.']
-    if description:
-        lines.append(f"What the family has in mind: {description}")
+    if known:
+        lines.append(
+            "The family has already written these parts. Keep them exactly as they are, "
+            "return them unchanged, and make everything you add consistent with them "
+            "(for example, steps that use exactly these ingredients):"
+        )
+        for key, value in known.items():
+            if isinstance(value, list):
+                lines.append(f"{_KNOWN_LABELS[key]}:")
+                lines.extend(f"  - {v}" for v in value)
+            else:
+                lines.append(f"{_KNOWN_LABELS[key]}: {value}")
     lines.append(
         "Give a one-sentence description; realistic prep and cook times in minutes; "
         "ingredients one per line with quantities (e.g. '2 cups rice'); short, "
@@ -144,18 +182,22 @@ async def generate_recipe(
     session: aiohttp.ClientSession,
     config: AddonConfig,
     title: str,
-    description: str,
     servings: int,
+    known: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """A full recipe, with whatever was `known` passed back untouched - the
+    AI is asked to keep it, and anything it changed anyway is put back."""
+    known = known or {}
     result = await _generate_json(
         session,
         config,
         _RECIPE_SYSTEM_PROMPT,
-        _recipe_prompt(title, description, servings),
+        _recipe_prompt(title, servings, known),
         _RECIPE_SCHEMA,
         "recipe",
     )
-    return {key: result.get(key, RECIPE_DEFAULTS.get(key)) for key in _RECIPE_SCHEMA["required"]}
+    recipe = {key: result.get(key, RECIPE_DEFAULTS.get(key)) for key in _RECIPE_SCHEMA["required"]}
+    return {**recipe, **known, "servings": servings}
 
 
 # --------------------------------------------------------------- handlers
@@ -185,7 +227,7 @@ def build_handlers(
     async def handle_generate_recipe(call: ServiceCall) -> dict[str, Any]:
         _require_parent(coordinator, call)
         return await generate_recipe(
-            session, config, call.data["title"], call.data["description"], call.data["servings"]
+            session, config, call.data["title"], call.data["servings"], known_fields(call.data)
         )
 
     return {
