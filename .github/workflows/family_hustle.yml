@@ -1,0 +1,42 @@
+name: Family Hustle
+
+on:
+  pull_request:
+    paths: ["family_hustle/**", ".github/workflows/family_hustle.yml"]
+  push:
+    branches: [main]
+    paths: ["family_hustle/**", ".github/workflows/family_hustle.yml"]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: family_hustle/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: family_hustle/backend/requirements_test.txt
+      - run: pip install -r requirements_test.txt
+      - run: ruff check hustle_addon tests
+      - run: pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: family_hustle/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: family_hustle/frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test

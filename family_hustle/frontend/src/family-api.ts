@@ -1,0 +1,165 @@
+import type { HassEntity, HomeAssistant } from "./ha-api";
+
+/* The add-on's Calendar and Meals tabs talk to the backend through here -
+ * ha-api.ts stays the chores layer it always was. Settings and the grocery
+ * list arrive with the pushed states (like every Hustle sensor); calendar
+ * events and the dinner board are fetched on demand, since Home Assistant's
+ * calendars have no change signal for the backend to push from. Every URL
+ * is relative (ingress serves the add-on under a per-session prefix). */
+
+export interface CalendarSettings {
+  familyCalendars: string[];
+  defaultCalendar: string | null;
+  dinnersCalendar: string | null;
+}
+
+export interface GroceryCategory {
+  category: string;
+  items: string[];
+}
+
+export interface ChoreProgress {
+  done: number;
+  total: number;
+}
+
+export interface FamilyExtras {
+  calendarSettings: CalendarSettings;
+  groceryList: GroceryCategory[];
+  groceryGeneratedAt: string | null;
+  /** member id -> today's chores done/total (the calendar header bars). */
+  todayChoreProgress: Record<string, ChoreProgress>;
+}
+
+export interface CalendarInfo {
+  entity_id: string;
+  name: string;
+}
+
+export interface FamilyEvent {
+  entityId: string;
+  calendarName: string;
+  uid: string | null;
+  recurrenceId: string | null;
+  rrule: string | null;
+  summary: string;
+  description: string;
+  location: string;
+  /** "YYYY-MM-DD" when allDay, else an ISO datetime. */
+  start: string;
+  /** Exclusive for all-day events (iCalendar). */
+  end: string;
+  allDay: boolean;
+  forMemberId: string | null;
+  attendeeIds: string[];
+}
+
+export interface DinnerEntry {
+  date: string;
+  dish: string;
+  notes: string | null;
+  is_today: boolean;
+  uid: string | null;
+}
+
+export interface DinnerWeek {
+  calendar_entity: string | null;
+  week: DinnerEntry[];
+  errors: string[];
+}
+
+function byKey(hass: HomeAssistant, key: string): HassEntity | undefined {
+  return Object.values(hass.states).find((e) => e.attributes.hustle_key === key);
+}
+
+function strings(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String) : [];
+}
+
+export function parseFamilyExtras(hass: HomeAssistant): FamilyExtras {
+  const settings = byKey(hass, "calendar_settings")?.attributes ?? {};
+  const grocery = byKey(hass, "grocery_list")?.attributes ?? {};
+  const progress = byKey(hass, "today_chore_progress")?.attributes.members ?? {};
+  return {
+    calendarSettings: {
+      familyCalendars: strings(settings.family_calendars),
+      defaultCalendar: (settings.default_calendar as string | null) ?? null,
+      dinnersCalendar: (settings.dinners_calendar as string | null) ?? null,
+    },
+    groceryList: Array.isArray(grocery.categories)
+      ? (grocery.categories as Array<Record<string, unknown>>).map((c) => ({
+          category: String(c.category ?? ""),
+          items: strings(c.items),
+        }))
+      : [],
+    groceryGeneratedAt: (grocery.generated_at as string | null) ?? null,
+    todayChoreProgress: progress as Record<string, ChoreProgress>,
+  };
+}
+
+async function getJson<T>(path: string): Promise<T> {
+  const resp = await fetch(path);
+  let body: unknown = null;
+  try {
+    body = await resp.json();
+  } catch {
+    // Fall through to the status-based message below.
+  }
+  if (!resp.ok) {
+    const error = (body as { error?: string } | null)?.error;
+    throw new Error(error ?? `${path} failed (${resp.status})`);
+  }
+  return body as T;
+}
+
+function toEvent(raw: Record<string, unknown>): FamilyEvent {
+  return {
+    entityId: String(raw.entity_id),
+    calendarName: String(raw.calendar_name ?? raw.entity_id),
+    uid: (raw.uid as string | null) ?? null,
+    recurrenceId: (raw.recurrence_id as string | null) ?? null,
+    rrule: (raw.rrule as string | null) ?? null,
+    summary: String(raw.summary ?? ""),
+    description: String(raw.description ?? ""),
+    location: String(raw.location ?? ""),
+    start: String(raw.start),
+    end: String(raw.end ?? raw.start),
+    allDay: Boolean(raw.all_day),
+    forMemberId: (raw.for_member_id as string | null) ?? null,
+    attendeeIds: strings(raw.attendee_ids),
+  };
+}
+
+export const familyApi = {
+  listCalendars(): Promise<CalendarInfo[]> {
+    return getJson<CalendarInfo[]>("api/calendar/calendars");
+  },
+
+  async events(
+    start: string,
+    end: string,
+    entityIds: string[] = []
+  ): Promise<{ events: FamilyEvent[]; errors: string[] }> {
+    const params = new URLSearchParams({ start, end });
+    entityIds.forEach((id) => params.append("entity_id", id));
+    const body = await getJson<{ events: Array<Record<string, unknown>>; errors: string[] }>(
+      `api/calendar/events?${params}`
+    );
+    return { events: body.events.map(toEvent), errors: body.errors ?? [] };
+  },
+
+  dinnerWeek(): Promise<DinnerWeek> {
+    return getJson<DinnerWeek>("api/meals/week");
+  },
+
+  async call<T = Record<string, unknown>>(
+    hass: HomeAssistant,
+    service: string,
+    data: Record<string, unknown>
+  ): Promise<T> {
+    const result = (await hass.callService("hustle", service, data)) as {
+      response?: unknown;
+    } | null;
+    return (result?.response ?? {}) as T;
+  },
+};

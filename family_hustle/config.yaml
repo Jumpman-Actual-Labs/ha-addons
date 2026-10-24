@@ -1,0 +1,37 @@
+name: Family Hustle
+version: "1.0.0"
+slug: family_hustle
+description: Family calendar, chores, allowance and meal planning in one place
+url: https://github.com/Jumpman-Actual-Labs/ha-addons
+arch:
+  - aarch64
+  - amd64
+init: false
+ingress: true
+ingress_stream: true
+panel_icon: mdi:calendar-heart
+panel_title: Family Hustle
+# The family's Google Calendar (via Home Assistant's calendars), member
+# notify.* alerts, hustle_* events and the HA user list all go through Home
+# Assistant Core's API.
+homeassistant_api: true
+# Read-only, only so the first start can import the old Hustle and
+# Household integrations' data (.storage/hustle_data_*, www/hustle_images/,
+# .storage/household_grocery_list, the Household config entry's calendar)
+# and fall back to secrets.yaml's AI keys. Nothing is ever written there.
+map:
+  - homeassistant_config:ro
+services:
+  - mqtt:want
+options:
+  openai_api_key: ""
+  anthropic_api_key: ""
+  ai_provider: openai
+  mqtt_enabled: true
+  log_level: info
+schema:
+  openai_api_key: password?
+  anthropic_api_key: password?
+  ai_provider: list(openai|anthropic)
+  mqtt_enabled: bool
+  log_level: list(debug|info|warning|error)
