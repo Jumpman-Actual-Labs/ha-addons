@@ -8,7 +8,7 @@ import math
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from . import logic
+from . import const, logic
 from .const import RUN_TYPES
 from .exercises import EXERCISE_LIBRARY
 from .models import AthleteProfile, GainsData, TrainingProgram
@@ -21,8 +21,12 @@ from .session_engine import plan_session, with_focus
 from .training_splits import SPLITS, custom_split_focuses, normalize_split, split_focuses
 from .workout_planner import next_strength_targets
 
-BUILD_TYPES = {"workout", "run", "program"}
+_ALL_BUILD_TYPES = {"workout", "run", "program"}
 PERMISSIONS = {"view_workouts", "coach_workouts", "view_progress", "manage_programs"}
+
+
+def build_types() -> set[str]:
+    return _ALL_BUILD_TYPES if const.RUNS_ENABLED else _ALL_BUILD_TYPES - {"run"}
 
 
 def number(value: Any, low: float, high: float, integer: bool = False) -> float | int:
@@ -143,6 +147,9 @@ def validate_program(raw: Any, profile: AthleteProfile, data: GainsData) -> dict
             if not isinstance(session, dict):
                 raise ValueError("Invalid session")
             kind = session.get("type")
+            # Run sessions stay valid with runs switched off - programs saved
+            # before then keep them. New programs get none: program requests
+            # force running_days to 0, which the AI-program check enforces.
             if kind not in {"workout", "run", "hiit", "conditioning", "recovery", "rest"}:
                 raise ValueError("Invalid session type")
             prescription = session.get("prescription", {})
@@ -317,13 +324,17 @@ def validate_proposal(kind: str, raw: Any, profile: AthleteProfile, data: GainsD
 
 
 def build_request(raw: Any) -> dict:
-    if not isinstance(raw, dict) or raw.get("type") not in BUILD_TYPES:
-        raise ValueError("Choose workout, run or program")
+    if not isinstance(raw, dict) or raw.get("type") not in build_types():
+        raise ValueError(
+            "Choose workout, run or program" if const.RUNS_ENABLED else "Choose workout or program"
+        )
     if raw.get("source") not in {"wizard", "geoffrey"} or not isinstance(raw.get("answers"), dict):
         raise ValueError("Invalid builder request")
     if len(json.dumps(raw, allow_nan=False)) > 40000:
         raise ValueError("Builder request is too large")
     answers = effective_answers(raw["answers"], run_duration=raw["type"] == "run")
+    if raw["type"] == "program" and not const.RUNS_ENABLED:
+        answers["running_days"] = 0
     if raw["type"] == "program":
         if "session_preferences" in answers:
             answers["session_preferences"] = normalize_session_preferences(
@@ -679,11 +690,18 @@ all weights use profile units. No invented PRs or history. For modifications, pr
 training for explicit review, never claim you changed saved records."""
 
 
+RUNS_OFF_PROMPT = """
+RUNS ARE TURNED OFF in Gains for now. Never propose runs or run sessions, never put
+run days in a program, never start the run builder, and always return
+"proposed_runs":[]. If asked for running, say runs aren't available in Gains yet."""
+
+
 def system_prompt(profile: AthleteProfile, data: GainsData, viewer: AthleteProfile) -> str:
     return (
         logic.build_ai_system_prompt(profile, EXERCISE_LIBRARY, data.workouts, data.gym_profiles)
         + "\n"
         + SCHEMA_PROMPT
+        + ("" if const.RUNS_ENABLED else RUNS_OFF_PROMPT)
         + "\nATHLETE CONTEXT:\n"
         + json.dumps(athlete_context(profile, data, viewer), allow_nan=False)
     )
@@ -945,7 +963,7 @@ def actions(raw: Any) -> list[dict]:
         if (
             isinstance(a, dict)
             and a.get("type") == "start_builder"
-            and a.get("builder") in BUILD_TYPES
+            and a.get("builder") in build_types()
         ):
             prefill = a.get("prefill") if isinstance(a.get("prefill"), dict) else {}
             if len(json.dumps(prefill, allow_nan=False)) <= 10000:

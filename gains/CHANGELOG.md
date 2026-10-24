@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.2
+
+- Runs are switched off for now: no Runs tab, run builder, run plan card or
+  run suggestions from Geoffrey, and new programs have no run days. Runs
+  you already logged are kept and come back if runs are switched on again.
+- The Coach tab shows athletes as tiles with their Home Assistant account
+  picture (or their initial when they don't have one).
+
 ## 1.0.1
 
 - The panel uses your own Home Assistant theme again - its accent colors

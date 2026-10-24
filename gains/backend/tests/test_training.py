@@ -80,6 +80,7 @@ async def grant(coord, coach, permissions=None):
     )
 
 
+@pytest.mark.runs_enabled
 @pytest.mark.parametrize("kind,payload", [("workout", WORKOUT), ("run", RUN), ("program", PROGRAM)])
 async def test_shared_structured_generation_and_acceptance(coordinator, kind, payload):
     athlete = await coordinator.async_ensure_profile("u", "Jordan")
@@ -568,6 +569,7 @@ async def test_kids_can_use_weighted_exercises_and_loads(coordinator):
     assert validated["exercises"][0]["sets"][0]["weight"] == 10
 
 
+@pytest.mark.runs_enabled
 async def test_incomplete_ai_program_uses_valid_ongoing_fallback(coordinator):
     await coordinator.async_ensure_profile("u", "Jordan")
     equip(coordinator.get_profile_by_user_id('u'), coordinator.data)
@@ -603,6 +605,7 @@ async def test_builder_accepts_direct_structured_proposal_shape(coordinator):
     assert proposal['payload']['exercises']
 
 
+@pytest.mark.runs_enabled
 async def test_builder_accepts_named_program_envelope(coordinator):
     await coordinator.async_ensure_profile("u", "Jordan")
     equip(coordinator.get_profile_by_user_id('u'), coordinator.data)
@@ -649,6 +652,7 @@ async def test_malformed_builder_response_is_retried_and_validated(coordinator):
     assert "previous response was invalid" in provider.calls[1][1][-1]["content"]
 
 
+@pytest.mark.runs_enabled
 def test_program_requests_are_ongoing_and_ignore_legacy_duration_answer():
     request = training.build_request(
         {

@@ -4,6 +4,7 @@ import { gainsApi, type HomeAssistant } from "../ha-api";
 import type { GainsState, AICoachMessage } from "../types";
 import type { TrainingProgram } from "../training-types";
 import { formStyles, glassCardStyle } from "../styles";
+import { BUILD_KINDS, RUNS_ENABLED } from "../features";
 @customElement("gains-coach-view")
 export class GainsCoachView extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
@@ -92,7 +93,7 @@ export class GainsCoachView extends LitElement {
   }
   private renderMessage(m: AICoachMessage) {
     return html`<div class="bubble ${m.role}">${m.content}</div>
-      ${m.actions?.map((a) => html`<button class="secondary" @click=${() => this.event("open-builder", { kind: a.builder, prefill: a.prefill })}>Continue building ${a.builder}</button>`)}${m.proposedWorkouts.map((w) => html`<div class="proposal"><button class="secondary" @click=${() => this.event("review-proposal", { kind: "workout", payload: { name: w.name, exercises: w.exercises.map((e) => ({ exercise_id: e.exerciseId, sets: e.sets.map((s) => ({ reps: s.reps ?? 8, weight: s.weight ?? 0 })) })) } })}>Review ${w.name}</button></div>`)}${m.proposedRuns.map((r) => html`<div class="proposal"><button class="secondary" @click=${() => this.event("review-proposal", { kind: "run", payload: { name: r.name, run_type: r.runType, target_distance: r.targetDistance, target_duration_minutes: r.targetDurationMinutes, segments: r.segments ?? [] } })}>Review ${r.name}</button></div>`)}`;
+      ${m.actions?.map((a) => html`<button class="secondary" @click=${() => this.event("open-builder", { kind: a.builder, prefill: a.prefill })}>Continue building ${a.builder}</button>`)}${m.proposedWorkouts.map((w) => html`<div class="proposal"><button class="secondary" @click=${() => this.event("review-proposal", { kind: "workout", payload: { name: w.name, exercises: w.exercises.map((e) => ({ exercise_id: e.exerciseId, sets: e.sets.map((s) => ({ reps: s.reps ?? 8, weight: s.weight ?? 0 })) })) } })}>Review ${w.name}</button></div>`)}${(RUNS_ENABLED ? m.proposedRuns : []).map((r) => html`<div class="proposal"><button class="secondary" @click=${() => this.event("review-proposal", { kind: "run", payload: { name: r.name, run_type: r.runType, target_distance: r.targetDistance, target_duration_minutes: r.targetDurationMinutes, segments: r.segments ?? [] } })}>Review ${r.name}</button></div>`)}`;
   }
   render() {
     const p = this.gainsState?.profile;
@@ -118,7 +119,7 @@ export class GainsCoachView extends LitElement {
             </ha-card>`,
         )}
       <div class="quick">
-        ${(["workout", "run", "program"] as const).map((kind) => html`<button class="primary" @click=${() => this.event("open-builder", { kind })}>Build ${kind}</button>`)}<button
+        ${BUILD_KINDS.map((kind) => html`<button class="primary" @click=${() => this.event("open-builder", { kind })}>Build ${kind}</button>`)}<button
           class="secondary"
           @click=${() => this.event("enter-coach-mode")}
         >

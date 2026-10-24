@@ -302,7 +302,7 @@ export class GainsSettingsView extends LitElement {
           Link with another Home Assistant user on this instance (e.g. a
           family member) for quick profile switching. Sharing and coaching
           don't require linking -- see "Who can coach me?" below for
-          coaching, and any workout/run/program's Share button for sending a
+          coaching, and any workout or program's Share button for sending a
           copy to anyone on this instance.
         </p>
 

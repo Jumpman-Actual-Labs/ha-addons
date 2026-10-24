@@ -4,6 +4,7 @@ import { trainingApi, trainingService, type HomeAssistant } from "../ha-api";
 import type { GainsState } from "../types";
 import type { TrainingSnapshot, Permission } from "../training-types";
 import { formStyles } from "../styles";
+import { RUNS_ENABLED } from "../features";
 @customElement("gains-coaching-permissions")
 export class GainsCoachingPermissions extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
@@ -96,8 +97,8 @@ export class GainsCoachingPermissions extends LitElement {
             <summary>${p.displayName}</summary>
             ${(
               [
-                ["view_workouts", "View current workouts and runs"],
-                ["coach_workouts", "Log and edit my workouts and runs"],
+                ["view_workouts", RUNS_ENABLED ? "View current workouts and runs" : "View current workouts"],
+                ["coach_workouts", RUNS_ENABLED ? "Log and edit my workouts and runs" : "Log and edit my workouts"],
                 ["view_progress", "View my training history and progress"],
                 ["manage_programs", "Manage my programs"],
               ] as const

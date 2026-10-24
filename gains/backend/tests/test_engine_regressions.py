@@ -81,6 +81,7 @@ def test_d9_null_weeks_and_count_mismatch_are_validation_errors():
         )
 
 
+@pytest.mark.runs_enabled
 def test_run_duration_keeps_existing_range_and_optional_seed_defaults():
     request = training.build_request({
         "type": "run", "source": "wizard", "answers": {"duration": "240.5", "seed": None}

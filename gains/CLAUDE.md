@@ -14,15 +14,29 @@ Gains work here, not in those two repos.
 
 ## Layout
 
-- `config.yaml` - ingress panel (`mdi:dumbbell`), `homeassistant_config:ro`
+- `config.yaml` - ingress panel (`mdi:dumbbell`), `homeassistant_api: true`
+  (account pictures only - see `ha_client.py`), `homeassistant_config:ro`
   (import), `services: mqtt:want`, options (`ai_provider`, the two API
-  keys and models, `mqtt_enabled`, `log_level`). No `homeassistant_api` -
-  the panel only needs the viewer's id and name, which ingress sends.
+  keys and models, `mqtt_enabled`, `log_level`).
 - `backend/gains_addon/` - the Python service (`python3 -m gains_addon`).
 - `frontend/` - the Lit panel, built by the Dockerfile's Node stage.
 - `backend/docs/`, `frontend/docs/` - design notes carried over from the
   two repos. They predate the move, so "integration"/"service" there means
   what's now the add-on backend and `api/services/<name>`.
+
+## Runs are switched off (for now)
+
+`RUNS_ENABLED` - `backend/gains_addon/const.py` and
+`frontend/src/features.ts` - is `False`. The run code is kept, not deleted,
+and stored runs are untouched; flip both back to `True` to restore runs.
+While off: no run builder (`training.build_types()`), program requests get
+`running_days` 0 (and the AI-program check then rejects run sessions), no
+run services (`create/log/skip/share_run`), Geoffrey is told so
+(`training.RUNS_OFF_PROMPT`) and his run proposals are dropped, and the
+panel hides the Runs tab, run plan card, run proposals and run sessions in
+program lists. Run sessions already saved in a program still validate - a
+program from before stays loadable. Tests of the dormant run code carry
+`@pytest.mark.runs_enabled` (see `tests/conftest.py`).
 
 ## Identity
 
@@ -72,6 +86,11 @@ Add-on layers around them:
   discovery topics sit under a `gains` node id so stale ones are cleared.
 - `weekly.py` - the integration's Sunday 23:50 next-week generation as an
   asyncio loop.
+- `ha_client.py` - Core's `/api/states` via Supervisor (cached 60s), for
+  each user's `person` picture. `services.py`'s `training_state` adds it to
+  `coachable_profiles` as `picture` for the Coach tab's tiles. The value is
+  a path on HA's own origin, which the same-origin ingress iframe loads
+  as-is. `None` outside Supervisor, where there are no pictures.
 - `web.py` - `api/states`, `api/websocket` (per-viewer pushes),
   `api/services/<name>`.
 - `migrate.py` - first start only (no `/data/gains.json`):

@@ -109,7 +109,9 @@ export interface TrainingSnapshot {
   active_profile_id: string;
   mode: "self" | "coach";
   permissions: Record<Permission, boolean>;
-  coachable_profiles: { profile_id: string; display_name: string }[];
+  /** picture: the athlete's Home Assistant account picture (a path on HA's
+   * own origin), or null when their person has none. */
+  coachable_profiles: { profile_id: string; display_name: string; picture?: string | null }[];
   grants: Record<
     string,
     { role: string; permissions: Record<Permission, boolean> }

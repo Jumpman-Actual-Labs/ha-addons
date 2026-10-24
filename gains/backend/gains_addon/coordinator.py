@@ -13,7 +13,7 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, date, datetime
 
-from . import logic, progress, training
+from . import const, logic, progress, training
 from .ai import AIProvider, AIProviderError
 from .const import AI_ROLE_ASSISTANT, AI_ROLE_USER
 from .equipment import get_equipment_item
@@ -1154,6 +1154,9 @@ class GainsCoordinator(JointSessionMixin, TrainingCoordinatorMixin):
         ):
             raise ValueError('Planning context changed; retry the conversation request')
         parsed = logic.parse_ai_reply(raw_reply)
+        if not const.RUNS_ENABLED:
+            # The prompt says so too (training.RUNS_OFF_PROMPT); this is the guarantee.
+            parsed["proposed_runs"] = []
 
         sanitized_updates = logic.sanitize_profile_updates(parsed["profile_updates"])
         if sanitized_updates and target_profile_id is None:

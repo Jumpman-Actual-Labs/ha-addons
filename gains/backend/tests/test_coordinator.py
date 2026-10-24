@@ -954,6 +954,7 @@ async def test_ai_chat_validates_proposed_workouts_against_the_library(coordinat
 
 
 
+@pytest.mark.runs_enabled
 async def test_ai_chat_validates_a_multi_day_plan_with_workouts_and_runs(coordinator):
     await coordinator.async_ensure_profile("user-1", "Jordan")
     equip(coordinator.get_profile_by_user_id('user-1'), coordinator.data)

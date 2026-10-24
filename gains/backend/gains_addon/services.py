@@ -22,6 +22,7 @@ from typing import Any
 
 import voluptuous as vol
 
+from . import const
 from . import validation as cv
 from .const import (
     ACTIVITY_LEVELS,
@@ -339,12 +340,17 @@ class ServiceError(Exception):
 
 
 Handler = Callable[[str, dict[str, Any]], Awaitable[Any]]
+# Home Assistant user id -> account picture URL (ha_client.user_pictures).
+PicturesSource = Callable[[], Awaitable[dict[str, str]]]
 
 
-def build_handlers(coordinator: GainsCoordinator) -> dict[str, tuple[vol.Schema, Handler]]:
+def build_handlers(
+    coordinator: GainsCoordinator, pictures: PicturesSource | None = None
+) -> dict[str, tuple[vol.Schema, Handler]]:
     """service name -> (schema, handler). Was `async_setup_services`'
     hass.services.async_register calls; every handler gets the caller's Home
-    Assistant user id first (see the module docstring)."""
+    Assistant user id first (see the module docstring). `pictures` supplies
+    account pictures for the Coach tab; without it there are none."""
     async def handle_ensure_profile(user_id: str, data: dict[str, Any]) -> None:
         display_name = data.get("display_name")
         await coordinator.async_ensure_profile(user_id, display_name)
@@ -586,11 +592,16 @@ def build_handlers(coordinator: GainsCoordinator) -> dict[str, tuple[vol.Schema,
         SERVICE_SHARE_PROGRAM: (SHARE_PROGRAM_SCHEMA, handle_share_program),
         SERVICE_RESPOND_SHARE: (RESPOND_SHARE_SCHEMA, handle_respond_share),
     }
-    handlers.update(_training_handlers(coordinator))
+    if not const.RUNS_ENABLED:
+        for name in (SERVICE_CREATE_RUN, SERVICE_LOG_RUN, SERVICE_SKIP_RUN, SERVICE_SHARE_RUN):
+            del handlers[name]
+    handlers.update(_training_handlers(coordinator, pictures))
     return handlers
 
 
-def _training_handlers(coordinator: GainsCoordinator) -> dict[str, tuple[vol.Schema, Handler]]:
+def _training_handlers(
+    coordinator: GainsCoordinator, pictures: PicturesSource | None
+) -> dict[str, tuple[vol.Schema, Handler]]:
     """Response-only endpoints: snapshots are authorized instead of public sensor copies."""
     schema = vol.Schema(
         {
@@ -603,9 +614,16 @@ def _training_handlers(coordinator: GainsCoordinator) -> dict[str, tuple[vol.Sch
     )
 
     async def state(user_id: str, data: dict[str, Any]) -> dict:
-        return await coordinator.async_training_state(
+        snapshot = await coordinator.async_training_state(
             user_id, data.get("target_profile_id")
         )
+        # The Coach tab's athlete tiles show each person's Home Assistant
+        # account picture, which only Home Assistant knows.
+        by_user = await pictures() if pictures else {}
+        for choice in snapshot.get("coachable_profiles", []):
+            athlete = coordinator.get_profile(choice["profile_id"])
+            choice["picture"] = by_user.get(athlete.ha_user_id) if athlete else None
+        return snapshot
 
     async def build(user_id: str, data: dict[str, Any]) -> dict:
         return await coordinator.async_build_training(

@@ -78,6 +78,13 @@ EFFORT_LEVELS = ("easy", "moderate", "hard", "max")
 # run (unlike a multi-exercise strength workout) is a single continuous
 # effort rather than something logged set-by-set while in progress.
 RUN_STATUSES = ("planned", "completed", "skipped")
+
+# Runs are switched off for now: no run builder, no runs in generated
+# programs, no run proposals from Geoffrey, no run services. Stored runs are
+# kept untouched, so flipping this back on (with the panel's RUNS_ENABLED in
+# frontend/src/features.ts) restores everything. Read as `const.RUNS_ENABLED`
+# at call time, so tests can switch it on.
+RUNS_ENABLED = False
 RUN_TYPES = ("easy", "tempo", "interval", "long")
 
 # AI Coach (partial Phase 8): AI performs conversational onboarding and
