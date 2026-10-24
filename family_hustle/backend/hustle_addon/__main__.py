@@ -10,7 +10,7 @@ import signal
 import aiohttp
 from aiohttp import web
 
-from . import family_calendar, meals, services, shopping
+from . import family_calendar, meals, recipes, services, shopping
 from .bridge import HassBridge
 from .config import load_config
 from .coordinator import HustleCoordinator
@@ -53,12 +53,14 @@ async def main() -> None:
             **services.SCHEMAS,
             **family_calendar.SCHEMAS,
             **meals.SCHEMAS,
+            **recipes.SCHEMAS,
             **shopping.SCHEMAS,
         }
         handlers = {
             **services.build_handlers(coordinator),
             **family_calendar.build_handlers(coordinator, calendar),
             **meals.build_handlers(coordinator, calendar, session, config),
+            **recipes.build_handlers(coordinator, session, config),
             **shopping.build_handlers(coordinator, shopping_list),
         }
         runner = web.AppRunner(

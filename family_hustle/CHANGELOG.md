@@ -17,6 +17,14 @@
   dates, each with a colored bar of who has events that day, and the
   tapped day's events listed underneath. Swipe sideways for another month.
 - Calendar ⚙ › Family colors: pick each person's color.
+- Meals tab rebuilt in two sections. **This week** lists the next seven
+  dinners: add one (from a recipe or just a name), move or remove it, open
+  its recipe, or plan the week with AI. The grocery list sits underneath
+  with "Add to shopping list". **Recipes** is the family recipe box: search,
+  add or edit recipes (or have the AI write one from its name), Cook mode
+  (step by step in big type, ingredient checklist, keeps the screen on),
+  add a recipe's ingredients to the shopping list, and plan it for a night.
+  Dinners link to recipes by name.
 - Settings (calendars, dinners calendar, shopping list, colors) are now for
   admin parents only, in the panel and on the server.
 

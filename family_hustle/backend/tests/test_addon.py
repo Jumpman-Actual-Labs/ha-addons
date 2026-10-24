@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
-from hustle_addon import family_calendar, meals, migrate, mqtt, services, shopping, web
+from hustle_addon import family_calendar, meals, migrate, mqtt, recipes, services, shopping, web
 from hustle_addon.bridge import HassBridge
 from hustle_addon.config import AddonConfig
 from hustle_addon.coordinator import HustleCoordinator
@@ -115,12 +115,14 @@ async def setup(config):
         **services.SCHEMAS,
         **family_calendar.SCHEMAS,
         **meals.SCHEMAS,
+        **recipes.SCHEMAS,
         **shopping.SCHEMAS,
     }
     handlers = {
         **services.build_handlers(coordinator),
         **family_calendar.build_handlers(coordinator, calendar),
         **meals.build_handlers(coordinator, calendar, None, config),
+        **recipes.build_handlers(coordinator, None, config),
         **shopping.build_handlers(coordinator, ShoppingList(ha, coordinator)),
     }
 
@@ -698,3 +700,76 @@ def test_event_bounds_without_offsets_use_local_time():
     )
     assert start.startswith("2026-10-24T17:00:00") and end.startswith("2026-10-24T18:00:00")
     assert start[19:] == end[19:] != ""  # both got the same local offset
+
+
+# ------------------------------------------------------------------ recipes
+
+
+async def test_recipe_round_trip(setup):
+    coordinator, _ha, call, _kid = await _family(setup)
+    result = await call(
+        "add_recipe",
+        {
+            "title": " Chicken Tacos ",
+            "servings": "4",
+            "prep_minutes": 15,
+            "ingredients": ["1 lb chicken", "", "8 tortillas"],
+            "steps": ["Cook the chicken", "Warm the tortillas"],
+        },
+        ADMIN,
+    )
+    [recipe] = coordinator.recipes
+    assert recipe["id"] == result["recipe_id"]
+    assert recipe["title"] == "Chicken Tacos"
+    assert recipe["ingredients"] == ["1 lb chicken", "8 tortillas"]
+    assert recipe["servings"] == 4 and recipe["cook_minutes"] is None
+    assert recipe["created_by"] == coordinator.members[0].id
+
+    await call("update_recipe", {"recipe_id": recipe["id"], "notes": "Extra lime"}, ADMIN)
+    assert coordinator.recipes[0]["notes"] == "Extra lime"
+    states = build_states(coordinator.data)
+    assert states["sensor.hustle_recipes"]["attributes"]["recipes"][0]["title"] == "Chicken Tacos"
+
+    with pytest.raises(services.ServiceError, match="already a recipe"):
+        await call("add_recipe", {"title": "chicken tacos"}, ADMIN)
+    await call("delete_recipe", {"recipe_id": recipe["id"]}, ADMIN)
+    assert coordinator.recipes == []
+
+
+async def test_recipes_are_written_by_parents(setup):
+    _coordinator, _ha, call, _kid = await _family(setup)
+    with pytest.raises(services.ServiceError, match="parent"):
+        await call("add_recipe", {"title": "Pancakes"}, {"id": "ha-kid"})
+    with pytest.raises(services.ServiceError, match="Invalid data"):
+        await call("add_recipe", {"title": "Pancakes", "prep_minutes": -5}, ADMIN)
+
+
+async def test_generate_recipe_fills_the_editor(setup, monkeypatch):
+    _coordinator, _ha, call, _kid = await _family(setup)
+
+    async def fake_json(session, config, system, prompt, schema, name):
+        assert name == "recipe"
+        assert "Shepherd's pie" in prompt and "serves 6" in prompt
+        return {
+            "description": "Cozy",
+            "servings": 6,
+            "prep_minutes": 20,
+            "cook_minutes": 40,
+            "ingredients": ["1 lb lamb"],
+            "steps": ["Brown the lamb"],
+            "tags": ["Comfort"],
+        }
+
+    monkeypatch.setattr(recipes, "_generate_json", fake_json)
+    result = await call("generate_recipe", {"title": "Shepherd's pie", "servings": 6}, ADMIN)
+    assert result["ingredients"] == ["1 lb lamb"] and result["cook_minutes"] == 40
+
+
+async def test_remove_meal_deletes_the_dinner(setup):
+    _coordinator, ha, call, _kid = await _family(setup)
+    ha.events["calendar.dinners"] = []
+    await call("update_calendar_settings", {"dinners_calendar": "calendar.dinners"}, ADMIN)
+    await call("schedule_meals", {"meals": [{"name": "Tacos", "date": "2026-10-24"}]}, ADMIN)
+    [event] = ha.events["calendar.dinners"]
+    await call("remove_meal", {"uid": event["uid"]}, ADMIN)
+    assert ha.events["calendar.dinners"] == []

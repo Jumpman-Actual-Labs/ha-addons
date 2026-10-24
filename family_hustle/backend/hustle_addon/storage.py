@@ -45,6 +45,7 @@ def default_data() -> dict[str, Any]:
         "calendar_settings": default_calendar_settings(),
         "event_tags": {},
         "grocery_list": {"categories": [], "generated_at": None},
+        "recipes": [],
     }
 
 

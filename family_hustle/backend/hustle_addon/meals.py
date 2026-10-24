@@ -432,6 +432,7 @@ SERVICE_GENERATE_MEAL_PLAN = "generate_meal_plan"
 SERVICE_GENERATE_GROCERY_LIST = "generate_grocery_list"
 SERVICE_SCHEDULE_MEALS = "schedule_meals"
 SERVICE_MOVE_MEAL = "move_meal"
+SERVICE_REMOVE_MEAL = "remove_meal"
 
 SCHEMAS = {
     SERVICE_GENERATE_MEAL_PLAN: vol.Schema(
@@ -476,6 +477,7 @@ SCHEMAS = {
             vol.Required("new_date"): _date,
         }
     ),
+    SERVICE_REMOVE_MEAL: vol.Schema({vol.Required("uid"): cv.string}),
 }
 
 
@@ -546,9 +548,14 @@ def build_handlers(
         )
         return {"moved": True}
 
+    async def handle_remove_meal(call: ServiceCall) -> None:
+        _require_parent(coordinator, call)
+        await calendar.delete_event(_dinners_calendar(), call.data["uid"])
+
     return {
         SERVICE_GENERATE_MEAL_PLAN: handle_generate_meal_plan,
         SERVICE_GENERATE_GROCERY_LIST: handle_generate_grocery_list,
         SERVICE_SCHEDULE_MEALS: handle_schedule_meals,
         SERVICE_MOVE_MEAL: handle_move_meal,
+        SERVICE_REMOVE_MEAL: handle_remove_meal,
     }

@@ -34,6 +34,35 @@ export interface GroceryCategory {
   items: string[];
 }
 
+export interface Recipe {
+  id: string;
+  title: string;
+  description: string;
+  servings: number | null;
+  prepMinutes: number | null;
+  cookMinutes: number | null;
+  ingredients: string[];
+  steps: string[];
+  tags: string[];
+  sourceUrl: string;
+  notes: string;
+  updatedAt: string;
+}
+
+/** What the recipe editor sends (snake_case, as the backend takes it). */
+export interface RecipeFields {
+  title: string;
+  description: string;
+  servings: number | null;
+  prep_minutes: number | null;
+  cook_minutes: number | null;
+  ingredients: string[];
+  steps: string[];
+  tags: string[];
+  source_url: string;
+  notes: string;
+}
+
 export interface ChoreProgress {
   done: number;
   total: number;
@@ -45,6 +74,8 @@ export interface FamilyExtras {
   groceryGeneratedAt: string | null;
   /** member id -> today's chores done/total (the calendar header bars). */
   todayChoreProgress: Record<string, ChoreProgress>;
+  /** The recipe box, sorted by title. */
+  recipes: Recipe[];
 }
 
 export interface CalendarInfo {
@@ -112,7 +143,37 @@ export function parseFamilyExtras(hass: HomeAssistant): FamilyExtras {
       : [],
     groceryGeneratedAt: (grocery.generated_at as string | null) ?? null,
     todayChoreProgress: progress as Record<string, ChoreProgress>,
+    recipes: Array.isArray(byKey(hass, "recipes")?.attributes.recipes)
+      ? (byKey(hass, "recipes")!.attributes.recipes as Array<Record<string, unknown>>).map(toRecipe)
+      : [],
   };
+}
+
+function numOrNull(value: unknown): number | null {
+  return value === null || value === undefined || value === "" ? null : Number(value);
+}
+
+function toRecipe(raw: Record<string, unknown>): Recipe {
+  return {
+    id: String(raw.id),
+    title: String(raw.title ?? ""),
+    description: String(raw.description ?? ""),
+    servings: numOrNull(raw.servings),
+    prepMinutes: numOrNull(raw.prep_minutes),
+    cookMinutes: numOrNull(raw.cook_minutes),
+    ingredients: strings(raw.ingredients),
+    steps: strings(raw.steps),
+    tags: strings(raw.tags),
+    sourceUrl: String(raw.source_url ?? ""),
+    notes: String(raw.notes ?? ""),
+    updatedAt: String(raw.updated_at ?? ""),
+  };
+}
+
+/** Dinners link to recipes by title - see the backend's recipes.py. */
+export function recipeFor(recipes: Recipe[], dish: string | null | undefined): Recipe | undefined {
+  const key = (dish ?? "").trim().toLowerCase();
+  return key ? recipes.find((r) => r.title.trim().toLowerCase() === key) : undefined;
 }
 
 async function getJson<T>(path: string): Promise<T> {

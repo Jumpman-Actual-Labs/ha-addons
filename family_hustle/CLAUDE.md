@@ -69,6 +69,11 @@ Add-on layers:
   remove_item/remove_completed_items`, keeping no copy. `add_items` skips
   anything already on the list unchecked. Any linked member may edit;
   choosing the list goes through `update_calendar_settings` (parents).
+- `recipes.py`: the recipe box. Recipes are plain dicts in
+  `coordinator.recipes` (title unique case-insensitively, because dinners
+  link by title); parents add, edit and delete. `generate_recipe` uses
+  meals.py's `_generate_json` to write ingredients, steps, times and tags
+  from a name, saving nothing itself.
 - `states.py`: the panel's read model. These are the exact payloads of the
   integration's `sensor.py` (`hustle_key`/`member_id`/`chore_definition_id`/
   `chore_assignment_id`/`bounty_id` markers), plus `calendar_settings`,
@@ -128,9 +133,21 @@ integration. `test_addon.py` covers the add-on layers against a fake HA.
   day (`_dayColors`; untagged = grey, dinners skipped), the picked day's
   agenda below, and a sideways swipe to change month. Event color = the "for" member
   (`utils/member-colors.ts`: avatar color or a pastel by roster order).
-- `views/meals-view.ts`: Household's `household-panel.js`, rewritten in Lit
-  with the same chalkboard styles and wizard steps. Its grocery checklists
-  add their unchecked items to the shopping list.
+- `views/meals-view.ts`: the Meals tab, with **This week** and **Recipes**
+  sections. This week lists the next seven dinners from
+  `api/meals/week`. Each day can add a dinner (typed, or a recipe's title,
+  via `schedule_meals`), move it, remove it (`remove_meal`), or open its
+  recipe. Recipes are matched by title (`recipeFor`); a dinner without one
+  gets "Get recipe", which opens the editor and has the AI write it.
+  Household's AI planner wizard lives here as a dialog (same steps and
+  rules). The persisted grocery list is a card with "Add to shopping list".
+  Three or more consecutive days with the same dish read as Meal Prep.
+- `views/recipes-view.ts`: the recipe box. It has a searchable card grid, a
+  recipe page (with plan for a night, add ingredients to the shopping list,
+  edit, delete), the editor ("Write with AI" calls `generate_recipe`), and
+  Cook mode: a full-screen view, one step at a time, with an ingredient
+  checklist and a Wake Lock while open. meals-view drives it through
+  `openRecipe()` / `newRecipe()` and listens for `meals-changed`.
 - `views/shopping-view.ts`: the shopping list. It re-reads every 30s while
   open, because items also change from the HA app and voice.
 - `hustle-panel.ts` and `views/*` (the rest): the Hustle frontend,

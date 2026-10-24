@@ -13,10 +13,17 @@ panel, laid out like a Skylight Calendar.
   bar showing who has events that day, and tapping a date lists its events.
 - **Chores**: everything Hustle did: chores and recurring chores, extra jobs
   (bounties), grades, behavior, paychecks and payroll, and reports.
-- **Meals**: this week's dinners board, the AI meal-plan wizard (Dinner
-  Planning or Meal Prep), a grocery list built from the plan, and moving a
-  dinner to another day. Check off what you already have on the grocery
-  list and **Add to shopping list** sends the rest to the Shopping tab.
+- **Meals**, in two sections:
+  - **This week**: the next seven dinners. Add one from a recipe or just
+    type it, move or remove it, open its recipe, or have the AI plan the
+    week (Dinner Planning or Meal Prep). The grocery list from a plan sits
+    underneath. Check off what you already have and **Add to shopping
+    list** sends the rest to the Shopping tab.
+  - **Recipes**: the family recipe box. Search it, add and edit recipes
+    (the AI can write one from just its name), **Cook** a recipe step by
+    step with an ingredient checklist (the screen stays on), send its
+    ingredients to the shopping list, or plan it for a night. A dinner with
+    the same name as a recipe links to it.
 - **Shopping**: Home Assistant's own shopping list, so it's the same list
   as in the Home Assistant app and Assist ("add milk to the shopping
   list"). Everyone in the family can add items, check them off, rename

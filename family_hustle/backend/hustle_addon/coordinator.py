@@ -101,6 +101,7 @@ class HustleCoordinator:
         self.calendar_settings: dict[str, Any] = default_calendar_settings()
         self.event_tags: dict[str, dict[str, Any]] = {}
         self.grocery_list: dict[str, Any] = {"categories": [], "generated_at": None}
+        self.recipes: list[dict[str, Any]] = []
 
     # ----------------------------------------------------------- listeners
     # Stands in for DataUpdateCoordinator's push API from the integration
@@ -165,6 +166,7 @@ class HustleCoordinator:
         }
         self.event_tags = dict(raw.get("event_tags") or {})
         self.grocery_list = raw.get("grocery_list") or {"categories": [], "generated_at": None}
+        self.recipes = list(raw.get("recipes") or [])
         self.recent_activity = [ActivityEntry.from_dict(a) for a in raw.get("recent_activity", [])]
 
         if migrated_stale_images:
@@ -195,6 +197,7 @@ class HustleCoordinator:
             "calendar_settings": self.calendar_settings,
             "event_tags": self.event_tags,
             "grocery_list": self.grocery_list,
+            "recipes": self.recipes,
         }
         await self.store.async_save(data)
         self.async_set_updated_data(self._build_public_data())
@@ -282,6 +285,7 @@ class HustleCoordinator:
             "today_chore_progress": self._today_chore_progress(),
             "calendar_settings": self.calendar_settings,
             "grocery_list": self.grocery_list,
+            "recipes": self.recipes,
         }
 
     def _potential_earnings_by_member(self) -> dict[str, int]:
@@ -1963,4 +1967,57 @@ class HustleCoordinator:
 
     async def async_save_grocery_list(self, categories: list[dict[str, Any]]) -> None:
         self.grocery_list = {"categories": categories, "generated_at": now_iso()}
+        await self._async_save()
+
+    # ------------------------------------------------------------ recipes
+    # The Meals tab's recipe box. Plain dicts in the RECIPE_FIELDS shape -
+    # recipes.py validates them; there's no business logic to put in a
+    # model. Dinners link to a recipe by title (calendar events can't carry
+    # an id), so titles are kept unique, case-insensitively.
+
+    def _get_recipe(self, recipe_id: str) -> dict[str, Any]:
+        for recipe in self.recipes:
+            if recipe["id"] == recipe_id:
+                return recipe
+        raise ValueError(f"Unknown recipe_id {recipe_id}")
+
+    def _check_recipe_title(self, title: str, recipe_id: str | None = None) -> str:
+        title = title.strip()
+        if not title:
+            raise ValueError("A recipe needs a name.")
+        for recipe in self.recipes:
+            if recipe["id"] != recipe_id and recipe["title"].strip().lower() == title.lower():
+                raise ValueError(f'There\'s already a recipe called "{recipe["title"]}".')
+        return title
+
+    async def async_add_recipe(
+        self, created_by: str | None = None, **fields: Any
+    ) -> dict[str, Any]:
+        now = now_iso()
+        recipe = {
+            **fields,
+            "id": new_id(),
+            "title": self._check_recipe_title(fields["title"]),
+            "created_by": created_by,
+            "created_at": now,
+            "updated_at": now,
+        }
+        self.recipes.append(recipe)
+        self.recipes.sort(key=lambda r: r["title"].lower())
+        await self._async_save()
+        return recipe
+
+    async def async_update_recipe(self, recipe_id: str, **fields: Any) -> dict[str, Any]:
+        recipe = self._get_recipe(recipe_id)
+        if "title" in fields:
+            fields["title"] = self._check_recipe_title(fields["title"], recipe_id)
+        recipe.update(fields)
+        recipe["updated_at"] = now_iso()
+        self.recipes.sort(key=lambda r: r["title"].lower())
+        await self._async_save()
+        return recipe
+
+    async def async_delete_recipe(self, recipe_id: str) -> None:
+        self._get_recipe(recipe_id)
+        self.recipes = [r for r in self.recipes if r["id"] != recipe_id]
         await self._async_save()

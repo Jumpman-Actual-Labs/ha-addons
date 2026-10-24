@@ -13,8 +13,9 @@ Each function here corresponds 1:1 to a sensor class in the integration's
 old sensor.py - keep their attribute shapes in sync with what ha-api.ts
 parses. Entity ids only need to be unique (the panel never looks them up
 by name), so the per-item ones use ids rather than slugified names. The
-last three (`calendar_settings`, `grocery_list`, `today_chore_progress`)
-are add-on additions for the Calendar and Meals tabs.
+last four (`calendar_settings`, `grocery_list`, `recipes`,
+`today_chore_progress`) are add-on additions for the Calendar and Meals
+tabs.
 """
 from __future__ import annotations
 
@@ -279,6 +280,13 @@ def _grocery_list(data: dict[str, Any]) -> Entity:
     )
 
 
+def _recipes(data: dict[str, Any]) -> Entity:
+    recipes = data.get("recipes") or []
+    return _entity(
+        "sensor.hustle_recipes", len(recipes), {"hustle_key": "recipes", "recipes": recipes}
+    )
+
+
 def _today_chore_progress(data: dict[str, Any]) -> Entity:
     progress = data.get("today_chore_progress") or {}
     return _entity(
@@ -521,6 +529,7 @@ def build_states(data: dict[str, Any]) -> dict[str, Entity]:
         _recent_bounties_history(data),
         _calendar_settings(data),
         _grocery_list(data),
+        _recipes(data),
         _today_chore_progress(data),
     ]
     for member in data.get("members", []):
