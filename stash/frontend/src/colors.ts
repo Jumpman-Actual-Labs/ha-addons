@@ -1,6 +1,8 @@
+// Category colors for the Midnight Cobalt themes in finance-panel.ts -
+// saturated enough to stay distinct on both the dark and light surfaces.
 const PALETTE = [
-  "#297c70", "#597eaa", "#9b83ae", "#b59762", "#6c9a96", "#617383",
-  "#a97078", "#7e9870", "#8b93b8", "#bd937f", "#438c9b", "#908275",
+  "#3b82f6", "#2dd4bf", "#a78bfa", "#f59e0b", "#f472b6", "#22d3ee",
+  "#84cc16", "#fb7185", "#818cf8", "#fbbf24", "#34d399", "#c084fc",
 ];
 
 export function paletteColor(index: number): string {

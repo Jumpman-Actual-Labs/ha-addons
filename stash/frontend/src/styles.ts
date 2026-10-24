@@ -9,7 +9,7 @@ export const glassCardStyle = css`
     --ha-card-border-radius: 18px;
     --ha-card-border-width: 1px;
     --ha-card-border-color: color-mix(in srgb, var(--divider-color, #dce3e8) 70%, transparent);
-    --ha-card-box-shadow: 0 3px 14px rgba(15, 30, 45, 0.035);
+    --ha-card-box-shadow: var(--stash-card-shadow);
   }
   button, input, select { font: inherit; }
   button { color: inherit; min-height: 40px; transition: background 150ms ease; }
@@ -31,8 +31,8 @@ export const glassCardStyle = css`
 export const bankingStyle = css`
   ha-card {
     --ha-card-border-radius: 12px;
-    --ha-card-box-shadow: none;
-    --ha-card-border-color: var(--divider-color, #e3e9ed);
+    --ha-card-box-shadow: var(--stash-card-shadow);
+    --ha-card-border-color: var(--stash-card-border, var(--divider-color, #e3e9ed));
   }
   button.primary, button.secondary, button.option {
     font-size: 0.82rem; font-weight: 600; border-radius: 8px; min-height: 42px;
@@ -49,11 +49,11 @@ export const bankingStyle = css`
   .toolbar { gap: 8px; flex-wrap: wrap; }
   .actions { flex-wrap: wrap; }
   .status, .tag { border-radius: 5px; font-size: 0.68rem; font-weight: 600; padding: 4px 7px; }
-  .status.paid, .tag.paid { background: #e5f3ed; color: #246448; }
-  .status.overdue, .tag.overdue { background: #fbeceb; color: #a43932; }
-  .status.unpaid, .tag.upcoming { background: #edf1f4; color: #53646e; }
-  .status.deferred { background: #eeedf7; color: #64558c; }
-  .status.partially_paid, .tag.due { background: #fbf2df; color: #87621c; }
+  .status.paid, .tag.paid { background: var(--stash-success-bg); color: var(--stash-success); }
+  .status.overdue, .tag.overdue { background: var(--stash-danger-bg); color: var(--stash-danger); }
+  .status.unpaid, .tag.upcoming { background: var(--stash-muted-bg); color: var(--secondary-text-color); }
+  .status.deferred { background: var(--stash-deferred-bg); color: var(--stash-deferred); }
+  .status.partially_paid, .tag.due { background: var(--stash-warning-bg); color: var(--stash-warning); }
   .empty { font-size: 0.82rem; padding: 18px 0; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 `;

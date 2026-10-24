@@ -25,7 +25,7 @@ export class FinanceDialog extends LitElement {
     .scrim {
       position: absolute;
       inset: 0;
-      background: rgba(8, 24, 33, 0.48);
+      background: rgba(2, 8, 23, 0.6);
       backdrop-filter: blur(4px);
       -webkit-backdrop-filter: blur(4px);
     }
@@ -41,7 +41,7 @@ export class FinanceDialog extends LitElement {
       color: var(--primary-text-color, #212121);
       border-radius: 14px;
       border: 1px solid color-mix(in srgb, var(--divider-color, #fff) 60%, transparent);
-      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
       backdrop-filter: blur(24px) saturate(160%);
       -webkit-backdrop-filter: blur(24px) saturate(160%);
       padding: 0;

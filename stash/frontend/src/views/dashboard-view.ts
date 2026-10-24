@@ -49,7 +49,7 @@ export class FinanceDashboardView extends LitElement {
     .payment-item { width: 100%; display: flex; gap: 12px; align-items: center; text-align: left; border: 0; border-bottom: 1px solid var(--divider-color, #ddd); background: transparent; color: inherit; padding: 18px 0; cursor: pointer; font: inherit; }
     .date-tile { flex: 0 0 44px; display: flex; flex-direction: column; align-items: center; border-radius: 8px; background: var(--secondary-background-color, #eff2f7); padding: 5px; }
     .date-tile span { font-size: 0.6rem; text-transform: uppercase; } .date-tile strong { font-size: 1.1rem; }
-    .date-tile.soon { background: color-mix(in srgb, #be800d 12%, var(--card-background-color, #fff)); color: var(--stash-warning); }
+    .date-tile.soon { background: var(--stash-warning-bg); color: var(--stash-warning); }
     .date-tile.late { background: var(--stash-danger-bg); color: var(--stash-danger); }
     .payment-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
     .payment-name strong { font-size: 0.87rem; font-weight: 600; }
@@ -147,11 +147,11 @@ export class FinanceDashboardView extends LitElement {
       text-transform: capitalize;
       white-space: nowrap;
     }
-    .tag.paid { background: #e8f5e9; color: #2e7d32; }
-    .tag.overdue { background: #ffebee; color: #c62828; }
-    .tag.due { background: #fff8e1; color: #f57f17; }
-    .tag.upcoming { background: #eeeeee; color: #616161; }
-    .tag.pay-from-savings { background: #e3f2fd; color: #1565c0; }
+    .tag.paid { background: var(--stash-success-bg); color: var(--stash-success); }
+    .tag.overdue { background: var(--stash-danger-bg); color: var(--stash-danger); }
+    .tag.due { background: var(--stash-warning-bg); color: var(--stash-warning); }
+    .tag.upcoming { background: var(--stash-muted-bg); color: var(--secondary-text-color); }
+    .tag.pay-from-savings { background: var(--stash-selected); color: var(--primary-color); }
     .sub-label {
       color: var(--secondary-text-color, #727272);
       font-size: 0.75rem;
@@ -234,18 +234,20 @@ export class FinanceDashboardView extends LitElement {
   `, bankingStyle, css`
     .period-heading { display:flex; align-items:center; justify-content:space-between; gap:24px; margin-bottom:28px; }
     .period-heading h2 { font-size:clamp(1.5rem, 2.6vw, 2rem); letter-spacing:-.045em; margin:8px 0; line-height:1.2; }
+    .period-heading h2 .accent { background:var(--stash-accent-gradient); -webkit-background-clip:text; background-clip:text; color:transparent; }
     .period-heading p { margin:8px 0 0; color:var(--secondary-text-color); font-size:.85rem; }
     .period-toggle, .bill-filters { display:flex; gap:4px; }
-    .period-toggle { padding:4px; background:var(--card-background-color); border:1px solid var(--divider-color); border-radius:12px; flex-shrink:0; }
+    .period-toggle { padding:4px; background:var(--card-background-color); border:1px solid var(--stash-card-border); border-radius:12px; flex-shrink:0; }
     .period-toggle button, .bill-filters button { border:0; background:none; color:var(--secondary-text-color); font:inherit; font-size:.78rem; padding:8px 13px; border-radius:8px; cursor:pointer; }
-    .period-toggle button[aria-pressed="true"], .bill-filters button[aria-pressed="true"] { background:var(--stash-selected); color:var(--primary-color); }
+    .period-toggle button[aria-pressed="true"] { background:var(--primary-color); color:var(--text-primary-color); font-weight:600; box-shadow:0 4px 14px color-mix(in srgb, var(--primary-color) 35%, transparent); }
+    .bill-filters button[aria-pressed="true"] { background:var(--stash-selected); color:var(--stash-link); }
     .overview-grid { display:grid; grid-template-columns:1.1fr 1fr; gap:22px; align-items:stretch; }
-    .focus-card { background:var(--card-background-color); border:1px solid var(--divider-color); border-radius:20px; padding:26px; min-width:0; }
+    .focus-card { background:var(--card-background-color); border:1px solid var(--stash-card-border); box-shadow:var(--stash-card-shadow); border-radius:20px; padding:26px; min-width:0; }
     .card-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
     .card-heading h2 { margin:0; font-size:1rem; font-weight:650; }
     .quiet { color:var(--secondary-text-color); font-size:.75rem; }
     .chart-layout { display:flex; gap:28px; align-items:center; justify-content:center; padding:30px 0; }
-    .bill-ring { width:190px; height:190px; flex:0 0 190px; border:0; border-radius:50%; background:conic-gradient(var(--stash-success) 0 var(--paid-progress), var(--primary-color) var(--paid-progress) var(--bills-progress), var(--stash-warning) var(--bills-progress) 0); padding:13px; cursor:pointer; color:inherit; }
+    .bill-ring { width:190px; height:190px; flex:0 0 190px; border:0; border-radius:50%; background:conic-gradient(var(--stash-success) 0 var(--paid-progress), var(--primary-color) var(--paid-progress) var(--bills-progress), var(--stash-warning) var(--bills-progress) 0); box-shadow:0 0 34px color-mix(in srgb, var(--primary-color) 28%, transparent); padding:13px; cursor:pointer; color:inherit; }
     .ring-center { border-radius:50%; height:100%; width:100%; background:var(--card-background-color); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:6px; }
     .ring-center strong { font-size:1.55rem; letter-spacing:-.045em; font-variant-numeric:tabular-nums; }
     .ring-center small, .ring-center > span { font-size:.72rem; color:var(--secondary-text-color); }
@@ -264,7 +266,7 @@ export class FinanceDashboardView extends LitElement {
     .chart-caption span { color:var(--secondary-text-color); }
     .cushion-card { background:var(--stash-cushion-bg); }
     .cushion-card .card-heading ha-icon { color:var(--stash-success); }
-    .member-card { background:var(--stash-cushion-bg); }
+    .member-card { background:var(--stash-cushion-bg); border-color:var(--stash-member-border); }
     .member-card .card-heading ha-icon { color:var(--stash-success); }
     .member-card .cushion-label { margin-top:8px; }
     .member-cushion-share { margin-top:20px; padding-top:18px; border-top:1px solid var(--divider-color); }
@@ -278,7 +280,7 @@ export class FinanceDashboardView extends LitElement {
     .cushion-deposit-btn { width:100%; margin-top:12px; }
     .cushion-explanation { font-size:.8rem; line-height:1.65; color:var(--secondary-text-color); margin:6px 0 20px; max-width:390px; }
     .period-bills { margin-top:24px; }
-    .text-action { border:0; background:none; color:var(--primary-color); cursor:pointer; font-size:.75rem; }
+    .text-action { border:0; background:none; color:var(--stash-link); cursor:pointer; font-size:.75rem; }
     .bill-filters { margin:20px 0 8px; }
     .period-bill { width:100%; display:flex; align-items:center; gap:16px; padding:14px 0; border:0; border-bottom:1px solid var(--divider-color); background:none; color:inherit; text-align:left; cursor:pointer; }
     .period-bill:last-child { border-bottom:0; }
@@ -290,6 +292,7 @@ export class FinanceDashboardView extends LitElement {
     .bill-value { text-align:right; font-variant-numeric:tabular-nums; flex-shrink:0; }
     .bill-value .positive { color:var(--stash-success); }
     .late-text, .bill-value .late-text, .shortfall { color:var(--stash-danger); }
+    .shortfall.alert { background:var(--stash-danger-bg); border:1px solid color-mix(in srgb, var(--stash-danger) 45%, transparent); border-radius:10px; padding:12px 14px; }
     .row-chevron { color:var(--secondary-text-color); }
     .setup { text-align:center; padding:40px; } .setup p { color:var(--secondary-text-color); }
     @media(max-width:1100px) { .chart-layout { gap:12px; } .bill-ring { width:160px; height:160px; flex-basis:160px; } .focus-card { padding:22px; } }
@@ -392,7 +395,7 @@ export class FinanceDashboardView extends LitElement {
     const myToSave = savePlan?.cushionMembers.find(m => m.memberId === me?.memberId)?.transfer ?? 0;
     return html`
       <div class="period-heading">
-        <div><span class="eyebrow">YOUR PAY-PERIOD PLAN</span><h2>A little more breathing room.</h2>
+        <div><span class="eyebrow">YOUR PAY-PERIOD PLAN</span><h2>A little more <span class="accent">breathing room.</span></h2>
           <p>${plan ? `${fmtDate(isNext ? plan.end : plan.start)} – ${lastDay(isNext ? plan.nextEnd : plan.end)}` : "Add your household’s pay schedule to get started."}</p></div>
         <div class="period-toggle" role="group" aria-label="Overview pay period">
           <button aria-pressed=${!isNext} @click=${() => { this._overviewPeriod = "current"; choose("all"); }}>This period</button>
@@ -453,7 +456,7 @@ export class FinanceDashboardView extends LitElement {
                   <span class="cushion-label">Your monthly budget responsibility</span>
                   <div class="cushion-amount-secondary">${money(me.budgetResponsibleAmount)}</div>
                   <span class="quiet">Includes bills and category budgets; savings are separate.</span>
-                  ${funding!.monthlyShortfall > 0 ? html`<p class="shortfall">Monthly budget exceeds your ${money(me.income)} income by ${money(funding!.monthlyShortfall)}. Reduce the budget or add income to close the gap.</p>` : ""}
+                  ${funding!.monthlyShortfall > 0 ? html`<p class="shortfall alert">Monthly budget exceeds your ${money(me.income)} income by ${money(funding!.monthlyShortfall)}. Reduce the budget or add income to close the gap.</p>` : ""}
                 </div>
                 <div class="member-cushion-share">
                   <span class="cushion-label">Your cushion to save ${isNext ? "next" : "this"} period</span>

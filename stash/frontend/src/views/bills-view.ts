@@ -188,11 +188,11 @@ export class FinanceBillsView extends LitElement {
       text-transform: capitalize;
       white-space: nowrap;
     }
-    .status.unpaid { background: #eeeeee; color: #616161; }
-    .status.partially_paid { background: #fff8e1; color: #f57f17; }
-    .status.paid { background: #e8f5e9; color: #2e7d32; }
-    .status.deferred { background: #ede7f6; color: #5e35b1; }
-    .status.overdue { background: #ffebee; color: #c62828; }
+    .status.unpaid { background: var(--stash-muted-bg); color: var(--secondary-text-color); }
+    .status.partially_paid { background: var(--stash-warning-bg); color: var(--stash-warning); }
+    .status.paid { background: var(--stash-success-bg); color: var(--stash-success); }
+    .status.deferred { background: var(--stash-deferred-bg); color: var(--stash-deferred); }
+    .status.overdue { background: var(--stash-danger-bg); color: var(--stash-danger); }
     .bill-card {
       cursor: pointer;
       transition: background 0.1s ease;

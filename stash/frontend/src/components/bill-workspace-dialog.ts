@@ -111,8 +111,8 @@ export class FinanceBillWorkspace extends LitElement {
     .history-entry-meta { display: flex; align-items: center; gap: 8px; color: var(--secondary-text-color, #727272); font-size: 0.85rem; margin-top: 2px; }
     .history-entry-meta .history-edit { margin-left: auto; font-size: 0.8rem; padding: 0; }
     .history-entry-meta .tag { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; text-transform: capitalize; }
-    .history-entry-meta .tag.late { background: #ffebee; color: #c62828; }
-    .history-entry-meta .tag.on-time { background: #e8f5e9; color: #2e7d32; }
+    .history-entry-meta .tag.late { background: var(--stash-danger-bg); color: var(--stash-danger); }
+    .history-entry-meta .tag.on-time { background: var(--stash-success-bg); color: var(--stash-success); }
     .history-contributions { margin-top: 8px; padding-left: 12px; }
     .history-contribution-row { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--secondary-text-color, #727272); padding: 2px 0; }
     .history-entry-notes { margin-top: 6px; font-size: 0.85rem; color: var(--secondary-text-color, #727272); font-style: italic; }

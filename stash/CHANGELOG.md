@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.1
+
+- New "Midnight Cobalt" look with a dark and a light theme, including
+  glowing light-ribbon backgrounds. Stash follows Home Assistant's
+  light/dark setting automatically.
+- Status tags (paid, overdue, due soon, deferred) now match the theme
+  instead of always using light-mode colors.
+- New category colors and add-on icon to match.
+
 ## 1.0.0
 
 - Stash is now a Home Assistant add-on instead of a custom integration +

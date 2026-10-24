@@ -127,8 +127,8 @@ export class FinanceIncomeView extends LitElement {
       font-size: 0.75rem;
       padding: 3px 8px;
       border-radius: 12px;
-      background: #e3f2fd;
-      color: #1565c0;
+      background: var(--stash-selected);
+      color: var(--primary-color);
       white-space: nowrap;
     }
     .empty {

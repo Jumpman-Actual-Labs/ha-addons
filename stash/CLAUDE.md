@@ -87,6 +87,12 @@ Unchanged views/components from `ha-finance-frontend`:
 - `<finance-dialog>` doesn't style slotted content: each view/dialog needs
   its form styles in its own `static styles` (shadow DOM scoping).
 - `npm test` runs the pure-TS regression scripts in `scripts/`.
+- Theme ("Midnight Cobalt"): every color is a CSS variable on
+  `finance-panel.ts`'s `:host` (dark, the default) and `:host([light])`.
+  Change colors there, in both blocks, not per view. `main.ts` sets
+  `[light]` from the parent HA page's `hass.themes.darkMode` (ingress is
+  same-origin), falling back to `prefers-color-scheme`, re-checked every 2s.
+  Category swatch colors are in `colors.ts`.
 
 Local run (no Supervisor): build the frontend (`npm ci && npm run build`),
 then from `stash/backend`: `STASH_ALLOW_ANY_CLIENT=1 STASH_DATA_DIR=<dir>
