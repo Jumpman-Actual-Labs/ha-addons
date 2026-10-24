@@ -1,6 +1,7 @@
 import "./shims/ha-elements";
 import "./gains-panel";
 import { AddonConnection } from "./addon-hass";
+import { followHaTheme } from "./ha-theme";
 import type { GainsPanel } from "./gains-panel";
 
 // Ingress page entry point - mounts the same <gains-panel> HA used to host
@@ -11,10 +12,12 @@ panel.narrow = narrowQuery.matches;
 narrowQuery.addEventListener("change", (e) => (panel.narrow = e.matches));
 
 let mounted = false;
-new AddonConnection((hass) => {
+const connection = new AddonConnection((hass) => {
   panel.hass = hass;
   if (!mounted) {
     document.body.replaceChildren(panel);
     mounted = true;
   }
-}).connect();
+});
+followHaTheme(() => connection.refresh());
+connection.connect();

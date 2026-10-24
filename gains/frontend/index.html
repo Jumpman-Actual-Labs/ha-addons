@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Gains</title>
     <style>
-      /* Home Assistant's default accent - the panel used to inherit the
-         user's theme accent from HA's frontend, which an ingress iframe
-         doesn't. Everything else comes from theme.ts. */
+      /* Home Assistant's default accent, for when there's no HA page around
+         this one to copy the user's theme from (see src/ha-theme.ts, whose
+         inline values win over these). */
       :root {
         --primary-color: #03a9f4;
         --text-primary-color: #fff;

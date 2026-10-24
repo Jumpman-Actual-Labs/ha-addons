@@ -1,4 +1,5 @@
 import type { HassEntity, HassEntityRegistryEntry, HassUser, HomeAssistant } from "./ha-api";
+import { haDarkMode } from "./ha-theme";
 
 /* The add-on's stand-in for Home Assistant's `hass` object. The panel was
  * written against HA's frontend API (see the HomeAssistant interface in
@@ -12,6 +13,8 @@ import type { HassEntity, HassEntityRegistryEntry, HassUser, HomeAssistant } fro
  *   ha-api.ts's isGainsEntity checks the entity registry for.
  * - `user` arrives with the first snapshot (the backend learns it from
  *   ingress's X-Remote-User-* headers).
+ * - `themes.darkMode` is Home Assistant's own, read from the HA page
+ *   around the ingress iframe (see ha-theme.ts).
  * - `callService("gains", name, data)` is `POST api/services/<name>`.
  * - `callWS` only answers the one message the panel sends, `call_service`
  *   with `return_response` (trainingService in ha-api.ts) - the same POST,
@@ -33,6 +36,7 @@ export class AddonConnection {
   private _entities: Record<string, HassEntityRegistryEntry> = {};
   private _user?: HassUser;
   private _attempt = 0;
+  private _received = false;
 
   constructor(private readonly _onChange: (hass: HomeAssistant) => void) {}
 
@@ -50,6 +54,7 @@ export class AddonConnection {
         Object.keys(msg.states).map((id) => [id, { platform: "gains" }])
       );
       if (msg.user) this._user = msg.user;
+      this._received = true;
       this._onChange(this.snapshot());
     };
     ws.onclose = () => {
@@ -57,6 +62,13 @@ export class AddonConnection {
       this._attempt += 1;
       window.setTimeout(() => this.connect(), delay);
     };
+  }
+
+  /** Hands the panel a new `hass` without new states - after the HA theme
+   * changes, so it re-reads `themes.darkMode`. Nothing until the first
+   * snapshot has arrived. */
+  refresh(): void {
+    if (this._received) this._onChange(this.snapshot());
   }
 
   /** A new object every time, like HA hands a panel a new `hass` on every
@@ -67,6 +79,7 @@ export class AddonConnection {
       states: this._states,
       entities: this._entities,
       user: this._user,
+      themes: { darkMode: haDarkMode() },
       callService: (_domain, service, serviceData) => this._callService(service, serviceData ?? {}),
       callWS: <T>(msg: Record<string, unknown>) => this._callWS<T>(msg),
     };

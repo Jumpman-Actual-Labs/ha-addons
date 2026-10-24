@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1
+
+- The panel uses your own Home Assistant theme again - its accent colors
+  and your light/dark setting - and follows along when you change them,
+  as it did when Gains was an integration.
+
 ## 1.0.0
 
 - Gains is now a Home Assistant add-on instead of a custom integration +
