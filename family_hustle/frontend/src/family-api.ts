@@ -1,6 +1,6 @@
 import type { HassEntity, HomeAssistant } from "./ha-api";
 
-/* The add-on's Calendar and Meals tabs talk to the backend through here -
+/* The add-on's Calendar, Meals and Shopping tabs talk to the backend through here -
  * ha-api.ts stays the chores layer it always was. Settings and the grocery
  * list arrive with the pushed states (like every Hustle sensor); calendar
  * events and the dinner board are fetched on demand, since Home Assistant's
@@ -11,6 +11,20 @@ export interface CalendarSettings {
   familyCalendars: string[];
   defaultCalendar: string | null;
   dinnersCalendar: string | null;
+  /** The Home Assistant to-do list behind the Shopping tab. */
+  shoppingList: string | null;
+}
+
+export interface ShoppingItem {
+  uid: string;
+  summary: string;
+  status: "needs_action" | "completed";
+  description: string;
+}
+
+export interface TodoListInfo {
+  entity_id: string;
+  name: string;
 }
 
 export interface GroceryCategory {
@@ -85,6 +99,7 @@ export function parseFamilyExtras(hass: HomeAssistant): FamilyExtras {
       familyCalendars: strings(settings.family_calendars),
       defaultCalendar: (settings.default_calendar as string | null) ?? null,
       dinnersCalendar: (settings.dinners_calendar as string | null) ?? null,
+      shoppingList: (settings.shopping_list as string | null) ?? null,
     },
     groceryList: Array.isArray(grocery.categories)
       ? (grocery.categories as Array<Record<string, unknown>>).map((c) => ({
@@ -150,6 +165,14 @@ export const familyApi = {
 
   dinnerWeek(): Promise<DinnerWeek> {
     return getJson<DinnerWeek>("api/meals/week");
+  },
+
+  shoppingLists(): Promise<TodoListInfo[]> {
+    return getJson<TodoListInfo[]>("api/shopping/lists");
+  },
+
+  shoppingItems(): Promise<{ entity_id: string; items: ShoppingItem[] }> {
+    return getJson<{ entity_id: string; items: ShoppingItem[] }>("api/shopping/items");
   },
 
   async call<T = Record<string, unknown>>(

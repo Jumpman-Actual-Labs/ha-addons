@@ -3,5 +3,5 @@ build_from:
   amd64: ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.20
 labels:
   org.opencontainers.image.title: Family Hustle
-  org.opencontainers.image.description: Family calendar, chores, allowance and meal planning in one place
+  org.opencontainers.image.description: Family calendar, chores, allowance, meal planning and shopping list in one place
   org.opencontainers.image.source: https://github.com/Jumpman-Actual-Labs/ha-addons

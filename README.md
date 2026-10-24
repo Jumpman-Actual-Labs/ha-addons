@@ -16,7 +16,7 @@ then install whichever add-ons you want. Nothing installs until you pick it.
 | [Garage](garage/DOCS.md) | Vehicles, fuel, maintenance and documents for your household |
 | [Stash](stash/DOCS.md) | Household bills, income, budgets, savings and settlements |
 | [Gains](gains/DOCS.md) | AI-assisted workout planning and tracking for your household |
-| [Family Hustle](family_hustle/DOCS.md) | Family calendar, chores, allowance and meal planning in one place |
+| [Family Hustle](family_hustle/DOCS.md) | Family calendar, chores, allowance, meal planning and shopping list in one place |
 ## AI assistance
 
 These add-ons were built with AI assistance (Anthropic's Claude and

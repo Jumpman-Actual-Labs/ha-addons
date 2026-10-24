@@ -16,4 +16,8 @@
   Household's grocery list and Dinners calendar.
 - Hustle's automation entities are published over MQTT with their old
   entity ids, and `hustle_*` events still fire.
+- Shopping tab: Home Assistant's shopping list (or any to-do list), shared
+  with the HA app and Assist. Everyone can add, check off, rename and
+  remove items. The Meals grocery list can send what you don't already
+  have straight to it.
 - First-run setup screen replaces the integration's config flow.

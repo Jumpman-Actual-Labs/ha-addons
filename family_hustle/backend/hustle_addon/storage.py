@@ -49,9 +49,10 @@ def default_data() -> dict[str, Any]:
 
 
 def default_calendar_settings() -> dict[str, Any]:
-    """Which Home Assistant `calendar.*` entities the add-on uses (none
-    until a parent picks them in the panel, or the Household import fills
-    in the dinners calendar - see migrate.py)."""
+    """Which Home Assistant entities the add-on uses: `calendar.*` ones
+    (none until a parent picks them in the panel, or the Household import
+    fills in the dinners calendar - see migrate.py) and the `todo.*` list
+    behind the Shopping tab."""
     return {
         # Shown on the Calendar tab's week grid.
         "family_calendars": [],
@@ -59,6 +60,9 @@ def default_calendar_settings() -> dict[str, Any]:
         "default_calendar": None,
         # The Meals tab's dinner board (Household's `calendar_entity`).
         "dinners_calendar": None,
+        # The Shopping tab - Home Assistant's own Shopping List integration
+        # unless a parent picks another to-do list.
+        "shopping_list": "todo.shopping_list",
     }
 
 

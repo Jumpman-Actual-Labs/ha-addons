@@ -13,6 +13,8 @@ Serves the panel itself plus everything it used to get from Home Assistant:
 - `api/calendar/calendars`, `api/calendar/events`, `api/meals/week` - read
   straight from Home Assistant's calendars on request; nothing about them
   is pushed (calendars have no change signal to push from).
+- `api/shopping/lists`, `api/shopping/items` - Home Assistant's to-do
+  lists and the shopping list's items, read on request the same way.
 - `images/...` - AI chore illustrations (was `/local/hustle_images/`).
 
 Every path is relative, because ingress serves the add-on under
@@ -48,6 +50,7 @@ from .family_calendar import FamilyCalendar, calendar_entity
 from .ha_client import HomeAssistantClient, HomeAssistantError, is_admin
 from .meals import load_dinner_week
 from .services import Context, Handler, ServiceError, ServiceValidationError, async_call_service
+from .shopping import ShoppingList
 from .states import build_states
 
 _LOGGER = logging.getLogger(__name__)
@@ -65,6 +68,7 @@ SCHEMAS_KEY = web.AppKey("schemas", dict)
 HANDLERS_KEY = web.AppKey("handlers", dict)
 HA_KEY = web.AppKey("ha", object)
 CALENDAR_KEY = web.AppKey("calendar", FamilyCalendar)
+SHOPPING_KEY = web.AppKey("shopping", ShoppingList)
 SOCKETS_KEY = web.AppKey("sockets", weakref.WeakSet)
 
 
@@ -293,6 +297,22 @@ async def meals_week(request: web.Request) -> web.Response:
         return _error(str(err))
 
 
+async def shopping_lists(request: web.Request) -> web.Response:
+    try:
+        await _require_viewer_member(request)
+        return web.json_response(await request.app[SHOPPING_KEY].list_lists())
+    except ServiceError as err:
+        return _error(str(err))
+
+
+async def shopping_items(request: web.Request) -> web.Response:
+    try:
+        await _require_viewer_member(request)
+        return web.json_response(await request.app[SHOPPING_KEY].items())
+    except ServiceError as err:
+        return _error(str(err))
+
+
 # -------------------------------------------------------------------- app
 
 
@@ -303,6 +323,7 @@ def create_app(
     handlers: dict[str, Handler],
     ha: HomeAssistantClient | None,
     calendar: FamilyCalendar,
+    shopping: ShoppingList,
 ) -> web.Application:
     app = web.Application(middlewares=[_ingress_only])
     app[CONFIG_KEY] = config
@@ -311,6 +332,7 @@ def create_app(
     app[HANDLERS_KEY] = handlers
     app[HA_KEY] = ha
     app[CALENDAR_KEY] = calendar
+    app[SHOPPING_KEY] = shopping
     app[SOCKETS_KEY] = weakref.WeakSet()
 
     async def _on_startup(app: web.Application) -> None:
@@ -332,6 +354,8 @@ def create_app(
     app.router.add_get("/api/calendar/calendars", calendars)
     app.router.add_get("/api/calendar/events", calendar_events)
     app.router.add_get("/api/meals/week", meals_week)
+    app.router.add_get("/api/shopping/lists", shopping_lists)
+    app.router.add_get("/api/shopping/items", shopping_items)
     app.router.add_static("/images", config.images_dir)
     assets = Path(config.static_dir) / "assets"
     if assets.is_dir():

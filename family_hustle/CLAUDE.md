@@ -7,7 +7,8 @@ The family's calendar, chores and meals as one Home Assistant **add-on**
 - **Household** (`ha-household`): dinner board, AI meal plans, grocery list.
   This is now the Meals tab.
 
-It also adds a Calendar tab modeled on a Skylight Calendar. It is ported the
+It also adds a Calendar tab modeled on a Skylight Calendar and a Shopping
+tab backed by a Home Assistant to-do list. It is ported the
 same way as Cache, Garage and Stash, so read the repo's top-level CLAUDE.md
 first: everything it says about Cache's shape (ingress only, the `hass`
 stand-in, Store envelope, one-time import, MQTT entities, version bumps,
@@ -59,6 +60,13 @@ Add-on layers:
   `FamilyCalendar`, because Household's `calendar.delete_event` service
   doesn't exist in HA. The grocery list is `coordinator.grocery_list`.
   Parents only.
+- `shopping.py`: the Shopping tab. The list is an HA to-do entity
+  (`calendar_settings["shopping_list"]`, default `todo.shopping_list`), so
+  it's shared with the HA app and Assist. It reads through `todo.get_items`
+  (`?return_response`) and writes through `todo.add_item/update_item/
+  remove_item/remove_completed_items`, keeping no copy. `add_items` skips
+  anything already on the list unchecked. Any linked member may edit;
+  choosing the list goes through `update_calendar_settings` (parents).
 - `states.py`: the panel's read model. These are the exact payloads of the
   integration's `sensor.py` (`hustle_key`/`member_id`/`chore_definition_id`/
   `chore_assignment_id`/`bounty_id` markers), plus `calendar_settings`,
@@ -73,7 +81,8 @@ Add-on layers:
   date-driven public data.
 - `web.py`: `api/states` (+ viewer), `api/websocket`,
   `api/services/<name>` (answers `{"response": ...}`), `api/ha_users`,
-  `api/calendar/calendars`, `api/calendar/events`, `api/meals/week`, and
+  `api/calendar/calendars`, `api/calendar/events`, `api/meals/week`,
+  `api/shopping/lists`, `api/shopping/items`, and
   `images/...` (AI chore pictures in `/data/images/`).
 - `migrate.py`: first start only (no `/data/hustle.json`). It imports the
   newest `.storage/hustle_data_*` (rewriting `/local/hustle_images/` to
@@ -90,7 +99,7 @@ integration. `test_addon.py` covers the add-on layers against a fake HA.
 ## Frontend
 
 - `family-app.ts`: the root, a Skylight-style rail (bottom bar on phones)
-  with Calendar / Chores / Meals. It also decides who's looking: a linked
+  with Calendar / Chores / Meals / Shopping. It also decides who's looking: a linked
   member gets the app, an HA admin on an unmanaged household gets
   `views/setup-view.ts`, and anyone else gets "link your account".
 - `views/calendar-view.ts`: the Skylight calendar. It has a member strip
@@ -99,7 +108,10 @@ integration. `test_addon.py` covers the add-on layers against a fake HA.
   tag/delete, and ⚙ for calendars. Event color = the "for" member
   (`utils/member-colors.ts`: avatar color or a pastel by roster order).
 - `views/meals-view.ts`: Household's `household-panel.js`, rewritten in Lit
-  with the same chalkboard styles and wizard steps.
+  with the same chalkboard styles and wizard steps. Its grocery checklists
+  add their unchecked items to the shopping list.
+- `views/shopping-view.ts`: the shopping list. It re-reads every 30s while
+  open, because items also change from the HA app and voice.
 - `hustle-panel.ts` and `views/*` (the rest): the Hustle frontend,
   unchanged apart from the panel header ("Chores") and losing its own
   link-your-account screen. `ha-api.ts` is still the only chores API
@@ -119,4 +131,5 @@ HUSTLE_STATIC_DIR=../frontend/dist python -m hustle_addon` and open
 Calendars need an HA API: point `HUSTLE_CORE_API_URL` at one and set any
 `SUPERVISOR_TOKEN`. A small fake that serves `api/calendars`,
 `api/calendars/<id>`, `websocket` (auth + `config/auth/list` +
-`calendar/event/*`), `api/events` and `api/services` is enough.
+`calendar/event/*`), `api/states` (for `todo.*` names), `api/events` and
+`api/services` (with `todo.*` behind `?return_response`) is enough.

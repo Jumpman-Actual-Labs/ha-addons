@@ -12,12 +12,13 @@ from pathlib import Path
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
-from hustle_addon import family_calendar, meals, migrate, mqtt, services, web
+from hustle_addon import family_calendar, meals, migrate, mqtt, services, shopping, web
 from hustle_addon.bridge import HassBridge
 from hustle_addon.config import AddonConfig
 from hustle_addon.coordinator import HustleCoordinator
 from hustle_addon.family_calendar import FamilyCalendar, event_tag_key, normalize_event
 from hustle_addon.ha_client import HomeAssistantError
+from hustle_addon.shopping import ShoppingList
 from hustle_addon.states import build_states
 from hustle_addon.storage import HustleStore
 
@@ -32,6 +33,7 @@ class FakeHA:
         self.commands: list[dict] = []
         self.fired: list[tuple[str, dict]] = []
         self.service_calls: list[tuple[str, str, dict]] = []
+        self.todo: dict[str, list[dict]] = {}
 
     async def get_calendars(self):
         return [{"entity_id": e, "name": e.split(".")[1].title()} for e in self.events]
@@ -64,8 +66,32 @@ class FakeHA:
     async def fire_event(self, event_type, data):
         self.fired.append((event_type, data))
 
-    async def call_service(self, domain, service, data):
+    async def call_service(self, domain, service, data, return_response=False):
         self.service_calls.append((domain, service, data))
+        if domain != "todo":
+            return None
+        items = self.todo.setdefault(data["entity_id"], [])
+        if service == "get_items":
+            return {data["entity_id"]: {"items": [dict(i) for i in items]}}
+        if service == "add_item":
+            uid = f"t{len(self.service_calls)}"
+            items.append({"uid": uid, "summary": data["item"], "status": "needs_action"})
+        elif service == "update_item":
+            item = next(i for i in items if data["item"] in (i["uid"], i["summary"]))
+            item["summary"] = data.get("rename", item["summary"])
+            item["status"] = data.get("status", item["status"])
+        elif service == "remove_item":
+            self.todo[data["entity_id"]] = [i for i in items if i["uid"] not in data["item"]]
+        elif service == "remove_completed_items":
+            self.todo[data["entity_id"]] = [i for i in items if i["status"] != "completed"]
+        return None
+
+    async def get_states(self):
+        return [
+            {"entity_id": "todo.shopping_list", "attributes": {"friendly_name": "Shopping List"}},
+            {"entity_id": "todo.costco", "attributes": {"friendly_name": "Costco"}},
+            {"entity_id": "light.kitchen", "attributes": {}},
+        ]
 
 
 @pytest.fixture
@@ -85,11 +111,17 @@ async def setup(config):
     )
     await coordinator.async_load()
     calendar = FamilyCalendar(ha, coordinator)
-    schemas = {**services.SCHEMAS, **family_calendar.SCHEMAS, **meals.SCHEMAS}
+    schemas = {
+        **services.SCHEMAS,
+        **family_calendar.SCHEMAS,
+        **meals.SCHEMAS,
+        **shopping.SCHEMAS,
+    }
     handlers = {
         **services.build_handlers(coordinator),
         **family_calendar.build_handlers(coordinator, calendar),
         **meals.build_handlers(coordinator, calendar, None, config),
+        **shopping.build_handlers(coordinator, ShoppingList(ha, coordinator)),
     }
 
     async def call(name, data, user):
@@ -364,6 +396,48 @@ async def test_grocery_list_is_saved(setup, monkeypatch):
     assert states["sensor.hustle_grocery_list"]["state"] == "1"
 
 
+# ------------------------------------------------------------------ shopping
+
+
+async def test_shopping_list_round_trip(setup):
+    coordinator, ha, call, _kid = await _family(setup)
+    kid_user = {"id": "ha-kid"}
+    result = await call("shopping_add_items", {"items": ["Milk", " eggs ", "", "milk"]}, kid_user)
+    assert result == {"added": 2}
+    listing = await ShoppingList(ha, coordinator).items()
+    assert listing["entity_id"] == "todo.shopping_list"
+    assert [i["summary"] for i in listing["items"]] == ["Milk", "eggs"]
+
+    milk, eggs = listing["items"]
+    await call("shopping_update_item", {"uid": milk["uid"], "status": "completed"}, kid_user)
+    # Re-sending a checked-off item adds it again; an unchecked one doesn't.
+    assert (await call("shopping_add_items", {"items": ["Milk", "Eggs"]}, ADMIN)) == {"added": 1}
+    await call("shopping_remove_items", {"uids": [eggs["uid"]]}, ADMIN)
+    await call("shopping_clear_completed", {}, ADMIN)
+    assert [i["summary"] for i in ha.todo["todo.shopping_list"]] == ["Milk"]
+
+
+async def test_shopping_needs_a_member_and_parents_pick_the_list(setup):
+    coordinator, ha, call, _kid = await _family(setup)
+    with pytest.raises(services.ServiceError, match="No Hustle member"):
+        await call("shopping_add_items", {"items": ["Milk"]}, {"id": "stranger"})
+    with pytest.raises(services.ServiceError):
+        await call("update_calendar_settings", {"shopping_list": "todo.costco"}, {"id": "ha-kid"})
+    with pytest.raises(services.ServiceError, match="Invalid data"):
+        await call("update_calendar_settings", {"shopping_list": "light.kitchen"}, ADMIN)
+    await call("update_calendar_settings", {"shopping_list": "todo.costco"}, ADMIN)
+    await call("shopping_add_items", {"items": ["Paper towels"]}, ADMIN)
+    assert ha.todo["todo.costco"][0]["summary"] == "Paper towels"
+    lists = await ShoppingList(ha, coordinator).list_lists()
+    assert [entry["entity_id"] for entry in lists] == ["todo.costco", "todo.shopping_list"]
+
+
+def test_shopping_defaults_to_home_assistants_list():
+    from hustle_addon.storage import default_calendar_settings
+
+    assert default_calendar_settings()["shopping_list"] == "todo.shopping_list"
+
+
 # -------------------------------------------------------------- states/mqtt
 
 
@@ -482,15 +556,22 @@ async def client(setup, config, monkeypatch):
     config.static_dir.mkdir(parents=True)
     (config.static_dir / "index.html").write_text("<html></html>")
     calendar = FamilyCalendar(ha, coordinator)
-    schemas = {**services.SCHEMAS, **family_calendar.SCHEMAS, **meals.SCHEMAS}
+    shopping_list = ShoppingList(ha, coordinator)
+    schemas = {
+        **services.SCHEMAS,
+        **family_calendar.SCHEMAS,
+        **meals.SCHEMAS,
+        **shopping.SCHEMAS,
+    }
     handlers = {
         **services.build_handlers(coordinator),
         **family_calendar.build_handlers(coordinator, calendar),
+        **shopping.build_handlers(coordinator, shopping_list),
     }
     # FakeHA isn't a HomeAssistantClient, so web.py treats this as a dev
     # run: the viewer is config.dev_user_id, an HA admin.
     config.dev_user_id = "ha-admin"
-    app = web.create_app(config, coordinator, schemas, handlers, ha, calendar)
+    app = web.create_app(config, coordinator, schemas, handlers, ha, calendar, shopping_list)
     async with TestClient(TestServer(app)) as test_client:
         yield test_client, coordinator, ha, monkeypatch
 
@@ -530,3 +611,10 @@ async def test_web_services_states_and_calendar(client):
 
     resp = await test_client.post("/api/services/nope", json={})
     assert resp.status == 400
+
+    resp = await test_client.post("/api/services/shopping_add_items", json={"items": ["Bread"]})
+    assert (await resp.json())["response"] == {"added": 1}
+    items = await (await test_client.get("/api/shopping/items")).json()
+    assert [i["summary"] for i in items["items"]] == ["Bread"]
+    lists = await (await test_client.get("/api/shopping/lists")).json()
+    assert {entry["name"] for entry in lists} == {"Shopping List", "Costco"}

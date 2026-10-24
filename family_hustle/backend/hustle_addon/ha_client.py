@@ -6,7 +6,8 @@ per-member push alerts, and the HA user list (linking a member to an
 account, and whether the viewer is an HA admin for first-run setup). The
 add-on also reads and writes Home Assistant's calendars (the family's
 Google Calendar, through HA's Google Calendar integration) for the Calendar
-and Meals tabs - see family_calendar.py. The
+and Meals tabs - see family_calendar.py - and its to-do lists for the
+Shopping tab (shopping.py). The
 add-on reaches the same things over Core's REST/websocket API (config.yaml's
 `homeassistant_api: true`), authenticated with the SUPERVISOR_TOKEN
 Supervisor injects.
@@ -60,8 +61,24 @@ class HomeAssistantClient:
         except (TimeoutError, aiohttp.ClientError, ValueError) as err:
             raise HomeAssistantError(f"{method} {path} failed: {err}") from err
 
-    async def call_service(self, domain: str, service: str, data: dict[str, Any]) -> None:
-        await self._request("POST", f"services/{domain}/{service}", json=data)
+    async def call_service(
+        self,
+        domain: str,
+        service: str,
+        data: dict[str, Any],
+        *,
+        return_response: bool = False,
+    ) -> dict[str, Any] | None:
+        path = f"services/{domain}/{service}"
+        if return_response:
+            path += "?return_response"
+        body = await self._request("POST", path, json=data)
+        if return_response and isinstance(body, dict):
+            return body.get("service_response")
+        return None
+
+    async def get_states(self) -> list[dict[str, Any]]:
+        return await self._request("GET", "states") or []
 
     async def fire_event(self, event_type: str, data: dict[str, Any]) -> None:
         await self._request("POST", f"events/{event_type}", json=data)

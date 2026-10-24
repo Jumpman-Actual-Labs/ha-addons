@@ -1,7 +1,7 @@
 # Family Hustle
 
-Your family's calendar, chores and meals in one sidebar panel, laid out like
-a Skylight Calendar.
+Your family's calendar, chores, meals and shopping list in one sidebar
+panel, laid out like a Skylight Calendar.
 
 - **Calendar**: your Google Calendar as a week or month grid. Tag each event
   with who it's for (that sets its color) and who's attending (their
@@ -12,7 +12,12 @@ a Skylight Calendar.
   (bounties), grades, behavior, paychecks and payroll, and reports.
 - **Meals**: this week's dinners board, the AI meal-plan wizard (Dinner
   Planning or Meal Prep), a grocery list built from the plan, and moving a
-  dinner to another day.
+  dinner to another day. Check off what you already have on the grocery
+  list and **Add to shopping list** sends the rest to the Shopping tab.
+- **Shopping**: Home Assistant's own shopping list, so it's the same list
+  as in the Home Assistant app and Assist ("add milk to the shopping
+  list"). Everyone in the family can add items, check them off, rename
+  them or remove them.
 
 ## Requirements
 
@@ -24,6 +29,9 @@ a Skylight Calendar.
 - **MQTT broker** (the Mosquitto broker add-on) for Family Hustle's Home
   Assistant entities. Without one, the panel works fine but the entities
   below won't exist.
+- The **Shopping List** integration (or any Home Assistant to-do list) for
+  the Shopping tab. It uses `todo.shopping_list` unless a parent picks
+  another list under Shopping › ⚙.
 - An **OpenAI or Anthropic API key** for meal planning, and OpenAI for chore
   pictures. Optional: everything else works without one.
 
@@ -50,6 +58,8 @@ a Skylight Calendar.
    they're signed in with, and kids only get the kid views.
 4. **Calendar › ⚙**: pick your Google Calendar(s).
 5. **Meals › ⚙**: pick the Dinners calendar.
+6. **Shopping › ⚙**: change the to-do list, if you don't want Home
+   Assistant's Shopping List.
 
 ## Entities
 

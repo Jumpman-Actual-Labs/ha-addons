@@ -31,6 +31,7 @@ from . import validation as cv
 from .coordinator import HustleCoordinator
 from .ha_client import HomeAssistantClient, HomeAssistantError
 from .services import Handler, ServiceCall, ServiceError, _require_parent
+from .shopping import todo_entity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -287,6 +288,7 @@ SCHEMAS = {
             vol.Optional("family_calendars"): [calendar_entity],
             vol.Optional("default_calendar"): vol.Any(calendar_entity, None),
             vol.Optional("dinners_calendar"): vol.Any(calendar_entity, None),
+            vol.Optional("shopping_list"): vol.Any(todo_entity, None),
         }
     ),
 }

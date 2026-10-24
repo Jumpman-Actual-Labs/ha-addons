@@ -8,19 +8,21 @@ import "./hustle-panel";
 import "./views/calendar-view";
 import "./views/meals-view";
 import "./views/setup-view";
+import "./views/shopping-view";
 
-/* Family Hustle's root: a Skylight-style rail with three tabs - Calendar
- * (the landing page), Chores (the whole Hustle panel, unchanged inside) and
- * Meals. Works out who's looking first: a linked member gets the app; an HA
+/* Family Hustle's root: a Skylight-style rail with four tabs - Calendar
+ * (the landing page), Chores (the whole Hustle panel, unchanged inside),
+ * Meals and Shopping. Works out who's looking first: a linked member gets the app; an HA
  * admin on a household nobody can manage yet gets first-run setup; anyone
  * else is asked to get a parent to link their account. */
 
-type Tab = "calendar" | "chores" | "meals";
+type Tab = "calendar" | "chores" | "meals" | "shopping";
 
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: "calendar", label: "Calendar", icon: "mdi:calendar-month" },
   { id: "chores", label: "Chores", icon: "mdi:broom" },
   { id: "meals", label: "Meals", icon: "mdi:silverware-fork-knife" },
+  { id: "shopping", label: "Shopping", icon: "mdi:cart-outline" },
 ];
 
 const TAB_KEY = "family-hustle-tab";
@@ -35,7 +37,7 @@ export class FamilyApp extends LitElement {
   static styles = css`
     :host {
       display: flex;
-      min-height: 100%;
+      min-height: 100vh;
       background: #f6f7f9;
       color: #2f3a4a;
       font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -123,7 +125,9 @@ export class FamilyApp extends LitElement {
         border-right: 0;
         border-top: 1px solid #e6e9ee;
         padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
-        position: sticky;
+        position: fixed;
+        left: 0;
+        right: 0;
         bottom: 0;
         top: auto;
         z-index: 30;
@@ -132,7 +136,7 @@ export class FamilyApp extends LitElement {
         display: none;
       }
       main {
-        padding: 14px 12px 24px;
+        padding: 14px 12px calc(84px + env(safe-area-inset-bottom));
       }
     }
   `;
@@ -140,7 +144,7 @@ export class FamilyApp extends LitElement {
   private static _savedTab(): Tab {
     try {
       const saved = window.localStorage.getItem(TAB_KEY);
-      if (saved === "calendar" || saved === "chores" || saved === "meals") return saved;
+      if (TABS.some((t) => t.id === saved)) return saved as Tab;
     } catch {
       // Storage blocked - start on the calendar.
     }
@@ -197,6 +201,9 @@ export class FamilyApp extends LitElement {
         ${this._tab === "chores" ? html`<hustle-panel .hass=${this.hass} .narrow=${this.narrow}></hustle-panel>` : nothing}
         ${this._tab === "meals"
           ? html`<family-meals-view .hass=${this.hass} .extras=${extras} .me=${me}></family-meals-view>`
+          : nothing}
+        ${this._tab === "shopping"
+          ? html`<family-shopping-view .hass=${this.hass} .extras=${extras} .me=${me}></family-shopping-view>`
           : nothing}
       </main>
     `;

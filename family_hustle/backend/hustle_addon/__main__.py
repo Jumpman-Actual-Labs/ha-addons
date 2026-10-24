@@ -10,7 +10,7 @@ import signal
 import aiohttp
 from aiohttp import web
 
-from . import family_calendar, meals, services
+from . import family_calendar, meals, services, shopping
 from .bridge import HassBridge
 from .config import load_config
 from .coordinator import HustleCoordinator
@@ -19,6 +19,7 @@ from .ha_client import HomeAssistantClient
 from .migrate import migrate_from_integrations
 from .mqtt import MqttPublisher, async_get_broker
 from .scheduler import run_scheduler
+from .shopping import ShoppingList
 from .storage import HustleStore
 from .web import create_app
 
@@ -47,13 +48,22 @@ async def main() -> None:
         await coordinator.async_load()
 
         calendar = FamilyCalendar(ha, coordinator)
-        schemas = {**services.SCHEMAS, **family_calendar.SCHEMAS, **meals.SCHEMAS}
+        shopping_list = ShoppingList(ha, coordinator)
+        schemas = {
+            **services.SCHEMAS,
+            **family_calendar.SCHEMAS,
+            **meals.SCHEMAS,
+            **shopping.SCHEMAS,
+        }
         handlers = {
             **services.build_handlers(coordinator),
             **family_calendar.build_handlers(coordinator, calendar),
             **meals.build_handlers(coordinator, calendar, session, config),
+            **shopping.build_handlers(coordinator, shopping_list),
         }
-        runner = web.AppRunner(create_app(config, coordinator, schemas, handlers, ha, calendar))
+        runner = web.AppRunner(
+            create_app(config, coordinator, schemas, handlers, ha, calendar, shopping_list)
+        )
         await runner.setup()
         await web.TCPSite(runner, "0.0.0.0", config.port).start()
         _LOGGER.info("Family Hustle listening on port %s", config.port)

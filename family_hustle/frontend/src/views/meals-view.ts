@@ -19,6 +19,8 @@ import type { MemberRosterEntry } from "../types";
  *   review (accept/deny, regenerate denied without repeats) -> submit
  *   (schedule onto the calendar, then build the grocery list).
  * - "View Grocery List" reopens the last generated list any time.
+ * - "Add to shopping list" sends the grocery list's unchecked items (checked
+ *   = already have it) to the Shopping tab's list.
  * Wizard state lives here only; closing it discards it, as before. Kids see
  * the board; planning, moving and settings are for parents. The family
  * calendar that used to sit under the board is the Calendar tab now. */
@@ -78,6 +80,7 @@ export class FamilyMealsView extends LitElement {
   @state() private _calendars: CalendarInfo[] = [];
   @state() private _dinnersDraft = "";
   @state() private _settingsError = "";
+  @state() private _sendStatus = "";
 
   private _loadedFor: string | null | undefined = undefined;
 
@@ -344,6 +347,34 @@ export class FamilyMealsView extends LitElement {
     }
   }
 
+  private async _sendToShopping(categories: CheckCategory[]): Promise<void> {
+    const items = categories.flatMap((c) => c.items.filter((i) => !i.checked).map((i) => i.label));
+    if (!items.length) {
+      this._sendStatus = "Everything's checked off - nothing to add.";
+      return;
+    }
+    this._sendStatus = "Adding…";
+    try {
+      const result = await familyApi.call<{ added?: number }>(this.hass, "shopping_add_items", { items });
+      const added = result.added ?? 0;
+      this._sendStatus = added
+        ? `Added ${added} item${added === 1 ? "" : "s"} to the shopping list.`
+        : "Already on the shopping list.";
+    } catch (err) {
+      this._sendStatus = (err as Error).message;
+    }
+  }
+
+  private _groceryActions(categories: CheckCategory[], onDone: () => void) {
+    return html`${this._sendStatus ? html`<p class="review-hint">${this._sendStatus}</p>` : nothing}
+      <div class="modal-actions">
+        ${this.extras.calendarSettings.shoppingList
+          ? html`<button class="secondary" @click=${() => this._sendToShopping(categories)}>Add to shopping list</button>`
+          : nothing}
+        <button class="primary" @click=${() => { this._sendStatus = ""; onDone(); }}>Done</button>
+      </div>`;
+  }
+
   // --------------------------------------------------------- settings
 
   private async _openSettings(): Promise<void> {
@@ -453,8 +484,9 @@ export class FamilyMealsView extends LitElement {
         ${error}`;
     }
     return html`<h2>Grocery List</h2>
+      <p class="review-hint">Check off what you already have, then add the rest to the shopping list.</p>
       <div>${this._checklist(w.grocery, (ci, ii) => this._patch({ grocery: this._toggled(w.grocery, ci, ii) }))}</div>
-      <div class="modal-actions"><button class="primary" @click=${() => (this._wizard = null)}>Done</button></div>`;
+      ${this._groceryActions(w.grocery, () => (this._wizard = null))}`;
   }
 
   private _modal(body: unknown, onClose: () => void) {
@@ -523,9 +555,10 @@ export class FamilyMealsView extends LitElement {
       ${this._groceryView
         ? this._modal(
             html`<h2>Grocery List</h2>
+              <p class="review-hint">Check off what you already have, then add the rest to the shopping list.</p>
               <div>${this._checklist(this._groceryView, (ci, ii) => (this._groceryView = this._toggled(this._groceryView!, ci, ii)))}</div>
-              <div class="modal-actions"><button class="primary" @click=${() => (this._groceryView = null)}>Done</button></div>`,
-            () => (this._groceryView = null)
+              ${this._groceryActions(this._groceryView, () => (this._groceryView = null))}`,
+            () => { this._sendStatus = ""; this._groceryView = null; }
           )
         : nothing}
       ${this._settingsOpen

@@ -1,7 +1,7 @@
 name: Family Hustle
 version: "1.0.0"
 slug: family_hustle
-description: Family calendar, chores, allowance and meal planning in one place
+description: Family calendar, chores, allowance, meal planning and shopping list in one place
 url: https://github.com/Jumpman-Actual-Labs/ha-addons
 arch:
   - aarch64
