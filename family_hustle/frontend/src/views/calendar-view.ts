@@ -182,10 +182,19 @@ export class FamilyCalendarView extends LitElement {
   @state() private _settingsDraft = { family: [] as string[], defaultCalendar: "", showDinners: true };
   @state() private _busy = false;
   @state() private _dialogError = "";
+  /** Phone-sized: the iOS-Calendar-style month + day agenda instead of the
+   * Skylight grids (see _phoneView). */
+  @state() private _mobile = false;
+  @state() private _pickedDay = startOfDay(new Date());
 
   private _loadedKey = "";
   private _clock?: number;
   private _refresh?: number;
+  private _phoneQuery = window.matchMedia("(max-width: 760px)");
+  private _onPhoneChange = (): void => {
+    this._mobile = this._phoneQuery.matches;
+  };
+  private _touchX: number | null = null;
 
   static styles = [
     formStyles,
@@ -306,29 +315,76 @@ export class FamilyCalendarView extends LitElement {
         .week-head, .allday-row, .grid { grid-template-columns: 40px repeat(var(--days), minmax(0, 1fr)); }
         .week-head > div { flex-direction: column; gap: 0; padding: 6px 2px; font-size: .75rem; }
         :host([view="week"]) .ev { padding: 3px 4px; }
-        :host([view="week"]) .ev .w, :host([view="week"]) .badges { display: none; }
+        :host([view="week"]) .ev .w, :host([view="week"]) .ev .badges { display: none; }
         .cell { min-height: 72px; }
         .members { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .fab { right: 18px; bottom: 84px; }
       }
+
+      /* ---- phone: month + agenda, like the iOS Calendar app ---- */
+      .p-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+      .p-year { border: 0; background: var(--fh-surface-2, #eef1f6); color: inherit; border-radius: 999px; padding: 6px 16px; min-height: 36px; display: inline-flex; align-items: center; gap: 2px; font: inherit; font-size: 1rem; cursor: pointer; }
+      .p-actions { margin-left: auto; display: inline-flex; background: var(--fh-surface-2, #eef1f6); border-radius: 999px; padding: 2px; }
+      .p-actions button { border: 0; background: none; color: inherit; min-height: 40px; min-width: 44px; display: grid; place-items: center; cursor: pointer; border-radius: 999px; }
+      .p-month { font-size: 2.1rem; font-weight: 750; letter-spacing: -.02em; margin: 8px 0 10px; }
+      .p-people { display: flex; gap: 6px; overflow-x: auto; padding: 0 0 10px; scrollbar-width: none; }
+      .p-people::-webkit-scrollbar { display: none; }
+      .p-person { flex: none; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--sky-line); background: var(--sky-card); color: inherit; border-radius: 999px; padding: 3px 10px 3px 3px; min-height: 0; font: inherit; font-size: .85rem; cursor: pointer; }
+      .p-person .dot { width: 24px; height: 24px; font-size: .7rem; }
+      .p-person.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 22%, var(--fh-tint-base, white)); }
+      .p-person.dim { opacity: .45; }
+      .p-dow, .p-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; }
+      .p-dow { font-size: .72rem; font-weight: 650; color: var(--sky-muted); border-bottom: 1px solid var(--sky-line); padding-bottom: 6px; }
+      .p-grid { touch-action: pan-y; }
+      .p-day { border: 0; border-bottom: 1px solid var(--sky-line); background: none; color: inherit; font: inherit; min-height: 64px; padding: 8px 0 6px; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer; }
+      .p-day.blank { cursor: default; }
+      .p-num { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; font-size: 1.15rem; font-weight: 600; }
+      .p-day.weekend .p-num { color: var(--sky-muted); }
+      .p-day.today .p-num { color: var(--sky-today); }
+      .p-day.picked .p-num { background: var(--sky-ink); color: var(--sky-card); }
+      .p-day.picked.today .p-num { background: var(--sky-today); color: #fff; }
+      .p-bar { display: flex; height: 6px; width: 26px; border-radius: 99px; overflow: hidden; gap: 1px; }
+      .p-bar i { flex: 1; background: var(--c); }
+      .p-agenda { margin-top: 6px; padding-bottom: 76px; /* clear of the + button */ }
+      .p-agenda h2 { font-size: .85rem; color: var(--sky-muted); font-weight: 650; margin: 10px 2px 4px; text-transform: uppercase; letter-spacing: .04em; }
+      .p-item { display: flex; gap: 12px; align-items: stretch; width: 100%; border: 0; border-bottom: 1px solid var(--sky-line); background: none; color: inherit; font: inherit; text-align: left; padding: 12px 2px; cursor: pointer; min-height: 0; }
+      .p-item .stripe { width: 5px; flex: none; border-radius: 99px; background: var(--c); }
+      .p-item .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+      .p-item .title { font-size: 1.1rem; font-weight: 650; display: flex; align-items: center; gap: 6px; }
+      .p-item .title ha-icon { --mdc-icon-size: 16px; color: var(--sky-muted); }
+      .p-item .meta { font-size: .9rem; color: var(--sky-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; --mdc-icon-size: 16px; }
+      .p-item .meta .badges { margin: 0; gap: 4px; }
+      .p-item .meta .badge { width: 22px; height: 22px; font-size: .68rem; border: 0; }
+      .p-item .times { flex: none; text-align: right; font-size: 1rem; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; gap: 2px; }
+      .p-item .times span + span { color: var(--sky-muted); }
+      .p-item.dinner .title { font-family: Georgia, "Times New Roman", serif; font-style: italic; }
+      .p-empty { color: var(--sky-muted); padding: 18px 2px; }
     `,
   ];
 
   connectedCallback(): void {
     super.connectedCallback();
+    this._onPhoneChange();
+    this._phoneQuery.addEventListener("change", this._onPhoneChange);
     this._clock = window.setInterval(() => (this._now = new Date()), 30_000);
     this._refresh = window.setInterval(() => this._load(true), REFRESH_MS);
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    this._phoneQuery.removeEventListener("change", this._onPhoneChange);
     window.clearInterval(this._clock);
     window.clearInterval(this._refresh);
   }
 
   protected willUpdate(changed: PropertyValues): void {
     if (changed.has("_view")) this.setAttribute("view", this._view);
-    if (changed.has("extras") || changed.has("_view") || changed.has("_anchor")) {
+    if (
+      changed.has("extras") ||
+      changed.has("_view") ||
+      changed.has("_anchor") ||
+      changed.has("_mobile")
+    ) {
       void this._load(false);
     }
   }
@@ -360,6 +416,13 @@ export class FamilyCalendarView extends LitElement {
   }
 
   private _range(): { start: Date; end: Date; days: Date[] } {
+    if (this._mobile) {
+      // Just the month's own days - the phone grid leaves the rest blank.
+      const start = new Date(this._anchor.getFullYear(), this._anchor.getMonth(), 1);
+      const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+      const days = Array.from({ length: Math.round((+end - +start) / 86_400_000) }, (_, i) => addDays(start, i));
+      return { start, end, days };
+    }
     if (this._view === "day") {
       const start = startOfDay(this._anchor);
       return { start, end: addDays(start, 1), days: [start] };
@@ -427,6 +490,15 @@ export class FamilyCalendarView extends LitElement {
 
   private _step(delta: number): void {
     const a = this._anchor;
+    if (this._mobile) {
+      // A new month on the phone picks its 1st - or today, back on this month.
+      const month = new Date(a.getFullYear(), a.getMonth() + delta, 1);
+      const today = startOfDay(new Date());
+      const sameMonth = month.getFullYear() === today.getFullYear() && month.getMonth() === today.getMonth();
+      this._anchor = month;
+      this._pickedDay = sameMonth ? today : month;
+      return;
+    }
     if (this._view === "day") this._anchor = addDays(a, delta);
     else if (this._view === "week") this._anchor = addDays(a, delta * 7);
     else this._anchor = new Date(a.getFullYear(), a.getMonth() + delta, 1);
@@ -1104,10 +1176,151 @@ export class FamilyCalendarView extends LitElement {
     </hustle-dialog>`;
   }
 
+  /** Colors for a day's bar under its date: one per family member with
+   * events that day (who it's for and who's attending), plus grey for
+   * untagged ones. Dinners don't count - nearly every day has one. */
+  private _dayColors(events: FamilyEvent[]): string[] {
+    const ids: string[] = [];
+    let untagged = false;
+    for (const e of events) {
+      if (this._isDinner(e)) continue;
+      const who = [e.forMemberId, ...e.attendeeIds].filter((id): id is string => Boolean(id));
+      if (!who.length) untagged = true;
+      for (const id of who) if (!ids.includes(id)) ids.push(id);
+    }
+    const colors = ids.map((id) => memberColor(this.hustleState.memberRoster, id));
+    if (untagged) colors.push(UNTAGGED_COLOR);
+    return colors.slice(0, 4);
+  }
+
+  private _agendaItem(e: FamilyEvent) {
+    const dinner = this._isDinner(e);
+    const color = dinner ? "var(--dinner-gold)" : this._color(e);
+    const repeats = Boolean(e.rrule || e.recurrenceId);
+    const times = e.allDay
+      ? html`<span>all-day</span>`
+      : html`<span>${timeFmt.format(eventStart(e))}</span><span>${timeFmt.format(eventEnd(e))}</span>`;
+    return html`<button class="p-item ${dinner ? "dinner" : ""}" style="--c:${color}" @click=${() => this._openEvent(e)}>
+      <span class="stripe"></span>
+      <span class="main">
+        <span class="title">${dinner ? html`<ha-icon icon="mdi:silverware-fork-knife"></ha-icon>` : nothing}${e.summary}${repeats ? html`<ha-icon icon="mdi:repeat"></ha-icon>` : nothing}</span>
+        ${e.location || e.attendeeIds.length || eventDays(e).length > 1
+          ? html`<span class="meta">
+              ${e.location ? html`<ha-icon icon="mdi:map-marker"></ha-icon>${e.location}` : nothing}
+              ${eventDays(e).length > 1 ? html`<span>${timeRange(e)}</span>` : nothing}
+              ${this._badges(e, 6)}
+            </span>`
+          : nothing}
+      </span>
+      <span class="times">${times}</span>
+    </button>`;
+  }
+
+  /** Phones get the iOS Calendar look: a big month name, a compact grid of
+   * dates each with a bar of who has events that day, and the picked day's
+   * events listed underneath. Swipe the grid sideways for the next or
+   * previous month. */
+  private _phoneView(events: FamilyEvent[]) {
+    const { start, days } = this._range();
+    const todayKey = dateKey(this._now);
+    const pickedKey = dateKey(this._pickedDay);
+    const byDay = new Map<string, FamilyEvent[]>();
+    for (const e of events) {
+      for (const key of eventDays(e)) byDay.set(key, [...(byDay.get(key) ?? []), e]);
+    }
+    const lead = (start.getDay() + 6) % 7; // Monday-first, like the rest of the app
+    const dow = Array.from({ length: 7 }, (_, i) =>
+      addDays(startOfWeek(start), i).toLocaleDateString(undefined, { weekday: "narrow" })
+    );
+    const picked = (byDay.get(pickedKey) ?? []).sort(
+      (a, b) =>
+        Number(this._isDinner(b)) - Number(this._isDinner(a)) ||
+        Number(b.allDay) - Number(a.allDay) ||
+        a.start.localeCompare(b.start)
+    );
+    const thisYear = start.getFullYear() === this._now.getFullYear();
+    const swipe = {
+      start: (e: TouchEvent) => (this._touchX = e.touches[0]?.clientX ?? null),
+      end: (e: TouchEvent) => {
+        const x = e.changedTouches[0]?.clientX;
+        if (this._touchX !== null && x !== undefined && Math.abs(x - this._touchX) > 60) {
+          this._step(x < this._touchX ? 1 : -1);
+        }
+        this._touchX = null;
+      },
+    };
+    return html`
+      <div class="p-head">
+        <button class="p-year" @click=${() => {
+          this._anchor = new Date();
+          this._pickedDay = startOfDay(new Date());
+        }}>Today</button>
+        <span class="p-actions">
+          <button aria-label="Previous month" @click=${() => this._step(-1)}><ha-icon icon="mdi:chevron-left"></ha-icon></button>
+          <button aria-label="Next month" @click=${() => this._step(1)}><ha-icon icon="mdi:chevron-right"></ha-icon></button>
+          ${this._isAdmin ? html`<button aria-label="Calendar settings" @click=${this._openSettings}><ha-icon icon="mdi:cog"></ha-icon></button>` : nothing}
+        </span>
+      </div>
+      <div class="p-month">${start.toLocaleDateString(undefined, thisYear ? { month: "long" } : { month: "long", year: "numeric" })}${this._loading ? " …" : ""}</div>
+      <div class="p-people">
+        ${this._members.map((m) => {
+          const on = this._filterMemberId === m.id;
+          return html`<button class="p-person ${on ? "on" : ""} ${this._filterMemberId && !on ? "dim" : ""}"
+            style="--c:${memberColor(this.hustleState.memberRoster, m.id)}"
+            aria-pressed=${on ? "true" : "false"}
+            @click=${() => (this._filterMemberId = on ? "" : m.id)}>
+            <span class="dot">${initials(m.haDisplayName)}</span>${m.haDisplayName}
+          </button>`;
+        })}
+      </div>
+      <div class="p-dow">${dow.map((d) => html`<span>${d}</span>`)}</div>
+      <div class="p-grid" @touchstart=${swipe.start} @touchend=${swipe.end}>
+        ${Array.from({ length: lead }, () => html`<span class="p-day blank"></span>`)}
+        ${days.map((d) => {
+          const key = dateKey(d);
+          const colors = this._dayColors(byDay.get(key) ?? []);
+          const weekend = d.getDay() === 0 || d.getDay() === 6;
+          return html`<button
+            class="p-day ${weekend ? "weekend" : ""} ${key === todayKey ? "today" : ""} ${key === pickedKey ? "picked" : ""}"
+            aria-label=${longDate.format(d)}
+            aria-pressed=${key === pickedKey ? "true" : "false"}
+            @click=${() => (this._pickedDay = d)}
+            @dblclick=${() => this._isParent && this._openAdd(d)}
+          >
+            <span class="p-num">${d.getDate()}</span>
+            ${colors.length ? html`<span class="p-bar">${colors.map((c) => html`<i style="--c:${c}"></i>`)}</span>` : html`<span class="p-bar"></span>`}
+          </button>`;
+        })}
+      </div>
+      <div class="p-agenda">
+        <h2>${longDate.format(this._pickedDay)}</h2>
+        ${picked.length ? picked.map((e) => this._agendaItem(e)) : html`<p class="p-empty">No events</p>`}
+      </div>
+    `;
+  }
+
   render() {
     if (!this.extras || !this.hustleState) return nothing;
     const configured = this._sources().all.length > 0;
     const events = this._visible(this._events);
+    const notices = html`
+      ${!configured
+        ? html`<div class="notice">
+            ${this._isAdmin
+              ? html`No calendars picked yet. Tap the <ha-icon icon="mdi:cog"></ha-icon> to choose your family's Google Calendar.`
+              : html`An admin parent needs to pick the family calendar first.`}
+          </div>`
+        : nothing}
+      ${this._errors.map((e) => html`<div class="notice error">Couldn't read ${e}</div>`)}
+    `;
+    const fab =
+      this._isParent && this.extras.calendarSettings.familyCalendars.length
+        ? html`<button class="fab" aria-label="Add event" @click=${() => this._openAdd(this._mobile ? this._pickedDay : undefined)}><ha-icon icon="mdi:plus"></ha-icon></button>`
+        : nothing;
+    if (this._mobile) {
+      return html`${notices}${this._phoneView(events)}${fab}
+        ${this._eventDialog()} ${this._addDialog()} ${this._settingsDialog()}`;
+    }
     const view = (v: View, label: string) =>
       html`<button class=${this._view === v ? "on" : ""} @click=${() => (this._view = v)}>${label}</button>`;
     return html`
@@ -1126,18 +1339,9 @@ export class FamilyCalendarView extends LitElement {
         </div>
       </div>
       ${this._memberStrip()}
-      ${!configured
-        ? html`<div class="notice">
-            ${this._isAdmin
-              ? html`No calendars picked yet. Tap the <ha-icon icon="mdi:cog"></ha-icon> to choose your family's Google Calendar.`
-              : html`An admin parent needs to pick the family calendar first.`}
-          </div>`
-        : nothing}
-      ${this._errors.map((e) => html`<div class="notice error">Couldn't read ${e}</div>`)}
+      ${notices}
       ${this._view === "month" ? this._monthView(events) : this._gridView(events)}
-      ${this._isParent && this.extras.calendarSettings.familyCalendars.length
-        ? html`<button class="fab" aria-label="Add event" @click=${() => this._openAdd()}><ha-icon icon="mdi:plus"></ha-icon></button>`
-        : nothing}
+      ${fab}
       ${this._eventDialog()} ${this._addDialog()} ${this._settingsDialog()}
     `;
   }

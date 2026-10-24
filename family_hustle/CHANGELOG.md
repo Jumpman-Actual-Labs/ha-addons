@@ -13,6 +13,9 @@
   weeks, month or year; until a date or a number of times), and timed
   events that span several days. Deleting a repeating event asks whether to
   delete just that day or all of them.
+- Calendar on phones looks like the iPhone Calendar app: the month's
+  dates, each with a colored bar of who has events that day, and the
+  tapped day's events listed underneath. Swipe sideways for another month.
 - Calendar ⚙ › Family colors: pick each person's color.
 - Settings (calendars, dinners calendar, shopping list, colors) are now for
   admin parents only, in the panel and on the server.

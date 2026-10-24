@@ -121,7 +121,12 @@ integration. `test_addon.py` covers the add-on layers against a fake HA.
   otherwise counts DTSTART as an extra occurrence. Timed UNTIL is UTC. A
   tap tags or deletes (one occurrence, or the series without
   `recurrence_id`). The ⚙ (calendars, show dinners, family colors via
-  `update_member` `avatar_color`) only shows to admin parents. Event color = the "for" member
+  `update_member` `avatar_color`) only shows to admin parents.
+  At phone width (`_mobile`, max-width 760px) it renders `_phoneView`
+  instead: iOS-Calendar-style month-only dates (`_range` returns just the
+  month), a bar under each date in the colors of whoever has events that
+  day (`_dayColors`; untagged = grey, dinners skipped), the picked day's
+  agenda below, and a sideways swipe to change month. Event color = the "for" member
   (`utils/member-colors.ts`: avatar color or a pastel by roster order).
 - `views/meals-view.ts`: Household's `household-panel.js`, rewritten in Lit
   with the same chalkboard styles and wizard steps. Its grocery checklists

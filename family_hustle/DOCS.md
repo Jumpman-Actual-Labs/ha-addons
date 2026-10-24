@@ -9,6 +9,8 @@ panel, laid out like a Skylight Calendar.
   it). The strip across the top shows each person's chores done today. Tap
   someone to see only their events. Parents add events with the **+**
   button, including multi-day and repeating ones, and tag one by tapping it.
+  On a phone it looks like the iPhone Calendar app: each date has a colored
+  bar showing who has events that day, and tapping a date lists its events.
 - **Chores**: everything Hustle did: chores and recurring chores, extra jobs
   (bounties), grades, behavior, paychecks and payroll, and reports.
 - **Meals**: this week's dinners board, the AI meal-plan wizard (Dinner
