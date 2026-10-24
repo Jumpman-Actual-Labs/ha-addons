@@ -30,12 +30,12 @@ export class FamilySetupView extends LitElement {
     formStyles,
     css`
       :host { display: block; max-width: 520px; margin: 6vh auto; padding: 0 16px; }
-      .card { background: #fff; border: 1px solid #e6e9ee; border-radius: 22px; padding: 28px; }
+      .card { background: var(--card-background-color, #fff); border: 1px solid var(--divider-color, #e6e9ee); border-radius: 22px; padding: 28px; }
       h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 600; }
-      p { color: #6b7685; margin: 0 0 8px; }
+      p { color: var(--secondary-text-color, #6b7685); margin: 0 0 8px; }
       .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
       .actions { margin-top: 22px; display: flex; justify-content: flex-end; }
-      .err { color: #b3261e; }
+      .err { color: var(--fh-danger, #b3261e); }
     `,
   ];
 

@@ -4,9 +4,7 @@ import { AddonConnection } from "./addon-hass";
 import type { FamilyApp } from "./family-app";
 
 // Ingress page entry point - mounts <family-app> and feeds it a `hass` from
-// the add-on backend. Always the light Skylight look: the Hustle views'
-// HA-variable fallbacks are light colors, and there are no HA theme
-// variables inside the ingress iframe to switch them.
+// the add-on backend. Light/dark theming is family-app's job.
 const app = document.createElement("family-app") as FamilyApp;
 const narrowQuery = window.matchMedia("(max-width: 870px)");
 app.narrow = narrowQuery.matches;

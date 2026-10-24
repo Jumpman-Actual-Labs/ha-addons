@@ -2,7 +2,7 @@ import type { MemberRosterEntry } from "../types";
 
 /* Skylight-style soft pastels, one per family member (in roster order)
  * unless a parent picked an avatar color for them in Settings. */
-const PASTELS = [
+export const PASTELS = [
   "#7fc8c0", // teal
   "#f19a9a", // coral
   "#b39ddb", // lavender

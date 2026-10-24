@@ -22,7 +22,8 @@ import type { MemberRosterEntry } from "../types";
  * - "Add to shopping list" sends the grocery list's unchecked items (checked
  *   = already have it) to the Shopping tab's list.
  * Wizard state lives here only; closing it discards it, as before. Kids see
- * the board; planning, moving and settings are for parents. The family
+ * the board; planning and moving are for parents, the settings (which
+ * calendar) for admin parents. The family
  * calendar that used to sit under the board is the Calendar tab now. */
 
 const MEAL_PREP_OPTION_COUNT = 5;
@@ -132,19 +133,19 @@ export class FamilyMealsView extends LitElement {
     .modal .secondary, .modal .deny { color: inherit; }
     button:disabled { opacity: 0.5; cursor: default; }
     .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .modal { position: relative; background: #fff; color: #1c1c1c; border-radius: 14px; padding: 24px; width: min(520px, 90vw); max-height: 85vh; overflow-y: auto; font-family: Georgia, "Times New Roman", serif; }
+    .modal { position: relative; background: var(--card-background-color, #fff); color: var(--primary-text-color, #1c1c1c); border-radius: 14px; padding: 24px; width: min(520px, 90vw); max-height: 85vh; overflow-y: auto; font-family: Georgia, "Times New Roman", serif; }
     .close-x { position: absolute; top: 10px; right: 14px; background: none; border: none; font-size: 22px; cursor: pointer; color: inherit; }
     .modal h2 { margin-top: 0; font-family: "Brush Script MT", "Segoe Script", cursive; font-size: 28px; font-weight: 400; }
     .mode-choices { display: flex; gap: 12px; margin-bottom: 16px; }
-    .mode-choice { flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 10px; border: 1px solid #ccc; background: none; cursor: pointer; text-align: left; font-family: inherit; color: inherit; }
+    .mode-choice { flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 10px; border: 1px solid var(--divider-color, #ccc); background: none; cursor: pointer; text-align: left; font-family: inherit; color: inherit; }
     .mode-choice.selected { border-color: var(--chalk-gold); background: rgba(212, 175, 106, 0.12); }
     .mode-choice span { font-size: 12px; opacity: 0.75; }
     label { display: block; margin-bottom: 14px; font-size: 13px; }
-    input, textarea, select.field { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; font-size: 14px; }
+    input, textarea, select.field { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px; border-radius: 6px; border: 1px solid var(--divider-color, #ccc); background: var(--card-background-color, #fff); color: inherit; font-family: inherit; font-size: 14px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
     .review-hint { margin: 0 0 12px; font-size: 12px; opacity: 0.75; font-style: italic; }
     .meal-list { display: flex; flex-direction: column; gap: 10px; }
-    .meal-card { border: 1px solid #ccc; border-radius: 10px; padding: 12px; }
+    .meal-card { border: 1px solid var(--divider-color, #ccc); border-radius: 10px; padding: 12px; }
     .meal-card h3 { margin: 0 0 4px; }
     .meal-card p { margin: 0; font-size: 13px; }
     .meal-card.accepted { border-color: #4a8f5c; background: rgba(74, 143, 92, 0.08); }
@@ -157,7 +158,7 @@ export class FamilyMealsView extends LitElement {
     .grocery-item input { width: auto; margin: 0; }
     .grocery-item .checked { text-decoration: line-through; opacity: 0.55; }
     .error { color: #e57373; }
-    .modal .error { color: #b3261e; }
+    .modal .error { color: var(--fh-danger, #b3261e); }
     .loading { font-style: italic; opacity: 0.75; }
   `;
 
@@ -173,6 +174,10 @@ export class FamilyMealsView extends LitElement {
 
   private get _isParent(): boolean {
     return this.me?.role === "parent";
+  }
+
+  private get _isAdmin(): boolean {
+    return this._isParent && this.me?.permissionLevel === "admin";
   }
 
   private async _loadWeek(): Promise<void> {
@@ -511,7 +516,7 @@ export class FamilyMealsView extends LitElement {
       <div class="board">
         <div class="header">
           <span class="title">This Week&rsquo;s Dinners</span><span class="flourish">&#10022;</span>
-          ${this._isParent ? html`<button class="gear" aria-label="Meals settings" @click=${this._openSettings}><ha-icon icon="mdi:cog"></ha-icon></button>` : nothing}
+          ${this._isAdmin ? html`<button class="gear" aria-label="Meals settings" @click=${this._openSettings}><ha-icon icon="mdi:cog"></ha-icon></button>` : nothing}
         </div>
         <div class="week">
           ${days.map(
@@ -542,7 +547,7 @@ export class FamilyMealsView extends LitElement {
             </div>`
           : nothing}
         ${!configured
-          ? html`<p class="board-note">${this._isParent ? "Pick your Dinners calendar with the gear above to get started." : "A parent needs to pick the Dinners calendar first."}</p>`
+          ? html`<p class="board-note">${this._isAdmin ? "Pick your Dinners calendar with the gear above to get started." : "An admin parent needs to pick the Dinners calendar first."}</p>`
           : nothing}
         ${this._boardError ? html`<p class="error board-note">${this._boardError}</p>` : nothing}
         ${this._moveError ? html`<p class="error board-note">${this._moveError}</p>` : nothing}

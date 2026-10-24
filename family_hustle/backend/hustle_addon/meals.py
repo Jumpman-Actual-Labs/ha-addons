@@ -21,7 +21,8 @@ What changed in the move:
 - API keys: add-on options first, then secrets.yaml (`openai_api_key` /
   `anthropic_api_key`), instead of the integration's options flow.
 - The grocery list lives in the Hustle store (`coordinator.grocery_list`).
-- Only parents run these (AI calls cost money and the calendar is shared).
+- Only parents run these (AI calls cost money and the calendar is shared);
+  picking the dinners calendar is for admin parents, like every setting.
 
 The AI calls themselves - prompts, JSON schemas, OpenAI Structured Outputs
 vs Anthropic's single-forced-tool idiom - are Household's `ai_client.py`

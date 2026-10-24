@@ -14,6 +14,21 @@
         font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         color-scheme: light;
       }
+      /* family-app sets data-theme; the loading screen guesses from the OS. */
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme="light"]),
+        html:not([data-theme="light"]) body {
+          background: #12151a;
+          color: #9aa4b2;
+          color-scheme: dark;
+        }
+      }
+      html[data-theme="dark"],
+      html[data-theme="dark"] body {
+        background: #12151a;
+        color: #9aa4b2;
+        color-scheme: dark;
+      }
       body > .loading {
         display: flex;
         height: 100vh;

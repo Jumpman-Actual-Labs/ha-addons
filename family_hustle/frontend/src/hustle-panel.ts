@@ -75,7 +75,7 @@ export class HustlePanel extends LitElement {
     .viewing-as { margin-left:auto; display:flex; align-items:center; gap:10px; font-size:.9rem; }
     main { padding:24px 0 48px; max-width:1120px; margin:auto; }
     .preview-banner { max-width:1080px; margin:16px auto 0; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; border-radius:12px; background:#e1f0e9; color:#153d35; }
-    .preview-banner button { min-height:44px; padding:8px 14px; border:1px solid #90b2a4; border-radius:10px; background:white; color:#153d35; cursor:pointer; }
+    .preview-banner button { min-height:44px; padding:8px 14px; border:1px solid #90b2a4; border-radius:10px; background:var(--card-background-color,#fff); color:var(--primary-text-color,#153d35); cursor:pointer; }
     nav.kid-nav { display:grid; grid-template-columns:repeat(3,1fr); max-width:760px; gap:8px; }
     .kid-nav button.tab { justify-content:center; min-height:56px; font-weight:650; }
     .kid-nav button.tab.active { background:#153d35; color:#fff; }

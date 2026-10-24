@@ -618,3 +618,83 @@ async def test_web_services_states_and_calendar(client):
     assert [i["summary"] for i in items["items"]] == ["Bread"]
     lists = await (await test_client.get("/api/shopping/lists")).json()
     assert {entry["name"] for entry in lists} == {"Shopping List", "Costco"}
+
+
+# ------------------------------------------- repeats, admin-only settings
+
+
+async def test_repeating_event_passes_its_rule_through(setup):
+    coordinator, ha, call, kid = await _family(setup)
+    ha.events["calendar.family"] = []
+    await call("update_calendar_settings", {"default_calendar": "calendar.family"}, ADMIN)
+    result = await call(
+        "create_event",
+        {
+            "summary": "Soccer",
+            "start": "2026-10-27T16:00:00-05:00",
+            "end": "2026-10-27T17:30:00-05:00",
+            "rrule": "rrule:freq=weekly;byday=tu,th;until=20261231",
+            "for_member_id": kid.id,
+        },
+        ADMIN,
+    )
+    create = next(c for c in ha.commands if c["type"] == "calendar/event/create")
+    assert create["event"]["rrule"] == "FREQ=WEEKLY;BYDAY=TU,TH;UNTIL=20261231"
+    assert coordinator.event_tags[event_tag_key("calendar.family", result["uid"])]
+    with pytest.raises(services.ServiceError, match="Invalid data"):
+        await call(
+            "create_event",
+            {"summary": "x", "start": "2026-10-27T16:00:00", "rrule": "FREQ=HOURLY"},
+            ADMIN,
+        )
+
+
+async def test_multi_day_timed_event_keeps_its_end(setup):
+    _coordinator, ha, call, _kid = await _family(setup)
+    ha.events["calendar.family"] = []
+    await call("update_calendar_settings", {"default_calendar": "calendar.family"}, ADMIN)
+    await call(
+        "create_event",
+        {
+            "summary": "Camping",
+            "start": "2026-10-30T15:00:00-05:00",
+            "end": "2026-11-01T11:00:00-05:00",
+        },
+        ADMIN,
+    )
+    event = next(c for c in ha.commands if c["type"] == "calendar/event/create")["event"]
+    assert (event["dtstart"], event["dtend"]) == (
+        "2026-10-30T15:00:00-05:00",
+        "2026-11-01T11:00:00-05:00",
+    )
+
+
+async def test_settings_are_for_admin_parents_only(setup):
+    coordinator, _ha, call, _kid = await _family(setup)
+    await call(
+        "add_member",
+        {
+            "ha_user_id": "ha-standard",
+            "ha_display_name": "Sam",
+            "role": "parent",
+            "permission_level": "standard",
+        },
+        ADMIN,
+    )
+    standard = {"id": "ha-standard"}
+    with pytest.raises(services.ServiceError, match="admin"):
+        await call("update_calendar_settings", {"show_dinners": False}, standard)
+    # Standard parents still add and tag events.
+    await call(
+        "tag_event", {"entity_id": "calendar.family", "uid": "u1", "attendee_ids": []}, standard
+    )
+    await call("update_calendar_settings", {"show_dinners": False}, ADMIN)
+    assert coordinator.calendar_settings["show_dinners"] is False
+
+
+def test_event_bounds_without_offsets_use_local_time():
+    start, end = family_calendar._event_bounds(
+        {"all_day": False, "start": "2026-10-24T17:00:00", "end": "2026-10-24T18:00:00"}
+    )
+    assert start.startswith("2026-10-24T17:00:00") and end.startswith("2026-10-24T18:00:00")
+    assert start[19:] == end[19:] != ""  # both got the same local offset

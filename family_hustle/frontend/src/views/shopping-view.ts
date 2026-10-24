@@ -9,7 +9,8 @@ import "../components/hustle-dialog";
 /* The Shopping tab: Home Assistant's own to-do list (todo.shopping_list
  * unless a parent picks another), so it's the same list as the HA app and
  * Assist ("add milk to the shopping list"). Anyone in the family can add,
- * check off, rename and remove items; picking the list is for parents.
+ * check off, rename and remove items; picking the list is for admin
+ * parents.
  * Re-read every 30s while open, since items also change from outside. */
 
 const REFRESH_MS = 30_000;
@@ -38,33 +39,33 @@ export class FamilyShoppingView extends LitElement {
   static styles = [
     formStyles,
     css`
-      :host { display: block; max-width: 720px; margin: 0 auto; color: #2f3a4a; }
+      :host { display: block; max-width: 720px; margin: 0 auto; color: var(--primary-text-color, #2f3a4a); }
       .head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
       h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 600; font-size: 1.7rem; margin: 0; }
-      .sub { color: #7b8796; font-size: .9rem; }
-      .gear { margin-left: auto; border: 1px solid #e6e9ee; background: #fff; border-radius: 999px; min-height: 36px; min-width: 36px; display: grid; place-items: center; cursor: pointer; }
-      .card { background: #fff; border: 1px solid #e6e9ee; border-radius: 18px; overflow: hidden; }
-      form.add { display: flex; gap: 8px; padding: 14px; border-bottom: 1px solid #eef0f3; }
+      .sub { color: var(--secondary-text-color, #7b8796); font-size: .9rem; }
+      .gear { margin-left: auto; border: 1px solid var(--divider-color, #e6e9ee); background: var(--card-background-color, #fff); color: inherit; border-radius: 999px; min-height: 36px; min-width: 36px; display: grid; place-items: center; cursor: pointer; }
+      .card { background: var(--card-background-color, #fff); border: 1px solid var(--divider-color, #e6e9ee); border-radius: 18px; overflow: hidden; }
+      form.add { display: flex; gap: 8px; padding: 14px; border-bottom: 1px solid var(--divider-color, #eef0f3); }
       form.add input { flex: 1; }
       form.add button { flex: none; }
       ul { list-style: none; margin: 0; padding: 0; }
-      li { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #f1f3f6; min-height: 52px; box-sizing: border-box; }
+      li { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--divider-color, #f1f3f6); min-height: 52px; box-sizing: border-box; }
       li:last-child { border-bottom: 0; }
-      .check { flex: none; width: 28px; height: 28px; min-height: 0; border-radius: 50%; border: 2px solid #c5ccd6; background: #fff; cursor: pointer; display: grid; place-items: center; padding: 0; color: #fff; --mdc-icon-size: 18px; }
-      .check.on { background: #7fc8c0; border-color: #7fc8c0; }
-      .label { flex: 1; min-width: 0; font-size: 1.05rem; cursor: text; background: none; border: 0; text-align: left; padding: 4px 0; min-height: 0; }
-      .done .label { text-decoration: line-through; color: #9aa4b1; }
-      .remove { flex: none; border: 0; background: none; color: #b4bcc7; cursor: pointer; min-height: 36px; min-width: 36px; --mdc-icon-size: 20px; }
-      .remove:hover { color: #b3261e; }
+      .check { flex: none; width: 28px; height: 28px; min-height: 0; border-radius: 50%; border: 2px solid var(--secondary-text-color, #c5ccd6); background: transparent; cursor: pointer; display: grid; place-items: center; padding: 0; color: #fff; --mdc-icon-size: 18px; }
+      .check.on { background: var(--fh-check, #7fc8c0); border-color: var(--fh-check, #7fc8c0); }
+      .label { flex: 1; min-width: 0; font-size: 1.05rem; cursor: text; background: none; border: 0; text-align: left; padding: 4px 0; min-height: 0; color: inherit; }
+      .done .label { text-decoration: line-through; color: var(--secondary-text-color, #9aa4b1); }
+      .remove { flex: none; border: 0; background: none; color: var(--secondary-text-color, #b4bcc7); cursor: pointer; min-height: 36px; min-width: 36px; --mdc-icon-size: 20px; }
+      .remove:hover { color: var(--fh-danger, #b3261e); }
       li input { flex: 1; }
-      .empty { padding: 28px 16px; text-align: center; color: #7b8796; }
-      .done-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: #fafbfc; border-top: 1px solid #eef0f3; color: #7b8796; font-size: .9rem; }
+      .empty { padding: 28px 16px; text-align: center; color: var(--secondary-text-color, #7b8796); }
+      .done-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: var(--fh-surface-3, #fafbfc); border-top: 1px solid var(--divider-color, #eef0f3); color: var(--secondary-text-color, #7b8796); font-size: .9rem; }
       .done-head button { border: 0; background: none; color: inherit; cursor: pointer; font: inherit; min-height: 36px; }
-      .done-head .clear { color: #b3261e; }
-      .notice { padding: 14px 16px; border-radius: 14px; background: #fdecea; color: #8a2a20; margin-bottom: 12px; }
+      .done-head .clear { color: var(--fh-danger, #b3261e); }
+      .notice { padding: 14px 16px; border-radius: 14px; background: var(--fh-error-bg, #fdecea); color: var(--fh-error-ink, #8a2a20); margin-bottom: 12px; }
       .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
-      button.ghost { background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; padding: 10px 16px; cursor: pointer; }
-      .hint { color: #7b8796; font-size: .9rem; }
+      button.ghost { background: var(--card-background-color, #fff); color: inherit; border: 1px solid var(--divider-color, #e6e9ee); border-radius: 10px; padding: 10px 16px; cursor: pointer; }
+      .hint { color: var(--secondary-text-color, #7b8796); font-size: .9rem; }
     `,
   ];
 
@@ -89,8 +90,8 @@ export class FamilyShoppingView extends LitElement {
     }
   }
 
-  private get _isParent(): boolean {
-    return this.me?.role === "parent";
+  private get _isAdmin(): boolean {
+    return this.me?.role === "parent" && this.me?.permissionLevel === "admin";
   }
 
   private async _load(): Promise<void> {
@@ -216,13 +217,13 @@ export class FamilyShoppingView extends LitElement {
       <div class="head">
         <h1>Shopping List</h1>
         ${this._listName && this._listName !== "Shopping List" ? html`<span class="sub">${this._listName}</span>` : nothing}
-        ${this._isParent
+        ${this._isAdmin
           ? html`<button class="gear" aria-label="Shopping settings" @click=${this._openSettings}><ha-icon icon="mdi:cog"></ha-icon></button>`
           : nothing}
       </div>
       ${this._error ? html`<div class="notice">${this._error}</div>` : nothing}
       ${!configured
-        ? html`<div class="card"><p class="empty">${this._isParent ? "Pick a to-do list with the gear above." : "A parent needs to pick the shopping list first."}</p></div>`
+        ? html`<div class="card"><p class="empty">${this._isAdmin ? "Pick a to-do list with the gear above." : "An admin parent needs to pick the shopping list first."}</p></div>`
         : html`<div class="card">
             <form class="add" @submit=${this._add}>
               <input .value=${this._draft} placeholder="Add an item" aria-label="Add an item" @input=${(e: Event) => (this._draft = (e.target as HTMLInputElement).value)} />

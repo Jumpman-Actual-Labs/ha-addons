@@ -60,6 +60,8 @@ def default_calendar_settings() -> dict[str, Any]:
         "default_calendar": None,
         # The Meals tab's dinner board (Household's `calendar_entity`).
         "dinners_calendar": None,
+        # Dinners also show on the Calendar tab's all-day row.
+        "show_dinners": True,
         # The Shopping tab - Home Assistant's own Shopping List integration
         # unless a parent picks another to-do list.
         "shopping_list": "todo.shopping_list",

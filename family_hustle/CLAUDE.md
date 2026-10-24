@@ -52,7 +52,9 @@ Add-on layers:
   `coordinator.event_tags`, keyed `<entity_id>|<uid>`, so every instance of
   a recurring event shares them. Which calendars to show, where new events
   go and the dinners calendar are in `coordinator.calendar_settings`.
-  Parents write; any linked member reads.
+  Parents add, tag and delete; settings (`update_calendar_settings`) are
+  admin parents only; any linked member reads. `create_event` takes an
+  optional `rrule` (validated, passed through as the event's RRULE).
 - `meals.py`: Household's `ai_client.py` (prompts and schemas unchanged;
   OpenAI Structured Outputs, or Anthropic forced tool use) plus its
   services. The board is read on demand (`api/meals/week`) instead of a
@@ -99,13 +101,27 @@ integration. `test_addon.py` covers the add-on layers against a fake HA.
 ## Frontend
 
 - `family-app.ts`: the root, a Skylight-style rail (bottom bar on phones)
-  with Calendar / Chores / Meals / Shopping. It also decides who's looking: a linked
+  with Calendar / Chores / Meals / Shopping, plus the theme button. It also
+  owns the theme. Every color is a token on its `:host` (light) and
+  `:host([dark])`. Those include the HA variables the Hustle views use, so
+  they theme the Chores tab through shadow DOM too, plus `--fh-*` tokens for
+  the new views. Add a color as a token in both blocks, never hard-coded.
+  The theme is Auto (HA's `themes.darkMode` from the parent page, then
+  `prefers-color-scheme`, re-checked every 2s), Light or Dark, kept per
+  device in localStorage. It also decides who's looking: a linked
   member gets the app, an HA admin on an unmanaged household gets
   `views/setup-view.ts`, and anyone else gets "link your account".
 - `views/calendar-view.ts`: the Skylight calendar. It has a member strip
-  (today's chore progress; tap to filter), a week time-grid with lanes for
-  overlapping events and a now line, a month grid, a + to add, a tap to
-  tag/delete, and ⚙ for calendars. Event color = the "for" member
+  (today's chore progress; tap to filter), a day/week time-grid
+  (`_gridView`, one or seven columns) with lanes for overlapping events and
+  a now line, and a month grid. The dinners calendar is read alongside the
+  family calendars and drawn as chalkboard chips on the all-day row
+  (`show_dinners`). The + dialog builds an RRULE for repeats; weekly
+  repeats move the start to the first chosen weekday, because Google
+  otherwise counts DTSTART as an extra occurrence. Timed UNTIL is UTC. A
+  tap tags or deletes (one occurrence, or the series without
+  `recurrence_id`). The ⚙ (calendars, show dinners, family colors via
+  `update_member` `avatar_color`) only shows to admin parents. Event color = the "for" member
   (`utils/member-colors.ts`: avatar color or a pastel by roster order).
 - `views/meals-view.ts`: Household's `household-panel.js`, rewritten in Lit
   with the same chalkboard styles and wizard steps. Its grocery checklists

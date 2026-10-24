@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.0
+
+- Light and dark themes. Auto (the default) follows Home Assistant's dark
+  mode; the button at the bottom of the menu switches between Auto, Light
+  and Dark on each device.
+- Calendar: a Day view next to Week and Month (tap a day's name or date to
+  open it).
+- Calendar: dinners from the Meals tab show on the all-day row (turn off
+  under ⚙ › Show dinners).
+- Calendar: repeating events (every day, weekday, week on chosen days, 2
+  weeks, month or year; until a date or a number of times), and timed
+  events that span several days. Deleting a repeating event asks whether to
+  delete just that day or all of them.
+- Calendar ⚙ › Family colors: pick each person's color.
+- Settings (calendars, dinners calendar, shopping list, colors) are now for
+  admin parents only, in the panel and on the server.
+
 ## 1.0.0
 
 - Family Hustle replaces the Hustle integration + custom panel, and the

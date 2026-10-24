@@ -11,6 +11,8 @@ export interface CalendarSettings {
   familyCalendars: string[];
   defaultCalendar: string | null;
   dinnersCalendar: string | null;
+  /** Dinners also show on the Calendar tab's all-day row. */
+  showDinners: boolean;
   /** The Home Assistant to-do list behind the Shopping tab. */
   shoppingList: string | null;
 }
@@ -99,6 +101,7 @@ export function parseFamilyExtras(hass: HomeAssistant): FamilyExtras {
       familyCalendars: strings(settings.family_calendars),
       defaultCalendar: (settings.default_calendar as string | null) ?? null,
       dinnersCalendar: (settings.dinners_calendar as string | null) ?? null,
+      showDinners: settings.show_dinners !== false,
       shoppingList: (settings.shopping_list as string | null) ?? null,
     },
     groceryList: Array.isArray(grocery.categories)

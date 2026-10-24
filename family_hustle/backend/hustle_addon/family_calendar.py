@@ -14,9 +14,14 @@ Kept out of Google on purpose: writing tags into event descriptions would
 show up as clutter in everyone's Google Calendar and break when someone
 edits the description there.
 
-Reading is open to any linked member; adding, deleting, tagging and
-choosing calendars is for parents (the same `_require_parent` guard the
-chore services use).
+Reading is open to any linked member; adding, deleting and tagging
+events is for parents (the same `_require_parent` guard the chore services
+use), and the settings - which calendars, the dinners calendar, the
+shopping list - for admin parents only.
+
+New events can repeat: `rrule` is an iCalendar RRULE (`FREQ=WEEKLY;
+BYDAY=TU,TH`), passed straight through to the calendar - Google expands
+it, and the reads come back as individual occurrences sharing the uid.
 """
 from __future__ import annotations
 
@@ -30,12 +35,23 @@ import voluptuous as vol
 from . import validation as cv
 from .coordinator import HustleCoordinator
 from .ha_client import HomeAssistantClient, HomeAssistantError
-from .services import Handler, ServiceCall, ServiceError, _require_parent
+from .services import (
+    Handler,
+    ServiceCall,
+    ServiceError,
+    _require_parent,
+    _require_parent_admin,
+)
 from .shopping import todo_entity
 
 _LOGGER = logging.getLogger(__name__)
 
 _CALENDAR_ENTITY = re.compile(r"^calendar\.[a-z0-9_]+$")
+# FREQ first, then any of the RRULE parts the panel builds (BYDAY, INTERVAL,
+# COUNT, UNTIL, BYMONTHDAY...) - letters, digits, commas, signs only.
+_RRULE = re.compile(
+    r"^FREQ=(DAILY|WEEKLY|MONTHLY|YEARLY)(;[A-Z]+=[A-Z0-9,+\-]+)*$"
+)
 
 
 class CalendarUnavailable(ServiceError):
@@ -47,6 +63,13 @@ def calendar_entity(value: Any) -> str:
     value = cv.string(value)
     if not _CALENDAR_ENTITY.match(value):
         raise vol.Invalid(f"{value} is not a calendar entity")
+    return value
+
+
+def rrule(value: Any) -> str:
+    value = cv.string(value).strip().upper().removeprefix("RRULE:")
+    if not _RRULE.match(value):
+        raise vol.Invalid(f"{value} is not a repeat rule this calendar understands")
     return value
 
 
@@ -180,16 +203,21 @@ class FamilyCalendar:
         all_day: bool,
         description: str = "",
         location: str = "",
+        repeat: str | None = None,
     ) -> str | None:
         """Adds the event and returns its uid - looked up afterwards, since
         `calendar/event/create` doesn't return one. None if it can't be
-        found again (the event still exists; it just can't be tagged yet)."""
+        found again (the event still exists; it just can't be tagged yet).
+        `repeat` is an RRULE; a repeating event's first occurrence is the
+        one found."""
         client = self._client()
         event: dict[str, Any] = {"summary": summary, "dtstart": start, "dtend": end}
         if description:
             event["description"] = description
         if location:
             event["location"] = location
+        if repeat:
+            event["rrule"] = repeat
         try:
             await client.ws_command(
                 {"type": "calendar/event/create", "entity_id": entity_id, "event": event}
@@ -240,12 +268,13 @@ def _event_bounds(data: dict[str, Any]) -> tuple[str, str]:
         end_dt = datetime.fromisoformat(data["end"]) if data.get("end") else None
     except ValueError as err:
         raise ServiceError(f"Invalid start/end: {err}") from err
+    # No offset means the household's local time (the container's TZ).
     if start_dt.tzinfo is None:
         start_dt = start_dt.astimezone()
+    if end_dt is not None and end_dt.tzinfo is None:
+        end_dt = end_dt.astimezone()
     if end_dt is None or end_dt <= start_dt:
         end_dt = start_dt + timedelta(hours=1)
-    elif end_dt.tzinfo is None:
-        end_dt = end_dt.astimezone()
     return start_dt.isoformat(), end_dt.isoformat()
 
 
@@ -264,6 +293,7 @@ SCHEMAS = {
             vol.Optional("all_day", default=False): cv.boolean,
             vol.Optional("description", default=""): cv.string,
             vol.Optional("location", default=""): cv.string,
+            vol.Optional("rrule"): vol.Any(rrule, None),
             vol.Optional("for_member_id"): vol.Any(cv.string, None),
             vol.Optional("attendee_ids", default=list): [cv.string],
         }
@@ -289,6 +319,7 @@ SCHEMAS = {
             vol.Optional("default_calendar"): vol.Any(calendar_entity, None),
             vol.Optional("dinners_calendar"): vol.Any(calendar_entity, None),
             vol.Optional("shopping_list"): vol.Any(todo_entity, None),
+            vol.Optional("show_dinners"): cv.boolean,
         }
     ),
 }
@@ -313,6 +344,7 @@ def build_handlers(
             call.data["all_day"],
             call.data["description"],
             call.data["location"],
+            call.data.get("rrule"),
         )
         for_member_id = call.data.get("for_member_id")
         attendee_ids = call.data["attendee_ids"]
@@ -343,7 +375,7 @@ def build_handlers(
         )
 
     async def handle_update_calendar_settings(call: ServiceCall) -> dict[str, Any]:
-        _require_parent(coordinator, call)
+        _require_parent_admin(coordinator, call)
         return await coordinator.async_update_calendar_settings(**call.data)
 
     return {

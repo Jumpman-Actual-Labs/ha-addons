@@ -9,23 +9,32 @@ import {
 } from "../family-api";
 import type { HustleState, MemberRosterEntry } from "../types";
 import { formStyles } from "../styles";
-import { UNTAGGED_COLOR, initials, memberColor } from "../utils/member-colors";
+import { PASTELS, UNTAGGED_COLOR, initials, memberColor } from "../utils/member-colors";
 import "../components/hustle-dialog";
 
 /* The Calendar tab, laid out like a Skylight Calendar: the family's name
  * and a clock up top, a strip of family members with today's chore
- * progress, then a week time-grid (or a month grid) of the family's Google
- * Calendar events, each colored by who it's for, with the initials of who's
- * attending. Parents add events with the + button and tag existing ones by
- * tapping them; kids see the same calendar read-only. Tapping a member in
- * the strip shows only their events. */
+ * progress, then a day or week time-grid (or a month grid) of the family's
+ * Google Calendar events, each colored by who it's for, with the initials
+ * of who's attending. The Meals tab's dinners show on the all-day row.
+ *
+ * Parents add events with the + button (one-off, multi-day or repeating)
+ * and tag or delete existing ones by tapping them; kids see the same
+ * calendar read-only. Tapping a member in the strip shows only their
+ * events. The ⚙ (calendars, dinners, family colors) is for admin parents
+ * only - the backend refuses settings changes from anyone else too. */
 
 const HOUR_PX = 56;
 const DEFAULT_FIRST_HOUR = 7;
 const DEFAULT_LAST_HOUR = 21;
 const REFRESH_MS = 5 * 60_000;
 
-type View = "week" | "month";
+type View = "day" | "week" | "month";
+type Repeat = "none" | "daily" | "weekdays" | "weekly" | "biweekly" | "monthly" | "yearly";
+type RepeatEnd = "never" | "until" | "count";
+
+const RRULE_DAYS = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
 interface Placed {
   event: FamilyEvent;
@@ -33,6 +42,25 @@ interface Placed {
   height: number;
   lane: number;
   lanes: number;
+}
+
+interface Draft {
+  summary: string;
+  allDay: boolean;
+  date: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+  calendar: string;
+  forMemberId: string;
+  attendees: string[];
+  location: string;
+  description: string;
+  repeat: Repeat;
+  repeatDays: number[];
+  repeatEnd: RepeatEnd;
+  repeatUntil: string;
+  repeatCount: number;
 }
 
 function dateKey(d: Date): string {
@@ -53,9 +81,13 @@ function addDays(d: Date, n: number): Date {
   return next;
 }
 
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
 /** Monday on or before `d` - Skylight's week starts Monday. */
 function startOfWeek(d: Date): Date {
-  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const start = startOfDay(d);
   return addDays(start, -((start.getDay() + 6) % 7));
 }
 
@@ -74,7 +106,7 @@ function eventDays(e: FamilyEvent): string[] {
   let end = eventEnd(e);
   if (!e.allDay) end = new Date(end.getTime() - 1);
   const days: string[] = [];
-  for (let d = new Date(start.getFullYear(), start.getMonth(), start.getDate()); ; d = addDays(d, 1)) {
+  for (let d = startOfDay(start); ; d = addDays(d, 1)) {
     if (e.allDay ? d >= end : d > end) break;
     days.push(dateKey(d));
     if (days.length > 62) break;
@@ -83,14 +115,47 @@ function eventDays(e: FamilyEvent): string[] {
 }
 
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+const shortDate = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const longDate = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" });
 
 function timeRange(e: FamilyEvent): string {
-  if (e.allDay) return "All day";
-  return `${timeFmt.format(eventStart(e))} – ${timeFmt.format(eventEnd(e))}`;
+  const start = eventStart(e);
+  const end = eventEnd(e);
+  if (e.allDay) {
+    const last = addDays(end, -1);
+    return last > start ? `${shortDate.format(start)} – ${shortDate.format(last)}` : "All day";
+  }
+  if (dateKey(start) !== dateKey(new Date(end.getTime() - 1))) {
+    return `${shortDate.format(start)} ${timeFmt.format(start)} – ${shortDate.format(end)} ${timeFmt.format(end)}`;
+  }
+  return `${timeFmt.format(start)} – ${timeFmt.format(end)}`;
+}
+
+/** "FREQ=WEEKLY;BYDAY=TU,TH" -> "Repeats weekly on Tue, Thu". Covers what
+ * the panel itself creates; anything else still says it repeats. */
+function describeRepeat(rule: string | null): string {
+  if (!rule) return "Repeats";
+  const parts = Object.fromEntries(rule.split(";").map((p) => p.split("=")));
+  const every = Number(parts.INTERVAL ?? 1);
+  const freq: Record<string, string> = { DAILY: "day", WEEKLY: "week", MONTHLY: "month", YEARLY: "year" };
+  const unit = freq[parts.FREQ] ?? "time";
+  let text = every > 1 ? `Repeats every ${every} ${unit}s` : `Repeats every ${unit}`;
+  if (parts.BYDAY) {
+    const names = String(parts.BYDAY)
+      .split(",")
+      .map((d) => new Date(2026, 0, 4 + RRULE_DAYS.indexOf(d)).toLocaleDateString(undefined, { weekday: "short" }));
+    text += ` on ${names.join(", ")}`;
+  }
+  if (parts.COUNT) text += `, ${parts.COUNT} times`;
+  if (parts.UNTIL) {
+    const u = String(parts.UNTIL);
+    text += ` until ${shortDate.format(new Date(+u.slice(0, 4), +u.slice(4, 6) - 1, +u.slice(6, 8)))}`;
+  }
+  return text;
 }
 
 function tint(hex: string, alpha: number): string {
-  return `color-mix(in srgb, ${hex} ${Math.round(alpha * 100)}%, white)`;
+  return `color-mix(in srgb, ${hex} calc(${Math.round(alpha * 100)}% * var(--fh-tint-boost, 1)), var(--fh-tint-base, white))`;
 }
 
 @customElement("family-calendar-view")
@@ -111,10 +176,10 @@ export class FamilyCalendarView extends LitElement {
   @state() private _tagFor = "";
   @state() private _tagAttendees: string[] = [];
   @state() private _adding = false;
-  @state() private _draft = this._emptyDraft();
+  @state() private _draft: Draft = this._emptyDraft();
   @state() private _settingsOpen = false;
   @state() private _calendars: CalendarInfo[] = [];
-  @state() private _settingsDraft = { family: [] as string[], defaultCalendar: "" };
+  @state() private _settingsDraft = { family: [] as string[], defaultCalendar: "", showDinners: true };
   @state() private _busy = false;
   @state() private _dialogError = "";
 
@@ -127,73 +192,81 @@ export class FamilyCalendarView extends LitElement {
     css`
       :host {
         display: block;
-        --sky-ink: #2f3a4a;
-        --sky-muted: #7b8796;
-        --sky-line: #e6e9ee;
+        --sky-ink: var(--primary-text-color, #2f3a4a);
+        --sky-muted: var(--secondary-text-color, #7b8796);
+        --sky-line: var(--divider-color, #e6e9ee);
+        --sky-card: var(--card-background-color, #fff);
         --sky-today: #e57368;
         --sky-fab: #7e57c2;
+        --dinner-bg: #1f3d2b;
+        --dinner-ink: #f5f2e8;
+        --dinner-gold: #d4af6a;
         color: var(--sky-ink);
       }
       .top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
       .family { font-family: Georgia, "Times New Roman", serif; font-size: 1.7rem; font-weight: 600; letter-spacing: -.01em; margin: 0; }
       .clock { font-size: 1.25rem; color: var(--sky-muted); font-variant-numeric: tabular-nums; }
       .controls { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-      .seg { display: inline-flex; border: 1px solid var(--sky-line); border-radius: 999px; overflow: hidden; background: #fff; }
+      .seg { display: inline-flex; border: 1px solid var(--sky-line); border-radius: 999px; overflow: hidden; background: var(--sky-card); }
       .seg button { border: 0; background: transparent; padding: 6px 14px; min-height: 36px; cursor: pointer; color: var(--sky-muted); }
-      .seg button.on { background: #eef1f6; color: var(--sky-ink); font-weight: 650; }
-      .icon-btn { border: 1px solid var(--sky-line); background: #fff; border-radius: 999px; min-height: 36px; min-width: 36px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0 10px; gap: 4px; }
+      .seg button.on { background: var(--fh-surface-2, #eef1f6); color: var(--sky-ink); font-weight: 650; }
+      .icon-btn { border: 1px solid var(--sky-line); background: var(--sky-card); color: inherit; border-radius: 999px; min-height: 36px; min-width: 36px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0 10px; gap: 4px; }
       .range { font-weight: 650; min-width: 9ch; }
 
       .members { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; padding: 4px 2px 12px; }
-      .member { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 12px; border-radius: 14px; border: 1px solid var(--sky-line); background: #fff; cursor: pointer; text-align: left; }
+      .member { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 12px; border-radius: 14px; border: 1px solid var(--sky-line); background: var(--sky-card); color: inherit; cursor: pointer; text-align: left; }
       .member.on { border-color: var(--c); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 45%, transparent); }
       .member.dim { opacity: .45; }
       .dot { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--c); color: #fff; font-weight: 700; font-size: .85rem; }
       .member-body { flex: 1; min-width: 0; }
       .member-name { display: flex; justify-content: space-between; font-weight: 650; font-size: .92rem; gap: 8px; }
       .member-name small { color: var(--sky-muted); font-weight: 500; }
-      .bar { height: 6px; border-radius: 99px; background: #edf0f4; margin-top: 6px; overflow: hidden; }
+      .bar { height: 6px; border-radius: 99px; background: var(--fh-surface-2, #edf0f4); margin-top: 6px; overflow: hidden; }
       .bar > i { display: block; height: 100%; background: var(--c); border-radius: 99px; }
 
-      .notice { padding: 14px 16px; border-radius: 14px; background: #fff7e8; color: #7a5212; margin-bottom: 12px; }
-      .notice.error { background: #fdecea; color: #8a2a20; }
+      .notice { padding: 14px 16px; border-radius: 14px; background: var(--fh-warn-bg, #fff7e8); color: var(--fh-warn-ink, #7a5212); margin-bottom: 12px; }
+      .notice.error { background: var(--fh-error-bg, #fdecea); color: var(--fh-error-ink, #8a2a20); }
 
-      .board { background: #fff; border: 1px solid var(--sky-line); border-radius: 18px; overflow: hidden; }
-      .week-head, .allday-row { display: grid; grid-template-columns: 56px repeat(7, minmax(0, 1fr)); }
-      .week-head { position: sticky; top: 0; z-index: 5; background: #fff; border-bottom: 1px solid var(--sky-line); }
+      .board { background: var(--sky-card); border: 1px solid var(--sky-line); border-radius: 18px; overflow: hidden; }
+      .week-head, .allday-row, .grid { display: grid; grid-template-columns: 56px repeat(var(--days), minmax(0, 1fr)); }
+      .week-head { position: sticky; top: 0; z-index: 5; background: var(--sky-card); border-bottom: 1px solid var(--sky-line); }
       .week-head > div { padding: 10px 8px; border-left: 1px solid var(--sky-line); font-weight: 650; display: flex; align-items: center; gap: 6px; }
+      .week-head > div.clickable { cursor: pointer; }
       .week-head > div:first-child, .allday-row > div:first-child { border-left: 0; }
       .daynum { display: inline-grid; place-items: center; min-width: 26px; height: 26px; border-radius: 50%; font-size: .85rem; }
       .today .daynum { background: var(--sky-today); color: #fff; }
       .allday-row { border-bottom: 1px solid var(--sky-line); }
-      .allday-row > div { border-left: 1px solid var(--sky-line); padding: 4px; display: flex; flex-direction: column; gap: 3px; min-height: 28px; }
+      .allday-row > div { border-left: 1px solid var(--sky-line); padding: 4px; display: flex; flex-direction: column; gap: 3px; min-height: 28px; min-width: 0; }
       .allday-label { font-size: .7rem; color: var(--sky-muted); justify-content: center; align-items: center; }
       .scroll { max-height: calc(100vh - 250px); min-height: 420px; overflow-y: auto; }
-      .grid { display: grid; grid-template-columns: 56px repeat(7, minmax(0, 1fr)); position: relative; }
+      .grid { position: relative; }
       .hours { position: relative; }
       .hours span { position: absolute; right: 8px; transform: translateY(-50%); font-size: .7rem; color: var(--sky-muted); white-space: nowrap; }
       .col { position: relative; border-left: 1px solid var(--sky-line); background-image: linear-gradient(var(--sky-line) 1px, transparent 1px); background-size: 100% ${HOUR_PX}px; }
-      .col.today { background-color: #fbfcfe; }
+      .col.today { background-color: var(--fh-today-col, #fbfcfe); }
       .now { position: absolute; left: 0; right: 0; height: 2px; background: var(--sky-today); z-index: 3; }
       .now::before { content: ""; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--sky-today); }
 
-      .ev { position: absolute; border-radius: 10px; padding: 5px 7px; overflow: hidden; cursor: pointer; border: 0; text-align: left; font: inherit; color: var(--sky-ink); background: var(--bg); box-shadow: inset 3px 0 0 var(--c); display: flex; flex-direction: column; gap: 1px; min-height: 0; }
+      .ev { position: absolute; border-radius: 10px; padding: 5px 7px; overflow: hidden; cursor: pointer; border: 0; text-align: left; font: inherit; color: var(--fh-event-ink, #2f3a4a); background: var(--bg); box-shadow: inset 3px 0 0 var(--c); display: flex; flex-direction: column; gap: 1px; min-height: 0; }
       .ev:hover { filter: brightness(.97); }
       .ev .t { font-weight: 650; font-size: .8rem; line-height: 1.2; padding-right: var(--bp, 0); }
       .ev.short .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .ev .w { font-size: .7rem; color: var(--fh-event-ink, #5b6676); opacity: .75; }
       .ev .badges { position: absolute; top: 4px; right: 4px; margin: 0; flex-wrap: nowrap; }
-      .ev .w { font-size: .7rem; color: #5b6676; }
       .badges { display: flex; gap: 2px; flex-wrap: wrap; margin-top: auto; justify-content: flex-end; }
-      .badge { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: .6rem; font-weight: 700; color: #fff; background: var(--c); border: 1.5px solid #fff; }
-      .chip { border: 0; border-radius: 8px; padding: 3px 7px; font: inherit; font-size: .75rem; font-weight: 600; text-align: left; cursor: pointer; background: var(--bg); box-shadow: inset 3px 0 0 var(--c); color: var(--sky-ink); display: flex; gap: 4px; align-items: center; min-height: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .badge { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: .6rem; font-weight: 700; color: #fff; background: var(--c); border: 1.5px solid var(--sky-card); }
+      .chip { border: 0; border-radius: 8px; padding: 3px 7px; font: inherit; font-size: .75rem; font-weight: 600; text-align: left; cursor: pointer; background: var(--bg); box-shadow: inset 3px 0 0 var(--c); color: var(--fh-event-ink, #2f3a4a); display: flex; gap: 4px; align-items: center; min-height: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
       .chip .badges { margin: 0 0 0 auto; flex-wrap: nowrap; }
+      .chip.dinner { background: var(--dinner-bg); color: var(--dinner-ink); box-shadow: inset 3px 0 0 var(--dinner-gold); font-family: Georgia, "Times New Roman", serif; font-style: italic; --mdc-icon-size: 14px; }
+      .chip.dinner ha-icon { color: var(--dinner-gold); flex: none; }
+      .chip .rep { --mdc-icon-size: 12px; opacity: .6; flex: none; }
 
       .month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
       .month .dow { padding: 8px; font-size: .75rem; color: var(--sky-muted); font-weight: 650; border-bottom: 1px solid var(--sky-line); }
-      .cell { min-height: 108px; border-left: 1px solid var(--sky-line); border-bottom: 1px solid var(--sky-line); padding: 4px; display: flex; flex-direction: column; gap: 3px; }
+      .cell { min-height: 108px; border-left: 1px solid var(--sky-line); border-bottom: 1px solid var(--sky-line); padding: 4px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
       .cell:nth-child(7n + 1) { border-left: 0; }
-      .cell.other { background: #fafbfc; color: var(--sky-muted); }
-      .cell .daynum { align-self: flex-start; }
+      .cell.other { background: var(--fh-surface-3, #fafbfc); color: var(--sky-muted); }
+      .cell .daynum { align-self: flex-start; cursor: pointer; }
       .cell .more { font-size: .7rem; color: var(--sky-muted); padding-left: 4px; }
 
       .fab { position: fixed; right: 28px; bottom: 28px; width: 58px; height: 58px; border-radius: 50%; border: 0; background: var(--sky-fab); color: #fff; box-shadow: 0 8px 24px rgba(126, 87, 194, .4); cursor: pointer; display: grid; place-items: center; z-index: 20; --mdc-icon-size: 30px; }
@@ -202,27 +275,38 @@ export class FamilyCalendarView extends LitElement {
       .detail-meta { display: flex; gap: 6px; align-items: center; color: var(--sky-muted); font-size: .9rem; margin: 2px 0; }
       .desc { white-space: pre-wrap; margin: 10px 0; font-size: .92rem; }
       .people { display: flex; flex-wrap: wrap; gap: 8px; }
-      .person { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px 6px 6px; border-radius: 999px; border: 1px solid var(--sky-line); cursor: pointer; background: #fff; min-height: 40px; }
-      .person.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 18%, white); }
+      .person { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px 6px 6px; border-radius: 999px; border: 1px solid var(--sky-line); cursor: pointer; background: var(--sky-card); min-height: 40px; margin: 0; color: inherit; font-size: .95rem; }
+      .person.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 22%, var(--fh-tint-base, white)); }
       .person .dot { width: 26px; height: 26px; font-size: .75rem; }
       .person input { display: none; }
       .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
       .check { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; color: inherit; font-size: .95rem; }
       .check input { width: auto; }
+      .weekdays { display: flex; gap: 6px; margin-top: 8px; }
+      .weekdays button { width: 38px; height: 38px; min-height: 0; border-radius: 50%; border: 1px solid var(--sky-line); background: var(--sky-card); cursor: pointer; font-weight: 650; padding: 0; }
+      .weekdays button.on { background: var(--sky-fab); border-color: var(--sky-fab); color: #fff; }
       .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
       .actions .left { margin-right: auto; }
-      button.danger { background: #fff; color: #b3261e; border: 1px solid #f0c4bf; border-radius: 10px; padding: 10px 16px; cursor: pointer; }
-      button.ghost { background: #fff; border: 1px solid var(--sky-line); border-radius: 10px; padding: 10px 16px; cursor: pointer; }
-      .err { color: #b3261e; margin-top: 10px; }
+      button.danger { background: var(--sky-card); color: var(--fh-danger, #b3261e); border: 1px solid var(--fh-danger-line, #f0c4bf); border-radius: 10px; padding: 10px 16px; cursor: pointer; }
+      button.ghost { background: var(--sky-card); color: inherit; border: 1px solid var(--sky-line); border-radius: 10px; padding: 10px 16px; cursor: pointer; }
+      .err { color: var(--fh-danger, #b3261e); margin-top: 10px; }
+      h3.section { margin: 20px 0 6px; font-size: .95rem; }
       .cal-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
       .cal-list label { display: flex; gap: 10px; align-items: center; margin: 0; padding: 8px 4px; color: inherit; font-size: .95rem; }
       .cal-list input { width: auto; }
+      .color-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--sky-line); flex-wrap: wrap; }
+      .color-row:last-child { border-bottom: 0; }
+      .color-row .who { display: flex; align-items: center; gap: 8px; min-width: 110px; font-weight: 600; }
+      .swatches { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+      .swatch { width: 26px; height: 26px; min-height: 0; border-radius: 50%; border: 2px solid transparent; background: var(--c); cursor: pointer; padding: 0; }
+      .swatch.on { border-color: var(--sky-ink); box-shadow: 0 0 0 2px var(--sky-card) inset; }
+      .swatches input[type="color"] { width: 32px; height: 28px; padding: 0; border: 0; background: none; cursor: pointer; }
 
       @media (max-width: 760px) {
-        .week-head, .allday-row, .grid { grid-template-columns: 40px repeat(7, minmax(0, 1fr)); }
+        .week-head, .allday-row, .grid { grid-template-columns: 40px repeat(var(--days), minmax(0, 1fr)); }
         .week-head > div { flex-direction: column; gap: 0; padding: 6px 2px; font-size: .75rem; }
-        .ev { padding: 3px 4px; }
-        .ev .w, .badges { display: none; }
+        :host([view="week"]) .ev { padding: 3px 4px; }
+        :host([view="week"]) .ev .w, :host([view="week"]) .badges { display: none; }
         .cell { min-height: 72px; }
         .members { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .fab { right: 18px; bottom: 84px; }
@@ -243,6 +327,7 @@ export class FamilyCalendarView extends LitElement {
   }
 
   protected willUpdate(changed: PropertyValues): void {
+    if (changed.has("_view")) this.setAttribute("view", this._view);
     if (changed.has("extras") || changed.has("_view") || changed.has("_anchor")) {
       void this._load(false);
     }
@@ -254,11 +339,31 @@ export class FamilyCalendarView extends LitElement {
     return this.me?.role === "parent";
   }
 
+  private get _isAdmin(): boolean {
+    return this._isParent && this.me?.permissionLevel === "admin";
+  }
+
   private get _members(): MemberRosterEntry[] {
     return this.hustleState.memberRoster.filter((m) => m.active);
   }
 
+  /** The calendars read for the grid: the family ones, plus the dinners
+   * calendar when dinners are shown and it isn't already a family one. */
+  private _sources(): { all: string[]; dinners: string | null } {
+    const s = this.extras.calendarSettings;
+    const family = s.familyCalendars;
+    const dinners =
+      s.showDinners && s.dinnersCalendar && !family.includes(s.dinnersCalendar)
+        ? s.dinnersCalendar
+        : null;
+    return { all: dinners ? [...family, dinners] : family, dinners };
+  }
+
   private _range(): { start: Date; end: Date; days: Date[] } {
+    if (this._view === "day") {
+      const start = startOfDay(this._anchor);
+      return { start, end: addDays(start, 1), days: [start] };
+    }
     if (this._view === "week") {
       const start = startOfWeek(this._anchor);
       const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
@@ -271,19 +376,20 @@ export class FamilyCalendarView extends LitElement {
   }
 
   private async _load(force: boolean): Promise<void> {
-    const calendars = this.extras?.calendarSettings.familyCalendars ?? [];
+    if (!this.extras) return;
+    const sources = this._sources().all;
     const { start, end } = this._range();
-    const key = `${dateKey(start)}|${dateKey(end)}|${calendars.join(",")}`;
+    const key = `${dateKey(start)}|${dateKey(end)}|${sources.join(",")}`;
     if (!force && key === this._loadedKey) return;
     this._loadedKey = key;
-    if (!calendars.length) {
+    if (!sources.length) {
       this._events = [];
       this._errors = [];
       return;
     }
     this._loading = true;
     try {
-      const result = await familyApi.events(dateKey(start), dateKey(end));
+      const result = await familyApi.events(dateKey(start), dateKey(end), sources);
       if (key !== this._loadedKey) return; // a newer range is loading
       this._events = result.events;
       this._errors = result.errors;
@@ -294,10 +400,18 @@ export class FamilyCalendarView extends LitElement {
     }
   }
 
+  private _isDinner(e: FamilyEvent): boolean {
+    return e.entityId === this._sources().dinners;
+  }
+
+  /** Member filter: dinners are everyone's, so they always stay. */
   private _visible(events: FamilyEvent[]): FamilyEvent[] {
     if (!this._filterMemberId) return events;
     return events.filter(
-      (e) => e.forMemberId === this._filterMemberId || e.attendeeIds.includes(this._filterMemberId)
+      (e) =>
+        this._isDinner(e) ||
+        e.forMemberId === this._filterMemberId ||
+        e.attendeeIds.includes(this._filterMemberId)
     );
   }
 
@@ -313,18 +427,23 @@ export class FamilyCalendarView extends LitElement {
 
   private _step(delta: number): void {
     const a = this._anchor;
-    this._anchor =
-      this._view === "week" ? addDays(a, delta * 7) : new Date(a.getFullYear(), a.getMonth() + delta, 1);
+    if (this._view === "day") this._anchor = addDays(a, delta);
+    else if (this._view === "week") this._anchor = addDays(a, delta * 7);
+    else this._anchor = new Date(a.getFullYear(), a.getMonth() + delta, 1);
+  }
+
+  private _openDay(day: Date): void {
+    this._anchor = day;
+    this._view = "day";
   }
 
   private _rangeLabel(): string {
+    if (this._view === "day") return longDate.format(this._anchor);
     if (this._view === "month") {
       return this._anchor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
     }
     const { start } = this._range();
-    const end = addDays(start, 6);
-    const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    return `${fmt(start)} – ${fmt(end)}`;
+    return `${shortDate.format(start)} – ${shortDate.format(addDays(start, 6))}`;
   }
 
   // ----------------------------------------------------------- dialogs
@@ -336,7 +455,7 @@ export class FamilyCalendarView extends LitElement {
     this._dialogError = "";
   }
 
-  private _toggle(list: string[], id: string): string[] {
+  private _toggle<T>(list: T[], id: T): T[] {
     return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
   }
 
@@ -369,45 +488,48 @@ export class FamilyCalendarView extends LitElement {
     );
   }
 
-  private _deleteEvent(): void {
+  /** `series` deletes every occurrence of a repeating event; otherwise
+   * only the one tapped. */
+  private _deleteEvent(series: boolean): void {
     const e = this._selected;
     if (!e?.uid) return;
-    const what = e.recurrenceId ? "this occurrence of" : "";
-    if (!window.confirm(`Delete ${what} "${e.summary}" from ${e.calendarName}? This also removes it from Google Calendar.`)) return;
+    const what = series ? `every occurrence of "${e.summary}"` : `"${e.summary}"${e.recurrenceId ? " on this day" : ""}`;
+    if (!window.confirm(`Delete ${what} from ${e.calendarName}? This also removes it from Google Calendar.`)) return;
     void this._run(
       () =>
         familyApi.call(this.hass, "delete_event", {
           entity_id: e.entityId,
           uid: e.uid,
-          ...(e.recurrenceId ? { recurrence_id: e.recurrenceId } : {}),
+          ...(!series && e.recurrenceId ? { recurrence_id: e.recurrenceId } : {}),
         }),
       () => (this._selected = null)
     );
   }
 
-  private _emptyDraft() {
-    const today = dateKey(new Date());
+  private _emptyDraft(day: Date = new Date()): Draft {
+    const key = dateKey(day);
     return {
       summary: "",
       allDay: false,
-      date: today,
-      endDate: today,
+      date: key,
+      endDate: key,
       startTime: "09:00",
       endTime: "10:00",
       calendar: "",
       forMemberId: "",
-      attendees: [] as string[],
+      attendees: [],
       location: "",
       description: "",
+      repeat: "none",
+      repeatDays: [day.getDay()],
+      repeatEnd: "never",
+      repeatUntil: dateKey(addDays(day, 90)),
+      repeatCount: 10,
     };
   }
 
   private _openAdd(day?: Date): void {
-    const draft = this._emptyDraft();
-    if (day) {
-      draft.date = dateKey(day);
-      draft.endDate = draft.date;
-    }
+    const draft = this._emptyDraft(day ?? (this._view === "day" ? this._anchor : new Date()));
     draft.calendar =
       this.extras.calendarSettings.defaultCalendar ?? this.extras.calendarSettings.familyCalendars[0] ?? "";
     this._draft = draft;
@@ -415,11 +537,66 @@ export class FamilyCalendarView extends LitElement {
     this._adding = true;
   }
 
+  /** The draft's repeat choices as an iCalendar RRULE, or null. */
+  private _rrule(d: Draft): string | null {
+    if (d.repeat === "none") return null;
+    const parts: string[] = [];
+    switch (d.repeat) {
+      case "daily":
+        parts.push("FREQ=DAILY");
+        break;
+      case "weekdays":
+        parts.push("FREQ=WEEKLY", "BYDAY=MO,TU,WE,TH,FR");
+        break;
+      case "weekly":
+      case "biweekly": {
+        parts.push("FREQ=WEEKLY");
+        if (d.repeat === "biweekly") parts.push("INTERVAL=2");
+        const days = d.repeatDays.length ? d.repeatDays : [parseKey(d.date).getDay()];
+        parts.push(`BYDAY=${[...days].sort().map((i) => RRULE_DAYS[i]).join(",")}`);
+        break;
+      }
+      case "monthly":
+        parts.push("FREQ=MONTHLY");
+        break;
+      case "yearly":
+        parts.push("FREQ=YEARLY");
+        break;
+    }
+    if (d.repeatEnd === "count") parts.push(`COUNT=${Math.max(1, d.repeatCount)}`);
+    if (d.repeatEnd === "until") {
+      const compact = d.repeatUntil.replace(/-/g, "");
+      if (d.allDay) {
+        parts.push(`UNTIL=${compact}`);
+      } else {
+        // Timed events need UNTIL in UTC: the end of that local day.
+        const end = new Date(`${d.repeatUntil}T23:59:59`);
+        parts.push(`UNTIL=${end.toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "")}`);
+      }
+    }
+    return parts.join(";");
+  }
+
   private _saveNew(): void {
     const d = this._draft;
     if (!d.summary.trim()) {
       this._dialogError = "Give the event a name.";
       return;
+    }
+    let startDate = d.date;
+    let endDate = d.endDate < d.date ? d.date : d.endDate;
+    // A weekly repeat starts on its first chosen weekday - otherwise
+    // Google also shows the start date itself as an extra occurrence.
+    const days =
+      d.repeat === "weekdays" ? [1, 2, 3, 4, 5]
+      : d.repeat === "weekly" || d.repeat === "biweekly" ? d.repeatDays
+      : [];
+    if (days.length) {
+      const first = parseKey(startDate);
+      let shift = 0;
+      while (!days.includes(addDays(first, shift).getDay())) shift += 1;
+      startDate = dateKey(addDays(first, shift));
+      endDate = dateKey(addDays(parseKey(endDate), shift));
     }
     const data: Record<string, unknown> = {
       summary: d.summary.trim(),
@@ -430,13 +607,21 @@ export class FamilyCalendarView extends LitElement {
     };
     if (d.calendar) data.entity_id = d.calendar;
     if (d.forMemberId) data.for_member_id = d.forMemberId;
+    const rule = this._rrule(d);
+    if (rule) data.rrule = rule;
     if (d.allDay) {
-      data.start = d.date;
+      data.start = startDate;
       // The dialog's end date is inclusive; the calendar's is exclusive.
-      data.end = dateKey(addDays(parseKey(d.endDate < d.date ? d.date : d.endDate), 1));
+      data.end = dateKey(addDays(parseKey(endDate), 1));
     } else {
-      data.start = new Date(`${d.date}T${d.startTime}`).toISOString();
-      data.end = new Date(`${d.date}T${d.endTime}`).toISOString();
+      const start = new Date(`${startDate}T${d.startTime}`);
+      const end = new Date(`${endDate}T${d.endTime}`);
+      if (end <= start) {
+        this._dialogError = "The event has to end after it starts.";
+        return;
+      }
+      data.start = start.toISOString();
+      data.end = end.toISOString();
     }
     void this._run(
       () => familyApi.call(this.hass, "create_event", data),
@@ -446,7 +631,11 @@ export class FamilyCalendarView extends LitElement {
 
   private async _openSettings(): Promise<void> {
     const s = this.extras.calendarSettings;
-    this._settingsDraft = { family: [...s.familyCalendars], defaultCalendar: s.defaultCalendar ?? "" };
+    this._settingsDraft = {
+      family: [...s.familyCalendars],
+      defaultCalendar: s.defaultCalendar ?? "",
+      showDinners: s.showDinners,
+    };
     this._dialogError = "";
     this._settingsOpen = true;
     try {
@@ -467,9 +656,21 @@ export class FamilyCalendarView extends LitElement {
         familyApi.call(this.hass, "update_calendar_settings", {
           family_calendars: draft.family,
           default_calendar: defaultCalendar,
+          show_dinners: draft.showDinners,
         }),
       () => (this._settingsOpen = false)
     );
+  }
+
+  /** Saved straight away, like Skylight's profile colors. "" goes back to
+   * the automatic pastel. */
+  private async _setColor(member: MemberRosterEntry, color: string): Promise<void> {
+    this._dialogError = "";
+    try {
+      await familyApi.call(this.hass, "update_member", { member_id: member.id, avatar_color: color });
+    } catch (err) {
+      this._dialogError = (err as Error).message;
+    }
   }
 
   // ------------------------------------------------------------ render
@@ -484,9 +685,17 @@ export class FamilyCalendarView extends LitElement {
   }
 
   private _chip(e: FamilyEvent) {
+    if (this._isDinner(e)) {
+      return html`<button class="chip dinner" @click=${() => this._openEvent(e)} title=${`Dinner: ${e.summary}`}>
+        <ha-icon icon="mdi:silverware-fork-knife"></ha-icon>${e.summary}
+      </button>`;
+    }
     const c = this._color(e);
+    const repeats = Boolean(e.rrule || e.recurrenceId);
     return html`<button class="chip" style="--c:${c};--bg:${tint(c, 0.32)}" @click=${() => this._openEvent(e)} title=${`${e.summary} · ${timeRange(e)}`}>
-      ${e.allDay ? "" : html`<span>${timeFmt.format(eventStart(e))}</span>`} ${e.summary} ${this._badges(e)}
+      ${e.allDay ? "" : html`<span>${timeFmt.format(eventStart(e))}</span>`} ${e.summary}
+      ${repeats ? html`<ha-icon class="rep" icon="mdi:repeat"></ha-icon>` : nothing}
+      ${this._badges(e)}
     </button>`;
   }
 
@@ -518,6 +727,8 @@ export class FamilyCalendarView extends LitElement {
     let first = DEFAULT_FIRST_HOUR;
     let last = DEFAULT_LAST_HOUR;
     for (const e of timed) {
+      const days = eventDays(e);
+      if (days.length > 1) return [0, 24]; // spans midnight - show the whole day
       first = Math.min(first, eventStart(e).getHours());
       const end = eventEnd(e);
       last = Math.max(last, end.getHours() + (end.getMinutes() ? 1 : 0));
@@ -539,7 +750,7 @@ export class FamilyCalendarView extends LitElement {
       .sort((a, b) => a.s - b.s || b.e - a.e);
 
     const placed: Placed[] = [];
-    let cluster: typeof placed = [];
+    let cluster: Placed[] = [];
     let laneEnds: number[] = [];
     let clusterEnd = 0;
     const flush = () => {
@@ -571,23 +782,32 @@ export class FamilyCalendarView extends LitElement {
     return placed;
   }
 
-  private _weekView(events: FamilyEvent[]) {
+  /** The time-grid for the Day view (one column) and Week view (seven). */
+  private _gridView(events: FamilyEvent[]) {
     const { days } = this._range();
+    const single = days.length === 1;
     const todayKey = dateKey(this._now);
-    const allDay = events.filter((e) => e.allDay);
+    const allDay = events
+      .filter((e) => e.allDay)
+      .sort((a, b) => Number(this._isDinner(b)) - Number(this._isDinner(a)));
     const timed = events.filter((e) => !e.allDay);
     const [firstHour, lastHour] = this._hourBounds(timed);
     const hours = Array.from({ length: lastHour - firstHour }, (_, i) => firstHour + i);
     const height = hours.length * HOUR_PX;
     const nowTop =
       ((this._now.getHours() + this._now.getMinutes() / 60 - firstHour) / (lastHour - firstHour)) * height;
+    const maxBadges = (lanes: number) => (single ? 6 : lanes > 1 ? 1 : 3);
 
-    return html`<div class="board"><div class="scroll">
+    return html`<div class="board" style="--days:${days.length}"><div class="scroll">
       <div class="week-head">
         <div></div>
         ${days.map(
-          (d) => html`<div class=${dateKey(d) === todayKey ? "today" : ""}>
-            <span>${d.toLocaleDateString(undefined, { weekday: "short" })}</span>
+          (d) => html`<div
+            class="${dateKey(d) === todayKey ? "today" : ""} ${single ? "" : "clickable"}"
+            title=${single ? "" : "Open this day"}
+            @click=${() => !single && this._openDay(d)}
+          >
+            <span>${d.toLocaleDateString(undefined, { weekday: single ? "long" : "short" })}</span>
             <span class="daynum">${d.getDate()}</span>
           </div>`
         )}
@@ -617,9 +837,9 @@ export class FamilyCalendarView extends LitElement {
               ${this._place(d, dayEvents, firstHour, lastHour).map((p) => {
                 const c = this._color(p.event);
                 const width = 100 / p.lanes;
-                // Side-by-side lanes are narrow - one badge there.
-                const maxBadges = p.lanes > 1 ? 1 : 3;
-                const badgeRoom = Math.min(p.event.attendeeIds.length, maxBadges) * 20;
+                const badges = maxBadges(p.lanes);
+                const badgeRoom = Math.min(p.event.attendeeIds.length, badges) * 20;
+                const repeats = Boolean(p.event.rrule || p.event.recurrenceId);
                 return html`<button
                   class="ev ${p.height < 40 ? "short" : ""}"
                   style="top:${p.top}px;height:${p.height}px;left:calc(${p.lane * width}% + 3px);width:calc(${width}% - 6px);--c:${c};--bg:${tint(c, 0.32)};--bp:${badgeRoom}px"
@@ -627,8 +847,10 @@ export class FamilyCalendarView extends LitElement {
                   @click=${() => this._openEvent(p.event)}
                 >
                   <span class="t">${p.event.summary}</span>
-                  ${p.height > 34 ? html`<span class="w">${timeRange(p.event)}</span>` : nothing}
-                  ${this._badges(p.event, maxBadges)}
+                  ${p.height > 34
+                    ? html`<span class="w">${timeRange(p.event)}${repeats ? " · repeats" : ""}${single && p.event.location ? ` · ${p.event.location}` : ""}</span>`
+                    : nothing}
+                  ${this._badges(p.event, badges)}
                 </button>`;
               })}
             </div>`;
@@ -645,14 +867,18 @@ export class FamilyCalendarView extends LitElement {
     for (const e of events) {
       for (const key of eventDays(e)) byDay.set(key, [...(byDay.get(key) ?? []), e]);
     }
+    const order = (a: FamilyEvent, b: FamilyEvent) =>
+      Number(this._isDinner(b)) - Number(this._isDinner(a)) ||
+      Number(b.allDay) - Number(a.allDay) ||
+      a.start.localeCompare(b.start);
     return html`<div class="board">
       <div class="month">
         ${days.slice(0, 7).map((d) => html`<div class="dow">${d.toLocaleDateString(undefined, { weekday: "short" })}</div>`)}
         ${days.map((d) => {
           const key = dateKey(d);
-          const list = (byDay.get(key) ?? []).sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.start.localeCompare(b.start));
+          const list = (byDay.get(key) ?? []).sort(order);
           return html`<div class="cell ${d.getMonth() !== month ? "other" : ""} ${key === todayKey ? "today" : ""}" @dblclick=${() => this._isParent && this._openAdd(d)}>
-            <span class="daynum">${d.getDate()}</span>
+            <span class="daynum" title="Open this day" @click=${() => this._openDay(d)}>${d.getDate()}</span>
             ${list.slice(0, 3).map((e) => this._chip(e))}
             ${list.length > 3 ? html`<span class="more">+${list.length - 3} more</span>` : nothing}
           </div>`;
@@ -683,37 +909,97 @@ export class FamilyCalendarView extends LitElement {
   private _eventDialog() {
     const e = this._selected;
     if (!e) return nothing;
-    const when = e.allDay
-      ? eventStart(e).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })
-      : `${eventStart(e).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} · ${timeRange(e)}`;
-    return html`<hustle-dialog open .heading=${e.summary} @hustle-dialog-closed=${() => (this._selected = null)}>
+    const dinner = this._isDinner(e);
+    const repeats = Boolean(e.rrule || e.recurrenceId);
+    const day = longDate.format(eventStart(e));
+    const when = e.allDay && timeRange(e) === "All day" ? day : `${day} · ${timeRange(e)}`;
+    return html`<hustle-dialog open .heading=${dinner ? `Dinner: ${e.summary}` : e.summary} @hustle-dialog-closed=${() => (this._selected = null)}>
       <p class="detail-time">${when}</p>
-      <div class="detail-meta"><ha-icon icon="mdi:calendar"></ha-icon>${e.calendarName}${e.rrule || e.recurrenceId ? " · repeats" : ""}</div>
+      <div class="detail-meta"><ha-icon icon="mdi:calendar"></ha-icon>${e.calendarName}</div>
+      ${repeats ? html`<div class="detail-meta"><ha-icon icon="mdi:repeat"></ha-icon>${describeRepeat(e.rrule)}</div>` : nothing}
       ${e.location ? html`<div class="detail-meta"><ha-icon icon="mdi:map-marker"></ha-icon>${e.location}</div>` : nothing}
       ${e.description ? html`<p class="desc">${e.description}</p>` : nothing}
-      ${e.uid
-        ? html`
-            <label>Who it's for</label>
-            ${this._forSelect(this._tagFor, (v) => (this._tagFor = v))}
-            <label>Who's attending</label>
-            ${this._people(this._tagAttendees, (id) => (this._tagAttendees = this._toggle(this._tagAttendees, id)))}
-            ${e.rrule || e.recurrenceId ? html`<p class="detail-meta">Tags apply to every occurrence.</p>` : nothing}
-          `
-        : html`<p class="detail-meta">This calendar doesn't give its events ids, so they can't be tagged.</p>`}
+      ${dinner
+        ? html`<p class="detail-meta">Planned on the Meals tab.</p>`
+        : e.uid
+          ? html`
+              <label>Who it's for</label>
+              ${this._forSelect(this._tagFor, (v) => (this._tagFor = v))}
+              <label>Who's attending</label>
+              ${this._people(this._tagAttendees, (id) => (this._tagAttendees = this._toggle(this._tagAttendees, id)))}
+              ${repeats ? html`<p class="detail-meta">Tags apply to every occurrence.</p>` : nothing}
+            `
+          : html`<p class="detail-meta">This calendar doesn't give its events ids, so they can't be tagged.</p>`}
       ${this._dialogError ? html`<p class="err">${this._dialogError}</p>` : nothing}
       <div class="actions">
-        ${this._isParent && e.uid ? html`<button class="danger left" ?disabled=${this._busy} @click=${this._deleteEvent}>Delete</button>` : nothing}
+        ${this._isParent && e.uid && !dinner
+          ? repeats
+            ? html`<button class="danger left" ?disabled=${this._busy} @click=${() => this._deleteEvent(false)}>Delete this one</button>
+                <button class="danger" ?disabled=${this._busy} @click=${() => this._deleteEvent(true)}>Delete all</button>`
+            : html`<button class="danger left" ?disabled=${this._busy} @click=${() => this._deleteEvent(false)}>Delete</button>`
+          : nothing}
         <button class="ghost" @click=${() => (this._selected = null)}>Close</button>
-        ${this._isParent && e.uid ? html`<button class="primary" ?disabled=${this._busy} @click=${this._saveTags}>Save</button>` : nothing}
+        ${this._isParent && e.uid && !dinner ? html`<button class="primary" ?disabled=${this._busy} @click=${this._saveTags}>Save</button>` : nothing}
       </div>
     </hustle-dialog>`;
+  }
+
+  private _repeatFields(d: Draft, set: (patch: Partial<Draft>) => void) {
+    const weekly = d.repeat === "weekly" || d.repeat === "biweekly";
+    return html`
+      <label>Repeat</label>
+      <select @change=${(e: Event) => set({ repeat: (e.target as HTMLSelectElement).value as Repeat })}>
+        ${(
+          [
+            ["none", "Does not repeat"],
+            ["daily", "Every day"],
+            ["weekdays", "Every weekday (Mon–Fri)"],
+            ["weekly", "Every week"],
+            ["biweekly", "Every 2 weeks"],
+            ["monthly", "Every month"],
+            ["yearly", "Every year"],
+          ] as Array<[Repeat, string]>
+        ).map(([value, label]) => html`<option value=${value} ?selected=${d.repeat === value}>${label}</option>`)}
+      </select>
+      ${weekly
+        ? html`<div class="weekdays" role="group" aria-label="Repeat on">
+            ${DAY_LETTERS.map(
+              (letter, i) => html`<button
+                class=${d.repeatDays.includes(i) ? "on" : ""}
+                aria-pressed=${d.repeatDays.includes(i) ? "true" : "false"}
+                title=${new Date(2026, 0, 4 + i).toLocaleDateString(undefined, { weekday: "long" })}
+                @click=${() => set({ repeatDays: this._toggle(d.repeatDays, i) })}
+              >${letter}</button>`
+            )}
+          </div>`
+        : nothing}
+      ${d.repeat !== "none"
+        ? html`<div class="row2">
+            <div>
+              <label>Stop repeating</label>
+              <select @change=${(e: Event) => set({ repeatEnd: (e.target as HTMLSelectElement).value as RepeatEnd })}>
+                <option value="never" ?selected=${d.repeatEnd === "never"}>Never</option>
+                <option value="until" ?selected=${d.repeatEnd === "until"}>On a date</option>
+                <option value="count" ?selected=${d.repeatEnd === "count"}>After a number of times</option>
+              </select>
+            </div>
+            <div>
+              ${d.repeatEnd === "until"
+                ? html`<label>Last day</label><input type="date" .value=${d.repeatUntil} @input=${(e: Event) => set({ repeatUntil: (e.target as HTMLInputElement).value })} />`
+                : d.repeatEnd === "count"
+                  ? html`<label>Times</label><input type="number" min="1" .value=${String(d.repeatCount)} @input=${(e: Event) => set({ repeatCount: Number((e.target as HTMLInputElement).value) || 1 })} />`
+                  : nothing}
+            </div>
+          </div>`
+        : nothing}
+    `;
   }
 
   private _addDialog() {
     if (!this._adding) return nothing;
     const d = this._draft;
-    const set = (patch: Partial<typeof d>) => (this._draft = { ...this._draft, ...patch });
-    const input = (key: keyof typeof d) => (ev: Event) => set({ [key]: (ev.target as HTMLInputElement).value });
+    const set = (patch: Partial<Draft>) => (this._draft = { ...this._draft, ...patch });
+    const input = (key: keyof Draft) => (ev: Event) => set({ [key]: (ev.target as HTMLInputElement).value } as Partial<Draft>);
     const family = this.extras.calendarSettings.familyCalendars;
     return html`<hustle-dialog open heading="New event" @hustle-dialog-closed=${() => (this._adding = false)}>
       <label>Title</label>
@@ -721,14 +1007,24 @@ export class FamilyCalendarView extends LitElement {
       <label class="check"><input type="checkbox" .checked=${d.allDay} @change=${(ev: Event) => set({ allDay: (ev.target as HTMLInputElement).checked })} />All day</label>
       ${d.allDay
         ? html`<div class="row2">
-            <div><label>From</label><input type="date" .value=${d.date} @input=${input("date")} /></div>
-            <div><label>Through</label><input type="date" .value=${d.endDate} @input=${input("endDate")} /></div>
+            <div><label>From</label><input type="date" .value=${d.date} @input=${(ev: Event) => {
+              const date = (ev.target as HTMLInputElement).value;
+              set({ date, endDate: d.endDate < date ? date : d.endDate });
+            }} /></div>
+            <div><label>Through</label><input type="date" .value=${d.endDate} min=${d.date} @input=${input("endDate")} /></div>
           </div>`
-        : html`<label>Date</label><input type="date" .value=${d.date} @input=${input("date")} />
+        : html`<div class="row2">
+              <div><label>Starts</label><input type="date" .value=${d.date} @input=${(ev: Event) => {
+                const date = (ev.target as HTMLInputElement).value;
+                set({ date, endDate: d.endDate < date ? date : d.endDate });
+              }} /></div>
+              <div><label>&nbsp;</label><input type="time" .value=${d.startTime} @input=${input("startTime")} /></div>
+            </div>
             <div class="row2">
-              <div><label>Starts</label><input type="time" .value=${d.startTime} @input=${input("startTime")} /></div>
-              <div><label>Ends</label><input type="time" .value=${d.endTime} @input=${input("endTime")} /></div>
+              <div><label>Ends</label><input type="date" .value=${d.endDate} min=${d.date} @input=${input("endDate")} /></div>
+              <div><label>&nbsp;</label><input type="time" .value=${d.endTime} @input=${input("endTime")} /></div>
             </div>`}
+      ${this._repeatFields(d, set)}
       ${family.length > 1
         ? html`<label>Calendar</label>
             <select @change=${input("calendar")}>
@@ -751,11 +1047,27 @@ export class FamilyCalendarView extends LitElement {
     </hustle-dialog>`;
   }
 
+  private _colorRows() {
+    return this._members.map((m) => {
+      const current = memberColor(this.hustleState.memberRoster, m.id);
+      return html`<div class="color-row">
+        <span class="who"><span class="dot" style="--c:${current}">${initials(m.haDisplayName)}</span>${m.haDisplayName}</span>
+        <span class="swatches">
+          ${PASTELS.map(
+            (c) => html`<button class="swatch ${current.toLowerCase() === c ? "on" : ""}" style="--c:${c}" aria-label="Use ${c}" @click=${() => this._setColor(m, c)}></button>`
+          )}
+          <input type="color" .value=${current} title="Any color" @change=${(e: Event) => this._setColor(m, (e.target as HTMLInputElement).value)} />
+        </span>
+      </div>`;
+    });
+  }
+
   private _settingsDialog() {
     if (!this._settingsOpen) return nothing;
     const draft = this._settingsDraft;
     const dinners = this.extras.calendarSettings.dinnersCalendar;
-    return html`<hustle-dialog open heading="Calendars" @hustle-dialog-closed=${() => (this._settingsOpen = false)}>
+    return html`<hustle-dialog open heading="Calendar settings" @hustle-dialog-closed=${() => (this._settingsOpen = false)}>
+      <h3 class="section">Calendars</h3>
       <p class="detail-meta">Pick which Home Assistant calendars show here. Your Google Calendar appears once Home Assistant's Google Calendar integration is set up.</p>
       <div class="cal-list">
         ${this._calendars.length === 0 && !this._dialogError ? html`<span class="detail-meta">Loading calendars…</span>` : nothing}
@@ -775,6 +1087,15 @@ export class FamilyCalendarView extends LitElement {
               )}
             </select>`
         : nothing}
+      <label class="check">
+        <input type="checkbox" .checked=${draft.showDinners} ?disabled=${!dinners} @change=${(e: Event) =>
+          (this._settingsDraft = { ...draft, showDinners: (e.target as HTMLInputElement).checked })} />
+        Show dinners from the Meals tab
+      </label>
+      ${!dinners ? html`<p class="detail-meta">Pick a Dinners calendar on the Meals tab first.</p>` : nothing}
+      <h3 class="section">Family colors</h3>
+      <p class="detail-meta">Each person's color, used for their events and everywhere else. Changes save straight away.</p>
+      ${this._colorRows()}
       ${this._dialogError ? html`<p class="err">${this._dialogError}</p>` : nothing}
       <div class="actions">
         <button class="ghost" @click=${() => (this._settingsOpen = false)}>Cancel</button>
@@ -785,35 +1106,36 @@ export class FamilyCalendarView extends LitElement {
 
   render() {
     if (!this.extras || !this.hustleState) return nothing;
-    const configured = this.extras.calendarSettings.familyCalendars.length > 0;
+    const configured = this._sources().all.length > 0;
     const events = this._visible(this._events);
+    const view = (v: View, label: string) =>
+      html`<button class=${this._view === v ? "on" : ""} @click=${() => (this._view = v)}>${label}</button>`;
     return html`
       <div class="top">
         <h1 class="family">${this.hustleState.householdName || "Our Family"}</h1>
         <span class="clock">${timeFmt.format(this._now)}</span>
         <div class="controls">
           <div class="seg" role="group" aria-label="Calendar view">
-            <button class=${this._view === "week" ? "on" : ""} @click=${() => (this._view = "week")}>Week</button>
-            <button class=${this._view === "month" ? "on" : ""} @click=${() => (this._view = "month")}>Month</button>
+            ${view("day", "Day")}${view("week", "Week")}${view("month", "Month")}
           </div>
           <button class="icon-btn" aria-label="Previous" @click=${() => this._step(-1)}><ha-icon icon="mdi:chevron-left"></ha-icon></button>
           <button class="icon-btn" @click=${() => (this._anchor = new Date())}>Today</button>
           <button class="icon-btn" aria-label="Next" @click=${() => this._step(1)}><ha-icon icon="mdi:chevron-right"></ha-icon></button>
           <span class="range">${this._rangeLabel()}${this._loading ? " …" : ""}</span>
-          ${this._isParent ? html`<button class="icon-btn" aria-label="Calendar settings" @click=${this._openSettings}><ha-icon icon="mdi:cog"></ha-icon></button>` : nothing}
+          ${this._isAdmin ? html`<button class="icon-btn" aria-label="Calendar settings" @click=${this._openSettings}><ha-icon icon="mdi:cog"></ha-icon></button>` : nothing}
         </div>
       </div>
       ${this._memberStrip()}
       ${!configured
         ? html`<div class="notice">
-            ${this._isParent
+            ${this._isAdmin
               ? html`No calendars picked yet. Tap the <ha-icon icon="mdi:cog"></ha-icon> to choose your family's Google Calendar.`
-              : html`A parent needs to pick the family calendar first.`}
+              : html`An admin parent needs to pick the family calendar first.`}
           </div>`
         : nothing}
       ${this._errors.map((e) => html`<div class="notice error">Couldn't read ${e}</div>`)}
-      ${this._view === "week" ? this._weekView(events) : this._monthView(events)}
-      ${this._isParent && configured
+      ${this._view === "month" ? this._monthView(events) : this._gridView(events)}
+      ${this._isParent && this.extras.calendarSettings.familyCalendars.length
         ? html`<button class="fab" aria-label="Add event" @click=${() => this._openAdd()}><ha-icon icon="mdi:plus"></ha-icon></button>`
         : nothing}
       ${this._eventDialog()} ${this._addDialog()} ${this._settingsDialog()}

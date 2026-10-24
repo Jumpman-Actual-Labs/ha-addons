@@ -10,7 +10,8 @@ through `todo.get_items` and writes through the other `todo.*` services.
 
 Any linked member can add, check off and remove items - kids included -
 since the whole family shops from it. Choosing the list is a parent's
-(`update_calendar_settings`, with the other HA entities the app uses).
+(`update_calendar_settings`, with the other HA entities the app uses -
+admin parents only).
 The Meals tab's grocery list feeds it through `shopping_add_items`.
 """
 from __future__ import annotations

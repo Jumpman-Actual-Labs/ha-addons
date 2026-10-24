@@ -3,11 +3,12 @@
 Your family's calendar, chores, meals and shopping list in one sidebar
 panel, laid out like a Skylight Calendar.
 
-- **Calendar**: your Google Calendar as a week or month grid. Tag each event
-  with who it's for (that sets its color) and who's attending (their
-  initials show on it). The strip across the top shows each person's chores
-  done today. Tap someone to see only their events. Parents add events with
-  the **+** button and tag one by tapping it.
+- **Calendar**: your Google Calendar as a day, week or month view, with
+  the Meals tab's dinners on the all-day row. Tag each event with who it's
+  for (that sets its color) and who's attending (their initials show on
+  it). The strip across the top shows each person's chores done today. Tap
+  someone to see only their events. Parents add events with the **+**
+  button, including multi-day and repeating ones, and tag one by tapping it.
 - **Chores**: everything Hustle did: chores and recurring chores, extra jobs
   (bounties), grades, behavior, paychecks and payroll, and reports.
 - **Meals**: this week's dinners board, the AI meal-plan wizard (Dinner
@@ -18,6 +19,10 @@ panel, laid out like a Skylight Calendar.
   as in the Home Assistant app and Assist ("add milk to the shopping
   list"). Everyone in the family can add items, check them off, rename
   them or remove them.
+
+Family Hustle has light and dark themes. **Auto** follows Home Assistant's
+dark mode; the button at the bottom of the menu switches between Auto,
+Light and Dark on each device.
 
 ## Requirements
 
@@ -56,7 +61,8 @@ panel, laid out like a Skylight Calendar.
    to their own Home Assistant account. Kids should have their own
    non-admin accounts. Family Hustle knows who's looking from the account
    they're signed in with, and kids only get the kid views.
-4. **Calendar › ⚙**: pick your Google Calendar(s).
+4. **Calendar › ⚙**: pick your Google Calendar(s) and each person's color.
+   The ⚙ settings on every tab are for parents with admin permission.
 5. **Meals › ⚙**: pick the Dinners calendar.
 6. **Shopping › ⚙**: change the to-do list, if you don't want Home
    Assistant's Shopping List.
