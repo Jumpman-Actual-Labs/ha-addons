@@ -1044,3 +1044,24 @@ async def test_meal_prep_dinners_are_marked(setup):
         [normalize_event(event, "calendar.dinners", "Dinners", {})], date(2026, 10, 24)
     )
     assert week[0]["meal_prep"] is True and week[0]["notes"] == "Big pot"
+
+
+async def test_edit_this_and_following(setup):
+    _coordinator, ha, call, _kid, uid = await _one_event(setup)
+    await call(
+        "update_event",
+        {
+            "entity_id": "calendar.family",
+            "uid": uid,
+            "recurrence_id": "20261103",
+            "recurrence_range": "THISANDFUTURE",
+            "summary": "Dentist",
+            "start": "2026-11-03T09:00:00-05:00",
+            "rrule": "FREQ=WEEKLY;BYDAY=TU",
+        },
+        ADMIN,
+    )
+    update = next(c for c in ha.commands if c["type"] == "calendar/event/update")
+    assert update["recurrence_id"] == "20261103"
+    assert update["recurrence_range"] == "THISANDFUTURE"
+    assert update["event"]["rrule"] == "FREQ=WEEKLY;BYDAY=TU"

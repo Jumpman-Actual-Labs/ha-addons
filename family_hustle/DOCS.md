@@ -8,7 +8,10 @@ panel, laid out like a Skylight Calendar.
   for (that sets its color) and who's attending (their initials show on
   it). The strip across the top shows each person's chores done today. Tap
   someone to see only their events. Parents add events with the **+**
-  button, including multi-day and repeating ones, and tag one by tapping it.
+  button, including multi-day and repeating ones, and tap one to tag, edit
+  or delete it. Workouts from Gains programs show too: tap one to set when
+  it starts (just that day, or every week), and it ends when Gains expects
+  the workout to be done.
   On a phone it looks like the iPhone Calendar app: each date has a colored
   bar showing who has events that day, and tapping a date lists its events.
 - **Chores**: everything Hustle did: chores and recurring chores, extra jobs
@@ -16,7 +19,8 @@ panel, laid out like a Skylight Calendar.
 - **Meals**, in two sections:
   - **This week**: the next seven dinners. Add one from a recipe or just
     type it, move or remove it, open its recipe, or have the AI plan the
-    week (Dinner Planning or Meal Prep). The grocery list from a plan sits
+    week (**Plan with AI**) or a batch dish (**Meal prep**). A meal-prep
+    batch gets its own card at the top, with its nights and recipe. The grocery list from a plan sits
     underneath. Check off what you already have and **Add to shopping
     list** sends the rest to the Shopping tab.
   - **Recipes**: the family recipe box. Search it, add and edit recipes
@@ -48,6 +52,8 @@ Light and Dark on each device.
 - The **Shopping List** integration (or any Home Assistant to-do list) for
   the Shopping tab. It uses `todo.shopping_list` unless a parent picks
   another list under Shopping › ⚙.
+- The **Gains** add-on (1.0.3 or newer), for program workouts on the
+  calendar. Optional.
 - An **OpenAI or Anthropic API key** for meal planning, and OpenAI for chore
   pictures. Optional: everything else works without one.
 

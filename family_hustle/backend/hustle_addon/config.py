@@ -42,6 +42,9 @@ class AddonConfig:
     # `<repository hash>-family-hustle` - Gains' is the same with `-gains`
     # (see workouts.py).
     hostname: str = ""
+    # Dev runs only: the Gains add-on's address, since there's no add-on
+    # network to find it on (HUSTLE_GAINS_URL).
+    gains_url: str = ""
 
     @property
     def store_path(self) -> Path:
@@ -73,4 +76,5 @@ def load_config() -> AddonConfig:
         core_api_url=os.environ.get("HUSTLE_CORE_API_URL", "http://supervisor/core"),
         dev_user_id=os.environ.get("HUSTLE_DEV_USER_ID", ""),
         hostname=os.environ.get("HOSTNAME", ""),
+        gains_url=os.environ.get("HUSTLE_GAINS_URL", ""),
     )

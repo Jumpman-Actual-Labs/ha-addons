@@ -50,7 +50,7 @@ async def main() -> None:
 
         calendar = FamilyCalendar(ha, coordinator)
         shopping_list = ShoppingList(ha, coordinator)
-        gains_url = gains_base_url(config.hostname)
+        gains_url = config.gains_url or gains_base_url(config.hostname)
         gains_workouts = Workouts(
             GainsClient(session, gains_url) if gains_url else None, coordinator
         )

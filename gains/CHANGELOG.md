@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.3
+
+- Program workouts can show on the Family Hustle calendar: Gains shares
+  each athlete's upcoming program sessions and how long it expects each to
+  take, with the Family Hustle add-on only.
+
 ## 1.0.2
 
 - Runs are switched off for now: no Runs tab, run builder, run plan card or

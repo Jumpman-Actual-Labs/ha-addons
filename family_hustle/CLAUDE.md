@@ -52,8 +52,13 @@ Add-on layers:
   `coordinator.event_tags`, keyed `<entity_id>|<uid>`, so every instance of
   a recurring event shares them. Which calendars to show, where new events
   go and the dinners calendar are in `coordinator.calendar_settings`.
-  Parents add, tag and delete; settings (`update_calendar_settings`) are
-  admin parents only; any linked member reads. `create_event` takes an
+  Parents add, edit (`update_event`), tag and delete; settings
+  (`update_calendar_settings`) are admin parents only; any linked member
+  reads. `update_event` uses `calendar/event/update` - one occurrence
+  (`recurrence_id`), that one and the rest (`recurrence_range`
+  THISANDFUTURE), or a one-off. If a calendar can't update, a one-off event
+  is deleted and re-added with its tags moved to the new uid; a series
+  never is. `create_event` takes an
   optional `rrule` (validated, passed through as the event's RRULE).
 - `meals.py`: Household's `ai_client.py` (prompts and schemas unchanged;
   OpenAI Structured Outputs, or Anthropic forced tool use) plus its
@@ -75,6 +80,18 @@ Add-on layers:
   meals.py's `_generate_json` to complete a recipe from its name plus any
   fields already written (`known_fields`), which the prompt says to keep
   and which are put back over the reply regardless. It saves nothing.
+- `workouts.py`: Gains program workouts on the calendar. `GainsClient`
+  calls the Gains add-on's `internal/schedule` over Supervisor's add-on
+  network (`<prefix>-gains:8099`, derived from this container's
+  `<prefix>-family-hustle` hostname; `HUSTLE_GAINS_URL` overrides it for
+  dev runs). Gains gates that route to this add-on's address. Each workout
+  becomes an event (`entity_id` "gains", `uid` program|occurrence, plus a
+  `workout` block) for the member whose `ha_user_id` matches the athlete.
+  Start times live in `coordinator.workout_times`: `once`
+  (program|occurrence) beats `weekly` (program|session template). With no
+  start time a workout is all-day; with one it lasts Gains' `minutes`.
+  `set_workout_time` is for the athlete or any parent and looks the workout
+  up on Gains first. No Gains means no workouts, not an error.
 - `states.py`: the panel's read model. These are the exact payloads of the
   integration's `sensor.py` (`hustle_key`/`member_id`/`chore_definition_id`/
   `chore_assignment_id`/`bounty_id` markers), plus `calendar_settings`,
@@ -142,7 +159,11 @@ integration. `test_addon.py` covers the add-on layers against a fake HA.
   gets "Get recipe", which opens the editor and has the AI write it.
   Household's AI planner wizard lives here as a dialog (same steps and
   rules). The persisted grocery list is a card with "Add to shopping list".
-  Three or more consecutive days with the same dish read as Meal Prep.
+  Meal Prep dinners are marked when scheduled: the description starts
+  with `meals.MEAL_PREP_MARKER`, which `dinner_week` strips and reports as
+  `meal_prep`. They get a batch card at the top. Older unmarked ones count
+  when the same dish runs 3+ nights. "Meal prep" opens the planner
+  straight at its details.
 - `views/recipes-view.ts`: the recipe box. It has a searchable card grid, a
   recipe page (with plan for a night, add ingredients to the shopping list,
   edit, delete), and the editor. "Fill with AI" at the bottom sends the

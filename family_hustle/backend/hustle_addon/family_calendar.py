@@ -243,9 +243,11 @@ class FamilyCalendar:
         uid: str,
         event: dict[str, Any],
         recurrence_id: str | None = None,
+        recurrence_range: str | None = None,
     ) -> None:
         """`calendar/event/update`. With `recurrence_id` only that one
-        occurrence changes; without, the whole event (series)."""
+        occurrence changes - or, with `recurrence_range` "THISANDFUTURE",
+        it and every later one; without, the whole event."""
         message: dict[str, Any] = {
             "type": "calendar/event/update",
             "entity_id": entity_id,
@@ -254,6 +256,8 @@ class FamilyCalendar:
         }
         if recurrence_id:
             message["recurrence_id"] = recurrence_id
+            if recurrence_range:
+                message["recurrence_range"] = recurrence_range
         try:
             await self._client().ws_command(message)
         except HomeAssistantError as err:
@@ -328,13 +332,15 @@ SCHEMAS = {
             vol.Optional("recurrence_id"): vol.Any(cv.string, None),
         }
     ),
-    # `recurrence_id` set = just that occurrence; otherwise the whole event,
-    # with `rrule` its (possibly unchanged) repeat rule.
+    # `recurrence_id` set = just that occurrence (or it and every later one,
+    # with `recurrence_range` THISANDFUTURE, which may carry a new `rrule`);
+    # otherwise the whole event.
     SERVICE_UPDATE_EVENT: vol.Schema(
         {
             vol.Required("entity_id"): calendar_entity,
             vol.Required("uid"): cv.string,
             vol.Optional("recurrence_id"): vol.Any(cv.string, None),
+            vol.Optional("recurrence_range"): vol.Any(vol.In(["THISANDFUTURE"]), None),
             vol.Required("summary"): cv.string,
             vol.Required("start"): cv.string,
             vol.Optional("end"): cv.string,
@@ -415,6 +421,7 @@ def build_handlers(
         _require_parent(coordinator, call)
         entity_id, uid = call.data["entity_id"], call.data["uid"]
         recurrence_id = call.data.get("recurrence_id")
+        recurrence_range = call.data.get("recurrence_range") if recurrence_id else None
         start, end = _event_bounds(call.data)
         event: dict[str, Any] = {
             "summary": call.data["summary"],
@@ -423,10 +430,10 @@ def build_handlers(
             "description": call.data["description"],
             "location": call.data["location"],
         }
-        if not recurrence_id and call.data.get("rrule"):
+        if call.data.get("rrule") and (not recurrence_id or recurrence_range):
             event["rrule"] = call.data["rrule"]
         try:
-            await calendar.update_event(entity_id, uid, event, recurrence_id)
+            await calendar.update_event(entity_id, uid, event, recurrence_id, recurrence_range)
         except ServiceError:
             if recurrence_id or call.data.get("rrule"):
                 raise

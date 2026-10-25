@@ -134,6 +134,9 @@ export class FamilyMealsView extends LitElement {
       .dish .name { font-size: 1.05rem; font-weight: 650; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
       .dish .notes { color: var(--secondary-text-color); font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .dish .none { color: var(--secondary-text-color); font-style: italic; }
+      .card.prep .card-head { border-bottom: 0; padding-bottom: 4px; --mdc-icon-size: 22px; }
+      .card.prep .card-head ha-icon { color: #d4af6a; }
+      .prep-body { margin: 0; padding: 0 16px 14px 48px; line-height: 1.5; }
       .pill { font-size: .72rem; font-weight: 650; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, #d4af6a 30%, var(--fh-tint-base)); color: inherit; }
       .day-actions { display: flex; gap: 6px; align-items: center; flex: none; }
       .day-actions select { width: auto; padding: 6px 8px; font-size: .85rem; }
@@ -297,12 +300,13 @@ export class FamilyMealsView extends LitElement {
     const entry = day.entry;
     const recipe = recipeFor(this.extras.recipes, entry?.dish);
     const label = day.isToday ? "Today" : day.date.toLocaleDateString(undefined, { weekday: "short" });
-    const prepDays = runs.get(day.key) ?? 0;
+    const run = runs.get(day.key) ?? 0;
+    const prepDays = entry?.meal_prep ? Math.max(run, 1) : run >= 3 ? run : 0;
     return html`<div class="day ${day.isToday ? "today" : ""} ${entry ? "" : "empty"}">
       <div class="date"><div class="dow">${label}</div><div class="num">${day.date.getDate()}</div></div>
       <div class="dish">
         ${entry
-          ? html`<span class="name">${entry.dish}${prepDays >= 3 ? html`<span class="pill">Meal prep · ${prepDays} days</span>` : nothing}</span>
+          ? html`<span class="name">${entry.dish}${prepDays ? html`<span class="pill">Meal prep</span>` : nothing}</span>
               ${entry.notes ? html`<span class="notes">${entry.notes}</span>` : nothing}`
           : html`<span class="none">Nothing planned</span>`}
       </div>
@@ -317,7 +321,7 @@ export class FamilyMealsView extends LitElement {
                 const select = e.target as HTMLSelectElement;
                 const to = select.value;
                 select.value = "";
-                if (to) void this._do("move_meal", { uid: entry.uid, name: entry.dish, description: entry.notes ?? "", new_date: to });
+                if (to) void this._do("move_meal", { uid: entry.uid, name: entry.dish, description: entry.notes ?? "", new_date: to, meal_prep: Boolean(entry.meal_prep) });
               }}>
                 <option value="">Move…</option>
                 ${days.filter((d) => d.key !== day.key).map((d) => html`<option value=${d.key}>${d.isToday ? "Today" : d.date.toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}</option>`)}
@@ -333,6 +337,43 @@ export class FamilyMealsView extends LitElement {
     </div>`;
   }
 
+  /** One card per Meal Prep batch this week: the dish, which nights it
+   * covers, and its recipe. A batch is the dinners marked as meal prep when
+   * they were scheduled (plus, for ones planned before that marking
+   * existed, 3+ nights in a row of the same dish). */
+  private _mealPrepCards(days: Day[], runs: Map<string, number>) {
+    const batches = new Map<string, { dish: string; notes: string | null; days: Day[] }>();
+    for (const day of days) {
+      const entry = day.entry;
+      if (!entry || !(entry.meal_prep || (runs.get(day.key) ?? 0) >= 3)) continue;
+      const batch = batches.get(entry.dish) ?? { dish: entry.dish, notes: entry.notes, days: [] };
+      batch.days.push(day);
+      batches.set(entry.dish, batch);
+    }
+    if (!batches.size) return nothing;
+    return [...batches.values()].map((b) => {
+      const recipe = recipeFor(this.extras.recipes, b.dish);
+      const nights = b.days
+        .map((d) => (d.isToday ? "Today" : d.date.toLocaleDateString(undefined, { weekday: "short" })))
+        .join(", ");
+      return html`<div class="card prep">
+        <div class="card-head">
+          <ha-icon icon="mdi:pot-steam-outline"></ha-icon>
+          <h2>Meal prep: ${b.dish}</h2>
+          ${recipe
+            ? html`<button class="link" @click=${() => this._openRecipe(recipe.id)}><ha-icon icon="mdi:book-open-variant"></ha-icon>Recipe</button>`
+            : this._isParent
+              ? html`<button class="link" @click=${() => this._writeRecipe(b.days[0].entry!)}><ha-icon icon="mdi:auto-fix"></ha-icon>Get recipe</button>`
+              : nothing}
+        </div>
+        <p class="prep-body">
+          ${b.notes ? html`${b.notes}<br />` : nothing}
+          <span class="hint">${b.days.length} ${b.days.length === 1 ? "night" : "nights"}: ${nights}</span>
+        </p>
+      </div>`;
+    });
+  }
+
   private _weekSection() {
     const configured = Boolean(this.extras.calendarSettings.dinnersCalendar);
     const days = this._days();
@@ -342,12 +383,14 @@ export class FamilyMealsView extends LitElement {
         ? html`<div class="notice">${this._isAdmin ? "Pick the calendar that holds your dinners with the ⚙ above to start planning." : "An admin parent needs to pick the Dinners calendar first."}</div>`
         : nothing}
       ${this._error && !this._adding ? html`<div class="notice error">${this._error}</div>` : nothing}
+      ${this._mealPrepCards(days, runs)}
       <div class="card">
         <div class="card-head">
           <h2>This week's dinners</h2>
           <span class="sub">${this._loadingWeek ? "Loading…" : "Also on the Calendar tab"}</span>
           ${this._isParent && configured
-            ? html`<button class="primary" @click=${this._openWizard}><ha-icon icon="mdi:auto-fix"></ha-icon> Plan with AI</button>`
+            ? html`<button class="ghost" @click=${() => this._openWizard("meal_prep")}><ha-icon icon="mdi:pot-steam-outline"></ha-icon> Meal prep</button>
+                <button class="primary" @click=${() => this._openWizard("dinner_planning")}><ha-icon icon="mdi:auto-fix"></ha-icon> Plan with AI</button>`
             : nothing}
         </div>
         ${days.map((d) => this._dayRow(d, days, runs))}
@@ -418,11 +461,13 @@ export class FamilyMealsView extends LitElement {
 
   // ---------------------------------------------------------- planner
 
-  private _openWizard(): void {
+  /** Plan with AI asks which kind of plan first; Meal prep skips straight to
+   * its details. */
+  private _openWizard(mode: Wizard["mode"] = "dinner_planning"): void {
     this._groceryStatus = "";
     this._wizard = {
-      step: "mode",
-      mode: "dinner_planning",
+      step: mode === "meal_prep" ? "params" : "mode",
+      mode,
       servings: 4,
       days: 7,
       preferences: "",
@@ -508,6 +553,7 @@ export class FamilyMealsView extends LitElement {
         name: dish.name,
         description: dish.description || "",
         date: dateAt(i),
+        meal_prep: true,
       }));
     }
     return w.slots.flatMap((s, i) =>
@@ -606,7 +652,7 @@ export class FamilyMealsView extends LitElement {
   private _wizardTitle(w: Wizard): string {
     return {
       mode: "Plan dinners with AI",
-      params: "Details",
+      params: w.mode === "meal_prep" ? "Meal prep with AI" : "Details",
       review: "Review dinners",
       grocery: "Grocery list",
     }[w.step];

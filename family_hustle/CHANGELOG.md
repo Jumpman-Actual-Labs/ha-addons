@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.0
+
+- Calendar: edit events - title, time, dates, place, notes, repeat and
+  who it's for. For a repeating event, change just that day or that day and
+  every one after.
+- Calendar: workouts from Gains programs (needs Gains 1.0.3) show for each
+  athlete. Tap one to set when it starts - for just that workout or that
+  day every week - and it ends when Gains expects the workout to be done.
+  Turn them off under ⚙ › Show workouts.
+- Meals: Meal prep has its own button again, meal-prep dinners are marked
+  as a batch, and a card at the top of This week shows the batch, its
+  nights and its recipe.
+
 ## 1.1.1
 
 - Cook mode: tap any ingredient's amount and type a new one - every other
