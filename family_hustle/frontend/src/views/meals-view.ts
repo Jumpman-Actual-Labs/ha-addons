@@ -8,6 +8,7 @@ import {
   type DinnerEntry,
   type FamilyExtras,
   type GroceryCategory,
+  type Meal,
 } from "../family-api";
 import type { MemberRosterEntry } from "../types";
 import { formStyles } from "../styles";
@@ -46,6 +47,8 @@ interface CheckCategory {
 interface Wizard {
   step: "mode" | "params" | "review" | "grocery";
   mode: "dinner_planning" | "meal_prep";
+  /** What the plan fills: Meal Prep defaults to lunches. */
+  meal: Meal;
   servings: number;
   days: number;
   preferences: string;
@@ -58,8 +61,19 @@ interface Wizard {
 interface Day {
   date: Date;
   key: string;
-  entry: DinnerEntry | null;
+  /** Lunch first, then dinner. */
+  meals: DinnerEntry[];
+  dinner: DinnerEntry | null;
   isToday: boolean;
+}
+
+function mealOf(entry: DinnerEntry): Meal {
+  return entry.meal === "lunch" ? "lunch" : "dinner";
+}
+
+function plural(meal: Meal, n: number): string {
+  if (meal === "lunch") return n === 1 ? "lunch" : "lunches";
+  return n === 1 ? "night" : "nights";
 }
 
 function localDateKey(date: Date): string {
@@ -97,7 +111,7 @@ export class FamilyMealsView extends LitElement {
   @state() private _wizard: Wizard | null = null;
   @state() private _grocery: CheckCategory[] = [];
   @state() private _groceryStatus = "";
-  @state() private _adding: { date: string; name: string; recipeId: string } | null = null;
+  @state() private _adding: { date: string; meal: Meal; name: string; recipeId: string } | null = null;
   @state() private _settingsOpen = false;
   @state() private _calendars: CalendarInfo[] = [];
   @state() private _dinnersDraft = "";
@@ -130,6 +144,10 @@ export class FamilyMealsView extends LitElement {
       .date .dow { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--secondary-text-color); }
       .date .num { font-size: 1.35rem; font-weight: 700; }
       .day.today .date .dow, .day.today .date .num { color: #e57368; }
+      .meals { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+      .meal { display: flex; gap: 14px; align-items: center; }
+      .kind { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--secondary-text-color); }
+      .link.more { border: 0; padding: 2px 0; min-height: 28px; align-self: flex-start; }
       .dish { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
       .dish .name { font-size: 1.05rem; font-weight: 650; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
       .dish .notes { color: var(--secondary-text-color); font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -175,8 +193,8 @@ export class FamilyMealsView extends LitElement {
 
       @media (max-width: 600px) {
         .day { flex-wrap: wrap; gap: 10px; padding: 12px; }
-        .day:not(.empty) .day-actions { width: 100%; justify-content: flex-end; padding-left: 62px; box-sizing: border-box; }
-        .day.empty { flex-wrap: nowrap; }
+        .meal:not(.empty) { flex-wrap: wrap; gap: 8px; }
+        .meal:not(.empty) .day-actions { width: 100%; justify-content: flex-end; }
         .grocery { columns: 1; }
       }
     `,
@@ -246,16 +264,18 @@ export class FamilyMealsView extends LitElement {
   // ------------------------------------------------------- this week
 
   private _days(): Day[] {
-    const byDate = new Map(this._week.map((e) => [e.date, e]));
+    const byDate = new Map<string, DinnerEntry[]>();
+    for (const e of this._week) byDate.set(e.date, [...(byDate.get(e.date) ?? []), e]);
     const today = new Date();
     return Array.from({ length: 7 }, (_, i) => {
       const date = new Date(today.getTime() + i * DAY_MS);
       const key = localDateKey(date);
-      return { date, key, entry: byDate.get(key) ?? null, isToday: i === 0 };
+      const meals = (byDate.get(key) ?? []).sort((a, b) => Number(mealOf(a) === "dinner") - Number(mealOf(b) === "dinner"));
+      return { date, key, meals, dinner: meals.find((m) => mealOf(m) === "dinner") ?? null, isToday: i === 0 };
     });
   }
 
-  /** Day key -> length of its run of consecutive days with the same dish.
+  /** Day key -> length of its run of consecutive days with the same dinner.
    * 3+ in a row reads as a Meal Prep batch (the calendar has no other record
    * of which planner mode made it); two nights of the same dinner is just
    * a repeat. */
@@ -263,9 +283,9 @@ export class FamilyMealsView extends LitElement {
     const runs = new Map<string, number>();
     let i = 0;
     while (i < days.length) {
-      const dish = days[i].entry?.dish;
+      const dish = days[i].dinner?.dish;
       let j = i + 1;
-      while (dish && j < days.length && days[j].entry?.dish === dish) j += 1;
+      while (dish && j < days.length && days[j].dinner?.dish === dish) j += 1;
       for (let k = i; k < j; k += 1) runs.set(days[k].key, dish ? j - i : 0);
       i = j;
     }
@@ -288,67 +308,93 @@ export class FamilyMealsView extends LitElement {
     const recipe = this.extras.recipes.find((r) => r.id === a.recipeId);
     const name = recipe?.title ?? a.name.trim();
     if (!name) {
-      this._error = "Pick a recipe or type what's for dinner.";
+      this._error = `Pick a recipe or type what's for ${a.meal}.`;
       return;
     }
-    if (await this._do("schedule_meals", { meals: [{ name, description: recipe?.description ?? "", date: a.date }] })) {
+    if (await this._do("schedule_meals", { meals: [{ name, description: recipe?.description ?? "", date: a.date, meal: a.meal }] })) {
       this._adding = null;
     }
   }
 
+  private _startAdding(date: string, meal: Meal): void {
+    this._error = "";
+    this._adding = { date, meal, name: "", recipeId: "" };
+  }
+
   private _dayRow(day: Day, days: Day[], runs: Map<string, number>) {
-    const entry = day.entry;
-    const recipe = recipeFor(this.extras.recipes, entry?.dish);
     const label = day.isToday ? "Today" : day.date.toLocaleDateString(undefined, { weekday: "short" });
-    const run = runs.get(day.key) ?? 0;
-    const prepDays = entry?.meal_prep ? Math.max(run, 1) : run >= 3 ? run : 0;
-    return html`<div class="day ${day.isToday ? "today" : ""} ${entry ? "" : "empty"}">
+    const canAdd = this._isParent && Boolean(this.extras.calendarSettings.dinnersCalendar);
+    const has = (meal: Meal) => day.meals.some((m) => mealOf(m) === meal);
+    const missing: Meal | null = !day.meals.length ? null : !has("lunch") ? "lunch" : !has("dinner") ? "dinner" : null;
+    return html`<div class="day ${day.isToday ? "today" : ""} ${day.meals.length ? "" : "empty"}">
       <div class="date"><div class="dow">${label}</div><div class="num">${day.date.getDate()}</div></div>
-      <div class="dish">
-        ${entry
-          ? html`<span class="name">${entry.dish}${prepDays ? html`<span class="pill">Meal prep</span>` : nothing}</span>
-              ${entry.notes ? html`<span class="notes">${entry.notes}</span>` : nothing}`
-          : html`<span class="none">Nothing planned</span>`}
-      </div>
-      <div class="day-actions">
-        ${entry && recipe
-          ? html`<button class="link" @click=${() => this._openRecipe(recipe.id)}><ha-icon icon="mdi:book-open-variant"></ha-icon>Recipe</button>`
-          : entry && this._isParent
-            ? html`<button class="link" title="Have the AI write a recipe for this" @click=${() => this._writeRecipe(entry)}><ha-icon icon="mdi:auto-fix"></ha-icon>Get recipe</button>`
-            : nothing}
-        ${entry && this._isParent && entry.uid
-          ? html`<select aria-label="Move ${entry.dish}" @change=${(e: Event) => {
-                const select = e.target as HTMLSelectElement;
-                const to = select.value;
-                select.value = "";
-                if (to) void this._do("move_meal", { uid: entry.uid, name: entry.dish, description: entry.notes ?? "", new_date: to, meal_prep: Boolean(entry.meal_prep) });
-              }}>
-                <option value="">Move…</option>
-                ${days.filter((d) => d.key !== day.key).map((d) => html`<option value=${d.key}>${d.isToday ? "Today" : d.date.toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}</option>`)}
-              </select>
-              <button class="icon" aria-label="Remove ${entry.dish}" @click=${() => {
-                if (window.confirm(`Take "${entry.dish}" off ${day.isToday ? "today" : label}?`)) void this._do("remove_meal", { uid: entry.uid });
-              }}><ha-icon icon="mdi:close"></ha-icon></button>`
-          : nothing}
-        ${!entry && this._isParent && this.extras.calendarSettings.dinnersCalendar
-          ? html`<button class="link add" @click=${() => { this._error = ""; this._adding = { date: day.key, name: "", recipeId: "" }; }}><ha-icon icon="mdi:plus"></ha-icon>Add dinner</button>`
+      <div class="meals">
+        ${day.meals.length
+          ? day.meals.map((entry) => this._mealLine(entry, day, days, runs))
+          : html`<div class="meal empty">
+              <div class="dish"><span class="none">Nothing planned</span></div>
+              ${canAdd
+                ? html`<div class="day-actions"><button class="link add" @click=${() => this._startAdding(day.key, "dinner")}><ha-icon icon="mdi:plus"></ha-icon>Add meal</button></div>`
+                : nothing}
+            </div>`}
+        ${missing && canAdd
+          ? html`<button class="link add more" @click=${() => this._startAdding(day.key, missing)}><ha-icon icon="mdi:plus"></ha-icon>Add ${missing}</button>`
           : nothing}
       </div>
     </div>`;
   }
 
-  /** One card per Meal Prep batch this week: the dish, which nights it
-   * covers, and its recipe. A batch is the dinners marked as meal prep when
-   * they were scheduled (plus, for ones planned before that marking
+  private _mealLine(entry: DinnerEntry, day: Day, days: Day[], runs: Map<string, number>) {
+    const meal = mealOf(entry);
+    const recipe = recipeFor(this.extras.recipes, entry.dish);
+    const label = day.isToday ? "Today" : day.date.toLocaleDateString(undefined, { weekday: "short" });
+    const isPrep = entry.meal_prep || (meal === "dinner" && (runs.get(day.key) ?? 0) >= 3);
+    const what = meal === "lunch" ? `lunch "${entry.dish}"` : `"${entry.dish}"`;
+    return html`<div class="meal">
+      <div class="dish">
+        ${meal === "lunch" || day.meals.length > 1 ? html`<span class="kind">${meal}</span>` : nothing}
+        <span class="name">${entry.dish}${isPrep ? html`<span class="pill">Meal prep</span>` : nothing}</span>
+        ${entry.notes ? html`<span class="notes">${entry.notes}</span>` : nothing}
+      </div>
+      <div class="day-actions">
+        ${recipe
+          ? html`<button class="link" @click=${() => this._openRecipe(recipe.id)}><ha-icon icon="mdi:book-open-variant"></ha-icon>Recipe</button>`
+          : this._isParent
+            ? html`<button class="link" title="Have the AI write a recipe for this" @click=${() => this._writeRecipe(entry)}><ha-icon icon="mdi:auto-fix"></ha-icon>Get recipe</button>`
+            : nothing}
+        ${this._isParent && entry.uid
+          ? html`<select aria-label="Move ${entry.dish}" @change=${(e: Event) => {
+                const select = e.target as HTMLSelectElement;
+                const to = select.value;
+                select.value = "";
+                if (to) void this._do("move_meal", { uid: entry.uid, name: entry.dish, description: entry.notes ?? "", new_date: to, meal, meal_prep: Boolean(entry.meal_prep) });
+              }}>
+                <option value="">Move…</option>
+                ${days.filter((d) => d.key !== day.key).map((d) => html`<option value=${d.key}>${d.isToday ? "Today" : d.date.toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}</option>`)}
+              </select>
+              <button class="icon" aria-label="Remove ${entry.dish}" @click=${() => {
+                if (window.confirm(`Take ${what} off ${day.isToday ? "today" : label}?`)) void this._do("remove_meal", { uid: entry.uid });
+              }}><ha-icon icon="mdi:close"></ha-icon></button>`
+          : nothing}
+      </div>
+    </div>`;
+  }
+
+  /** One card per Meal Prep batch this week: the dish, which days it
+   * covers, and its recipe. A batch is the meals marked as meal prep when
+   * they were scheduled (plus, for dinners planned before that marking
    * existed, 3+ nights in a row of the same dish). */
   private _mealPrepCards(days: Day[], runs: Map<string, number>) {
-    const batches = new Map<string, { dish: string; notes: string | null; days: Day[] }>();
+    const batches = new Map<string, { meal: Meal; dish: string; notes: string | null; days: Day[]; entry: DinnerEntry }>();
     for (const day of days) {
-      const entry = day.entry;
-      if (!entry || !(entry.meal_prep || (runs.get(day.key) ?? 0) >= 3)) continue;
-      const batch = batches.get(entry.dish) ?? { dish: entry.dish, notes: entry.notes, days: [] };
-      batch.days.push(day);
-      batches.set(entry.dish, batch);
+      for (const entry of day.meals) {
+        const meal = mealOf(entry);
+        if (!(entry.meal_prep || (meal === "dinner" && (runs.get(day.key) ?? 0) >= 3))) continue;
+        const key = `${meal}|${entry.dish}`;
+        const batch = batches.get(key) ?? { meal, dish: entry.dish, notes: entry.notes, days: [], entry };
+        batch.days.push(day);
+        batches.set(key, batch);
+      }
     }
     if (!batches.size) return nothing;
     return [...batches.values()].map((b) => {
@@ -359,16 +405,16 @@ export class FamilyMealsView extends LitElement {
       return html`<div class="card prep">
         <div class="card-head">
           <ha-icon icon="mdi:pot-steam-outline"></ha-icon>
-          <h2>Meal prep: ${b.dish}</h2>
+          <h2>${b.meal === "lunch" ? "Meal prep lunches" : "Meal prep"}: ${b.dish}</h2>
           ${recipe
             ? html`<button class="link" @click=${() => this._openRecipe(recipe.id)}><ha-icon icon="mdi:book-open-variant"></ha-icon>Recipe</button>`
             : this._isParent
-              ? html`<button class="link" @click=${() => this._writeRecipe(b.days[0].entry!)}><ha-icon icon="mdi:auto-fix"></ha-icon>Get recipe</button>`
+              ? html`<button class="link" @click=${() => this._writeRecipe(b.entry)}><ha-icon icon="mdi:auto-fix"></ha-icon>Get recipe</button>`
               : nothing}
         </div>
         <p class="prep-body">
           ${b.notes ? html`${b.notes}<br />` : nothing}
-          <span class="hint">${b.days.length} ${b.days.length === 1 ? "night" : "nights"}: ${nights}</span>
+          <span class="hint">${b.days.length} ${plural(b.meal, b.days.length)}: ${nights}</span>
         </p>
       </div>`;
     });
@@ -380,13 +426,13 @@ export class FamilyMealsView extends LitElement {
     const runs = this._prepRuns(days);
     return html`
       ${!configured
-        ? html`<div class="notice">${this._isAdmin ? "Pick the calendar that holds your dinners with the ⚙ above to start planning." : "An admin parent needs to pick the Dinners calendar first."}</div>`
+        ? html`<div class="notice">${this._isAdmin ? "Pick the calendar that holds your meals with the ⚙ above to start planning." : "An admin parent needs to pick the Meals calendar first."}</div>`
         : nothing}
       ${this._error && !this._adding ? html`<div class="notice error">${this._error}</div>` : nothing}
       ${this._mealPrepCards(days, runs)}
       <div class="card">
         <div class="card-head">
-          <h2>This week's dinners</h2>
+          <h2>This week's meals</h2>
           <span class="sub">${this._loadingWeek ? "Loading…" : "Also on the Calendar tab"}</span>
           ${this._isParent && configured
             ? html`<button class="ghost" @click=${() => this._openWizard("meal_prep")}><ha-icon icon="mdi:pot-steam-outline"></ha-icon> Meal prep</button>
@@ -468,6 +514,7 @@ export class FamilyMealsView extends LitElement {
     this._wizard = {
       step: mode === "meal_prep" ? "params" : "mode",
       mode,
+      meal: mode === "meal_prep" ? "lunch" : "dinner",
       servings: 4,
       days: 7,
       preferences: "",
@@ -506,6 +553,7 @@ export class FamilyMealsView extends LitElement {
           servings: Math.max(1, w.servings),
           days: Math.max(1, w.days),
           count,
+          meal: w.meal,
           ...(w.preferences ? { preferences: w.preferences } : {}),
           exclude_meal_names: excludeNames,
         }
@@ -553,6 +601,7 @@ export class FamilyMealsView extends LitElement {
         name: dish.name,
         description: dish.description || "",
         date: dateAt(i),
+        meal: w.meal,
         meal_prep: true,
       }));
     }
@@ -587,17 +636,24 @@ export class FamilyMealsView extends LitElement {
     const error = w.error ? html`<p class="err">${w.error}</p>` : nothing;
     if (w.step === "mode") {
       return html`<div class="mode-choices">
-          <button class="mode-choice ${w.mode === "dinner_planning" ? "selected" : ""}" @click=${() => this._patch({ mode: "dinner_planning" })}>
+          <button class="mode-choice ${w.mode === "dinner_planning" ? "selected" : ""}" @click=${() => this._patch({ mode: "dinner_planning", meal: "dinner" })}>
             <strong>Dinner Planning</strong><span>A different dinner each day</span>
           </button>
-          <button class="mode-choice ${w.mode === "meal_prep" ? "selected" : ""}" @click=${() => this._patch({ mode: "meal_prep" })}>
-            <strong>Meal Prep</strong><span>One batch dish for the whole stretch</span>
+          <button class="mode-choice ${w.mode === "meal_prep" ? "selected" : ""}" @click=${() => this._patch({ mode: "meal_prep", meal: "lunch" })}>
+            <strong>Meal Prep</strong><span>One batch dish, packed as lunches</span>
           </button>
         </div>
         <div class="actions">${cancel}<button class="primary" @click=${() => this._patch({ step: "params" })}>Next</button></div>`;
     }
     if (w.step === "params") {
-      return html`<div class="row2">
+      return html`${w.mode === "meal_prep"
+          ? html`<label>For</label>
+              <div class="seg" role="radiogroup" aria-label="Meal prep for">
+                <button role="radio" class=${w.meal === "lunch" ? "on" : ""} aria-checked=${w.meal === "lunch" ? "true" : "false"} @click=${() => this._patch({ meal: "lunch" })}>Lunches</button>
+                <button role="radio" class=${w.meal === "dinner" ? "on" : ""} aria-checked=${w.meal === "dinner" ? "true" : "false"} @click=${() => this._patch({ meal: "dinner" })}>Dinners</button>
+              </div>`
+          : nothing}
+        <div class="row2">
           <div><label>Servings</label><input type="number" min="1" .value=${String(w.servings)} @input=${(e: Event) => this._patch({ servings: Number((e.target as HTMLInputElement).value) || 1 })} /></div>
           <div><label>Days</label><input type="number" min="1" .value=${String(w.days)} @input=${(e: Event) => this._patch({ days: Number((e.target as HTMLInputElement).value) || 1 })} /></div>
         </div>
@@ -606,7 +662,7 @@ export class FamilyMealsView extends LitElement {
         ${error}
         <div class="actions">
           ${cancel}
-          <button class="primary" ?disabled=${w.loading} @click=${() => this._generate([])}>${w.loading ? "Asking the chef…" : "Suggest dinners"}</button>
+          <button class="primary" ?disabled=${w.loading} @click=${() => this._generate([])}>${w.loading ? "Asking the chef…" : w.meal === "lunch" ? "Suggest lunches" : "Suggest dinners"}</button>
         </div>`;
     }
     if (w.step === "review") {
@@ -635,10 +691,10 @@ export class FamilyMealsView extends LitElement {
         <div class="actions">
           ${cancel}
           ${canRegenerate ? html`<button class="ghost" ?disabled=${w.loading} @click=${() => this._generate([...w.seenNames])}>Regenerate denied</button>` : nothing}
-          ${canSubmit ? html`<button class="primary" ?disabled=${w.loading} @click=${this._submit}>Add to dinners</button>` : nothing}
+          ${canSubmit ? html`<button class="primary" ?disabled=${w.loading} @click=${this._submit}>${w.meal === "lunch" ? "Add to lunches" : "Add to dinners"}</button>` : nothing}
         </div>`;
     }
-    return html`<p class="hint">Added to your dinners. Check off what you already have, then send the rest to the shopping list.</p>
+    return html`<p class="hint">Added to the week. Check off what you already have, then send the rest to the shopping list.</p>
       <div class="grocery" style="padding:0">${this._checklist(w.grocery, (ci, ii) => this._patch({ grocery: this._toggled(w.grocery, ci, ii) }))}</div>
       ${this._groceryStatus ? html`<p class="ok">${this._groceryStatus}</p>` : nothing}
       <div class="actions">
@@ -653,7 +709,7 @@ export class FamilyMealsView extends LitElement {
     return {
       mode: "Plan dinners with AI",
       params: w.mode === "meal_prep" ? "Meal prep with AI" : "Details",
-      review: "Review dinners",
+      review: w.meal === "lunch" ? "Review lunches" : "Review dinners",
       grocery: "Grocery list",
     }[w.step];
   }
@@ -685,7 +741,12 @@ export class FamilyMealsView extends LitElement {
     const a = this._adding;
     if (!a) return nothing;
     const day = new Date(`${a.date}T12:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
-    return html`<hustle-dialog open heading="Dinner for ${day}" @hustle-dialog-closed=${() => (this._adding = null)}>
+    const meal = a.meal === "lunch" ? "Lunch" : "Dinner";
+    return html`<hustle-dialog open heading="${meal} for ${day}" @hustle-dialog-closed=${() => (this._adding = null)}>
+      <div class="seg" role="radiogroup" aria-label="Meal">
+        <button role="radio" class=${a.meal === "lunch" ? "on" : ""} aria-checked=${a.meal === "lunch" ? "true" : "false"} @click=${() => (this._adding = { ...a, meal: "lunch" })}>Lunch</button>
+        <button role="radio" class=${a.meal === "dinner" ? "on" : ""} aria-checked=${a.meal === "dinner" ? "true" : "false"} @click=${() => (this._adding = { ...a, meal: "dinner" })}>Dinner</button>
+      </div>
       ${this.extras.recipes.length
         ? html`<label>From the recipe box</label>
             <select @change=${(e: Event) => (this._adding = { ...a, recipeId: (e.target as HTMLSelectElement).value })}>
@@ -693,12 +754,12 @@ export class FamilyMealsView extends LitElement {
               ${this.extras.recipes.map((r) => html`<option value=${r.id} ?selected=${r.id === a.recipeId}>${r.title}</option>`)}
             </select>
             <label>Or just type it</label>`
-        : html`<label>What's for dinner?</label>`}
-      <input .value=${a.name} ?disabled=${Boolean(a.recipeId)} placeholder="Leftovers night" @input=${(e: Event) => (this._adding = { ...a, name: (e.target as HTMLInputElement).value })} />
+        : html`<label>What's for ${a.meal}?</label>`}
+      <input .value=${a.name} ?disabled=${Boolean(a.recipeId)} placeholder=${a.meal === "lunch" ? "Sandwiches" : "Leftovers night"} @input=${(e: Event) => (this._adding = { ...a, name: (e.target as HTMLInputElement).value })} />
       ${this._error ? html`<p class="err">${this._error}</p>` : nothing}
       <div class="actions">
         <button class="ghost" @click=${() => (this._adding = null)}>Cancel</button>
-        <button class="primary" @click=${this._saveDinner}>Add dinner</button>
+        <button class="primary" @click=${this._saveDinner}>Add ${a.meal}</button>
       </div>
     </hustle-dialog>`;
   }
@@ -732,12 +793,12 @@ export class FamilyMealsView extends LitElement {
       ${this._addDialog()}
       ${this._settingsOpen
         ? html`<hustle-dialog open heading="Meals settings" @hustle-dialog-closed=${() => (this._settingsOpen = false)}>
-            <label>Dinners calendar</label>
+            <label>Meals calendar</label>
             <select @change=${(e: Event) => (this._dinnersDraft = (e.target as HTMLSelectElement).value)}>
               <option value="" ?selected=${!this._dinnersDraft}>None</option>
               ${this._calendars.map((c) => html`<option value=${c.entity_id} ?selected=${c.entity_id === this._dinnersDraft}>${c.name}</option>`)}
             </select>
-            <p class="hint" style="margin-top:8px">Dinners are all-day events on this calendar. A separate Google Calendar (e.g. "Dinners") keeps them tidy on the Calendar tab.</p>
+            <p class="hint" style="margin-top:8px">Dinners and lunches are all-day events on this calendar (lunches are titled "Lunch: …"). A separate Google Calendar (e.g. "Meals") keeps them tidy on the Calendar tab.</p>
             <div class="actions">
               <button class="ghost" @click=${() => (this._settingsOpen = false)}>Cancel</button>
               <button class="primary" @click=${this._saveSettings}>Save</button>

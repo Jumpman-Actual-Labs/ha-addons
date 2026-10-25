@@ -150,9 +150,13 @@ integration. `test_addon.py` covers the add-on layers against a fake HA.
   gets "Get recipe", which opens the editor and has the AI write it.
   Household's AI planner wizard lives here as a dialog (same steps and
   rules). The persisted grocery list is a card with "Add to shopping list".
-  Meal Prep dinners are marked when scheduled: the description starts
-  with `meals.MEAL_PREP_MARKER`, which `dinner_week` strips and reports as
-  `meal_prep`. They get a batch card at the top. Older unmarked ones count
+  Lunches share the dinners calendar, titled `meals.LUNCH_PREFIX`
+  ("Lunch: <dish>"); `dinner_week` splits that into `meal` + `dish`, and
+  `generate_meal_plan`/`schedule_meals`/`move_meal` take `meal` (default
+  dinner). Each day lists lunch then dinner. Meal Prep defaults to lunch
+  (packable prompt). Meal Prep meals are marked when scheduled: the
+  description starts with `meals.MEAL_PREP_MARKER`, which `dinner_week`
+  strips and reports as `meal_prep`. They get a batch card at the top. Older unmarked ones count
   when the same dish runs 3+ nights. "Meal prep" opens the planner
   straight at its details.
 - `views/recipes-view.ts`: the recipe box. It has a searchable card grid, a

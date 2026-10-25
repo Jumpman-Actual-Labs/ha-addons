@@ -479,6 +479,19 @@ export class FamilyCalendarView extends LitElement {
     }
   }
 
+  /** Lunches share the meals calendar, titled "Lunch: <dish>" (meals.py). */
+  private _isLunch(e: FamilyEvent): boolean {
+    return e.summary.startsWith("Lunch: ");
+  }
+
+  private _mealIcon(e: FamilyEvent): string {
+    return this._isLunch(e) ? "mdi:food-takeout-box-outline" : "mdi:silverware-fork-knife";
+  }
+
+  private _mealHeading(e: FamilyEvent): string {
+    return this._isLunch(e) ? e.summary : `Dinner: ${e.summary}`;
+  }
+
   private _isDinner(e: FamilyEvent): boolean {
     return e.entityId === this._sources().dinners;
   }
@@ -820,8 +833,8 @@ export class FamilyCalendarView extends LitElement {
 
   private _chip(e: FamilyEvent) {
     if (this._isDinner(e)) {
-      return html`<button class="chip dinner" @click=${() => this._openEvent(e)} title=${`Dinner: ${e.summary}`}>
-        <ha-icon icon="mdi:silverware-fork-knife"></ha-icon>${e.summary}
+      return html`<button class="chip dinner" @click=${() => this._openEvent(e)} title=${this._mealHeading(e)}>
+        <ha-icon icon=${this._mealIcon(e)}></ha-icon>${e.summary}
       </button>`;
     }
     const c = this._color(e);
@@ -1047,7 +1060,7 @@ export class FamilyCalendarView extends LitElement {
     const repeats = Boolean(e.rrule || e.recurrenceId);
     const day = longDate.format(eventStart(e));
     const when = e.allDay && timeRange(e) === "All day" ? day : `${day} · ${timeRange(e)}`;
-    return html`<hustle-dialog open .heading=${dinner ? `Dinner: ${e.summary}` : e.summary} @hustle-dialog-closed=${() => (this._selected = null)}>
+    return html`<hustle-dialog open .heading=${dinner ? this._mealHeading(e) : e.summary} @hustle-dialog-closed=${() => (this._selected = null)}>
       <p class="detail-time">${when}</p>
       <div class="detail-meta"><ha-icon icon="mdi:calendar"></ha-icon>${e.calendarName}</div>
       ${repeats ? html`<div class="detail-meta"><ha-icon icon="mdi:repeat"></ha-icon>${describeRepeat(e.rrule)}</div>` : nothing}
@@ -1277,7 +1290,7 @@ export class FamilyCalendarView extends LitElement {
     return html`<button class="p-item ${dinner ? "dinner" : ""}" style="--c:${color}" @click=${() => this._openEvent(e)}>
       <span class="stripe"></span>
       <span class="main">
-        <span class="title">${dinner ? html`<ha-icon icon="mdi:silverware-fork-knife"></ha-icon>` : nothing}${e.summary}${repeats ? html`<ha-icon icon="mdi:repeat"></ha-icon>` : nothing}</span>
+        <span class="title">${dinner ? html`<ha-icon icon=${this._mealIcon(e)}></ha-icon>` : nothing}${e.summary}${repeats ? html`<ha-icon icon="mdi:repeat"></ha-icon>` : nothing}</span>
         ${e.location || e.attendeeIds.length || eventDays(e).length > 1
           ? html`<span class="meta">
               ${e.location ? html`<ha-icon icon="mdi:map-marker"></ha-icon>${e.location}` : nothing}

@@ -101,8 +101,12 @@ export interface FamilyEvent {
   attendeeIds: string[];
 }
 
+export type Meal = "lunch" | "dinner";
+
 export interface DinnerEntry {
   date: string;
+  /** Lunches are titled "Lunch: <dish>" on the meals calendar. */
+  meal?: Meal;
   dish: string;
   notes: string | null;
   is_today: boolean;

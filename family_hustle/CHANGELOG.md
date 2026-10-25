@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.2
+
+- Meals: lunches. **Meal prep** now makes lunches by default (packable
+  dishes that keep in the fridge), with Dinners still a choice. Adding a
+  meal by hand and a recipe's "Plan for" ask Lunch or Dinner. This week
+  shows each day's lunch and dinner.
+- Lunches go on the same meals calendar, titled "Lunch: <dish>", and get
+  their own icon on the Calendar tab. Existing dinners are unchanged.
+
 ## 1.2.1
 
 - Gains workouts are off the calendar again (too much on it). Their start

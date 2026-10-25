@@ -65,6 +65,23 @@ MEAL_PLAN_MODES = ["dinner_planning", "meal_prep"]
 # carry anything else that survives Google).
 MEAL_PREP_MARKER = "Meal prep · "
 
+# Lunches share the meals calendar with dinners, told apart by their title:
+# "Lunch: Chicken burrito bowls" (readable in Google Calendar too). Anything
+# without the prefix is a dinner.
+LUNCH_PREFIX = "Lunch: "
+MEALS = ["dinner", "lunch"]
+
+
+def meal_title(name: str, meal: str) -> str:
+    return f"{LUNCH_PREFIX}{name}" if meal == "lunch" else name
+
+
+def split_title(summary: str) -> tuple[str, str]:
+    """A meals-calendar event title -> (meal, dish)."""
+    if summary.startswith(LUNCH_PREFIX):
+        return "lunch", summary.removeprefix(LUNCH_PREFIX)
+    return "dinner", summary
+
 
 class AIError(ServiceError):
     """Any failure calling, or parsing the response of, the AI provider -
@@ -280,8 +297,16 @@ def _meal_plan_prompt(
     count: int,
     preferences: str | None,
     exclude_names: list[str],
+    meal: str = "dinner",
 ) -> str:
-    if mode == "meal_prep":
+    if mode == "meal_prep" and meal == "lunch":
+        goal = (
+            f"Suggest {count} candidate meal-prep lunch dish(es). Each must be a single "
+            f"recipe made in one batch and portioned into lunches for all {days} days - "
+            f"packable, keeps well in the fridge, and good cold or reheated in a "
+            f"microwave - not {days} different meals."
+        )
+    elif mode == "meal_prep":
         goal = (
             f"Suggest {count} candidate meal-prep dish(es). Each dish must be a single "
             f"recipe substantial and freezer/fridge-friendly enough to be portioned out "
@@ -289,7 +314,7 @@ def _meal_plan_prompt(
         )
     else:
         goal = (
-            f"Suggest {count} different dinner recipes, intended as one distinct meal per "
+            f"Suggest {count} different {meal} recipes, intended as one distinct meal per "
             f"day across a {days}-day span."
         )
 
@@ -316,8 +341,9 @@ async def generate_meal_plan(
     count: int,
     preferences: str | None,
     exclude_names: list[str],
+    meal: str = "dinner",
 ) -> list[dict]:
-    prompt = _meal_plan_prompt(mode, servings, days, count, preferences, exclude_names)
+    prompt = _meal_plan_prompt(mode, servings, days, count, preferences, exclude_names, meal)
     result = await _generate_json(
         session, config, _MEAL_PLAN_SYSTEM_PROMPT, prompt, _MEAL_PLAN_SCHEMA, "meal_plan"
     )
@@ -377,9 +403,10 @@ async def generate_grocery_list(
 
 
 def dinner_week(events: list[dict[str, Any]], today: date) -> list[dict[str, Any]]:
-    """Calendar events -> the board's `[{date, dish, notes, is_today, uid}]`
-    (Household's `sensor.household_dinner_menu` `week` attribute). Only the
-    start day matters for slotting a dinner into the week."""
+    """Calendar events -> the board's `[{date, meal, dish, notes, is_today,
+    uid, meal_prep}]` (Household's `sensor.household_dinner_menu` `week`
+    attribute, plus `meal` - "lunch" or "dinner"). Only the start day matters
+    for slotting a meal into the week."""
     week = []
     for event in events:
         start = event["start"]
@@ -391,17 +418,20 @@ def dinner_week(events: list[dict[str, Any]], today: date) -> list[dict[str, Any
             )
         except ValueError:
             continue
+        meal, dish = split_title(event["summary"])
         week.append(
             {
                 "date": day.isoformat(),
-                "dish": event["summary"],
+                "meal": meal,
+                "dish": dish,
                 "notes": event["description"].removeprefix(MEAL_PREP_MARKER) or None,
                 "is_today": day == today,
                 "uid": event["uid"],
                 "meal_prep": event["description"].startswith(MEAL_PREP_MARKER),
             }
         )
-    week.sort(key=lambda entry: entry["date"])
+    # Lunch before dinner on the same day.
+    week.sort(key=lambda entry: (entry["date"], entry["meal"] != "lunch"))
     return week
 
 
@@ -447,6 +477,7 @@ SCHEMAS = {
             vol.Required("servings"): vol.Coerce(int),
             vol.Required("days"): vol.Coerce(int),
             vol.Required("count"): vol.Coerce(int),
+            vol.Optional("meal", default="dinner"): vol.In(MEALS),
             vol.Optional("preferences"): cv.string,
             vol.Optional("exclude_meal_names", default=list): vol.All(
                 cv.ensure_list, [cv.string]
@@ -470,6 +501,7 @@ SCHEMAS = {
                             vol.Optional("description", default=""): cv.string,
                             vol.Required("date"): _date,
                             vol.Optional("meal_prep", default=False): cv.boolean,
+                            vol.Optional("meal", default="dinner"): vol.In(MEALS),
                         }
                     )
                 ],
@@ -483,6 +515,7 @@ SCHEMAS = {
             vol.Optional("description", default=""): cv.string,
             vol.Required("new_date"): _date,
             vol.Optional("meal_prep", default=False): cv.boolean,
+            vol.Optional("meal", default="dinner"): vol.In(MEALS),
         }
     ),
     SERVICE_REMOVE_MEAL: vol.Schema({vol.Required("uid"): cv.string}),
@@ -524,6 +557,7 @@ def build_handlers(
             call.data["count"],
             call.data.get("preferences"),
             call.data["exclude_meal_names"],
+            call.data["meal"],
         )
         return {"meals": meals}
 
@@ -542,7 +576,9 @@ def build_handlers(
             description = meal["description"]
             if meal["meal_prep"]:
                 description = MEAL_PREP_MARKER + description
-            await _add_dinner(entity_id, meal["name"], description, meal["date"])
+            await _add_dinner(
+                entity_id, meal_title(meal["name"], meal["meal"]), description, meal["date"]
+            )
         return {"scheduled": len(call.data["meals"])}
 
     async def handle_move_meal(call: ServiceCall) -> dict[str, Any]:
@@ -557,7 +593,12 @@ def build_handlers(
         description = call.data["description"]
         if call.data["meal_prep"]:
             description = MEAL_PREP_MARKER + description
-        await _add_dinner(entity_id, call.data["name"], description, call.data["new_date"])
+        await _add_dinner(
+            entity_id,
+            meal_title(call.data["name"], call.data["meal"]),
+            description,
+            call.data["new_date"],
+        )
         return {"moved": True}
 
     async def handle_remove_meal(call: ServiceCall) -> None:

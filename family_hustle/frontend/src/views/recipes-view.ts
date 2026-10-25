@@ -125,6 +125,7 @@ export class FamilyRecipesView extends LitElement {
     editText: string;
   } | null = null;
   @state() private _planDate = localDateKey(new Date());
+  @state() private _planMeal: "lunch" | "dinner" = "dinner";
   @state() private _busy = false;
   @state() private _aiBusy = false;
   @state() private _fillStatus = "";
@@ -349,10 +350,10 @@ export class FamilyRecipesView extends LitElement {
     this._status = "";
     try {
       await familyApi.call(this.hass, "schedule_meals", {
-        meals: [{ name: recipe.title, description: recipe.description, date: this._planDate }],
+        meals: [{ name: recipe.title, description: recipe.description, date: this._planDate, meal: this._planMeal }],
       });
       const day = new Date(`${this._planDate}T12:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
-      this._status = `Planned for ${day}.`;
+      this._status = `Planned for ${this._planMeal} on ${day}.`;
       this.dispatchEvent(new CustomEvent("meals-changed", { bubbles: true, composed: true }));
     } catch (err) {
       this._error = (err as Error).message;
@@ -424,7 +425,7 @@ export class FamilyRecipesView extends LitElement {
     const today = new Date();
     return Array.from({ length: 14 }, (_, i) => {
       const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
-      const label = i === 0 ? "Tonight" : i === 1 ? "Tomorrow" : d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+      const label = i === 0 ? "Today" : i === 1 ? "Tomorrow" : d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
       return html`<option value=${localDateKey(d)} ?selected=${localDateKey(d) === this._planDate}>${label}</option>`;
     });
   }
@@ -451,8 +452,12 @@ export class FamilyRecipesView extends LitElement {
       ${this._isParent && this.canPlan
         ? html`<div class="plan">
             <span>Plan for</span>
-            <select @change=${(e: Event) => (this._planDate = (e.target as HTMLSelectElement).value)}>${this._planOptions()}</select>
-            <button class="ghost" @click=${() => this._plan(r)}>Add to dinners</button>
+            <select aria-label="Meal" @change=${(e: Event) => (this._planMeal = (e.target as HTMLSelectElement).value as "lunch" | "dinner")}>
+              <option value="dinner" ?selected=${this._planMeal === "dinner"}>Dinner</option>
+              <option value="lunch" ?selected=${this._planMeal === "lunch"}>Lunch</option>
+            </select>
+            <select aria-label="Day" @change=${(e: Event) => (this._planDate = (e.target as HTMLSelectElement).value)}>${this._planOptions()}</select>
+            <button class="ghost" @click=${() => this._plan(r)}>Add to the week</button>
           </div>`
         : nothing}
       ${this._status ? html`<p class="ok">${this._status}</p>` : nothing}

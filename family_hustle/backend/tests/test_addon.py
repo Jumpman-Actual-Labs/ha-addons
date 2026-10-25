@@ -358,6 +358,7 @@ def test_dinner_week_shapes_board_entries():
         "is_today": True,
         "uid": "a",
         "meal_prep": False,
+        "meal": "dinner",
     }
 
 
@@ -982,3 +983,46 @@ async def test_settings_from_older_versions_are_dropped(config):
     saved = (await store.async_load())
     assert "workout_times" not in saved
     assert "show_workouts" not in saved["calendar_settings"]
+
+
+async def test_meal_prep_lunches(setup):
+    _coordinator, ha, call, _kid = await _family(setup)
+    ha.events["calendar.dinners"] = []
+    await call("update_calendar_settings", {"dinners_calendar": "calendar.dinners"}, ADMIN)
+    await call(
+        "schedule_meals",
+        {
+            "meals": [
+                {"name": "Burrito bowls", "date": "2026-10-26", "meal_prep": True, "meal": "lunch"},
+                {"name": "Tacos", "date": "2026-10-26"},
+            ]
+        },
+        ADMIN,
+    )
+    titles = [e["summary"] for e in ha.events["calendar.dinners"]]
+    assert titles == ["Lunch: Burrito bowls", "Tacos"]
+    week = meals.dinner_week(
+        [
+            normalize_event(e, "calendar.dinners", "Meals", {})
+            for e in ha.events["calendar.dinners"]
+        ],
+        date(2026, 10, 26),
+    )
+    assert [(w["meal"], w["dish"], w["meal_prep"]) for w in week] == [
+        ("lunch", "Burrito bowls", True),
+        ("dinner", "Tacos", False),
+    ]
+    lunch_uid = ha.events["calendar.dinners"][0]["uid"]
+    await call(
+        "move_meal",
+        {"uid": lunch_uid, "name": "Burrito bowls", "new_date": "2026-10-27", "meal": "lunch",
+         "meal_prep": True},
+        ADMIN,
+    )
+    assert "Lunch: Burrito bowls" in [e["summary"] for e in ha.events["calendar.dinners"]]
+
+
+def test_lunch_meal_prep_prompt():
+    prompt = meals._meal_plan_prompt("meal_prep", 2, 5, 5, None, [], "lunch")
+    assert "lunch" in prompt and "packable" in prompt
+    assert "dinner recipes" in meals._meal_plan_prompt("dinner_planning", 4, 7, 7, None, [])

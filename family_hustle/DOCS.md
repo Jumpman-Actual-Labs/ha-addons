@@ -4,7 +4,7 @@ Your family's calendar, chores, meals and shopping list in one sidebar
 panel, laid out like a Skylight Calendar.
 
 - **Calendar**: your Google Calendar as a day, week or month view, with
-  the Meals tab's dinners on the all-day row. Tag each event with who it's
+  the Meals tab's lunches and dinners on the all-day row. Tag each event with who it's
   for (that sets its color) and who's attending (their initials show on
   it). The strip across the top shows each person's chores done today. Tap
   someone to see only their events. Parents add events with the **+**
@@ -15,10 +15,11 @@ panel, laid out like a Skylight Calendar.
 - **Chores**: everything Hustle did: chores and recurring chores, extra jobs
   (bounties), grades, behavior, paychecks and payroll, and reports.
 - **Meals**, in two sections:
-  - **This week**: the next seven dinners. Add one from a recipe or just
-    type it, move or remove it, open its recipe, or have the AI plan the
-    week (**Plan with AI**) or a batch dish (**Meal prep**). A meal-prep
-    batch gets its own card at the top, with its nights and recipe. The grocery list from a plan sits
+  - **This week**: the next seven days' lunches and dinners. Add one from
+    a recipe or just type it, move or remove it, open its recipe, or have
+    the AI plan the week's dinners (**Plan with AI**) or a batch dish
+    (**Meal prep**, lunches by default). A meal-prep batch gets its own card
+    at the top, with its days and recipe. The grocery list from a plan sits
     underneath. Check off what you already have and **Add to shopping
     list** sends the rest to the Shopping tab.
   - **Recipes**: the family recipe box. Search it, add and edit recipes
@@ -26,8 +27,7 @@ panel, laid out like a Skylight Calendar.
     what you wrote), **Cook** a recipe step by step with an ingredient
     checklist (the screen stays on, and tapping an amount rescales every
     ingredient), send its ingredients to the shopping list, or plan it for
-    a night. A dinner with
-    the same name as a recipe links to it.
+    a lunch or dinner. A meal with the same name as a recipe links to it.
 - **Shopping**: Home Assistant's own shopping list, so it's the same list
   as in the Home Assistant app and Assist ("add milk to the shopping
   list"). Everyone in the family can add items, check them off, rename
@@ -42,7 +42,7 @@ Light and Dark on each device.
 - **Google Calendar integration** in Home Assistant (Settings > Devices &
   Services > Add Integration > Google Calendar). Family Hustle reads and
   writes your calendars through it, so anything it can see shows up here.
-  A separate "Dinners" Google Calendar for meal plans keeps them off the
+  A separate "Meals" Google Calendar for meal plans keeps them off the
   family calendar.
 - **MQTT broker** (the Mosquitto broker add-on) for Family Hustle's Home
   Assistant entities. Without one, the panel works fine but the entities
@@ -76,7 +76,7 @@ Light and Dark on each device.
    they're signed in with, and kids only get the kid views.
 4. **Calendar › ⚙**: pick your Google Calendar(s) and each person's color.
    The ⚙ settings on every tab are for parents with admin permission.
-5. **Meals › ⚙**: pick the Dinners calendar.
+5. **Meals › ⚙**: pick the Meals calendar.
 6. **Shopping › ⚙**: change the to-do list, if you don't want Home
    Assistant's Shopping List.
 
