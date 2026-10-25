@@ -17,6 +17,23 @@ from .workout_planner import (
 )
 
 
+def estimate_minutes(exercises: list[dict], catalog: dict[str, dict] | None = None) -> float:
+    """How long a session takes: five minutes warmup, one minute per
+    exercise for transitions, three seconds per repetition (timed sets count
+    their seconds), and the rest between sets. Used to fit a planned session
+    to its time budget, and by the Family Hustle calendar for a workout's
+    end time."""
+    catalog = catalog or {e["id"]: e for e in EXERCISE_LIBRARY}
+    seconds = 0
+    for e in exercises:
+        timed = catalog.get(e.get("exercise_id"), {}).get("is_timed")
+        sets = e.get("sets") or []
+        seconds += 60
+        seconds += sum((s.get("reps") or 0) * (1 if timed else 3) for s in sets)
+        seconds += max(0, len(sets) - 1) * (e.get("rest_seconds") or 0)
+    return round(5 + seconds / 60, 1)
+
+
 def plan_session(
     intent: PlanningIntent,
     profile: AthleteProfile,
@@ -119,21 +136,7 @@ def plan_session(
         minimum.add(next(i for i in ids if METADATA[i]['movement'] == slot))
 
     def minutes() -> float:
-        # Five minutes warmup, one minute transitions, three seconds per repetition.
-        return round(
-            5
-            + sum(
-                60
-                + sum(
-                    (s["reps"] if catalog[e["exercise_id"]].get("is_timed") else s["reps"] * 3)
-                    for s in e["sets"]
-                )
-                + max(0, len(e["sets"]) - 1) * e["rest_seconds"]
-                for e in exercises
-            )
-            / 60,
-            1,
-        )
+        return estimate_minutes(exercises, catalog)
 
     while minutes() > intent.duration_minutes:
         optional = next((e for e in reversed(exercises) if e["exercise_id"] not in minimum), None)
