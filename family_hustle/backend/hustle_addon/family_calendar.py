@@ -237,6 +237,28 @@ class FamilyCalendar:
                 return raw.get("uid")
         return None
 
+    async def update_event(
+        self,
+        entity_id: str,
+        uid: str,
+        event: dict[str, Any],
+        recurrence_id: str | None = None,
+    ) -> None:
+        """`calendar/event/update`. With `recurrence_id` only that one
+        occurrence changes; without, the whole event (series)."""
+        message: dict[str, Any] = {
+            "type": "calendar/event/update",
+            "entity_id": entity_id,
+            "uid": uid,
+            "event": event,
+        }
+        if recurrence_id:
+            message["recurrence_id"] = recurrence_id
+        try:
+            await self._client().ws_command(message)
+        except HomeAssistantError as err:
+            raise ServiceError(f"Couldn't change the event: {err}") from err
+
     async def delete_event(
         self, entity_id: str, uid: str, recurrence_id: str | None = None
     ) -> None:
@@ -280,6 +302,7 @@ def _event_bounds(data: dict[str, Any]) -> tuple[str, str]:
 
 SERVICE_CREATE_EVENT = "create_event"
 SERVICE_DELETE_EVENT = "delete_event"
+SERVICE_UPDATE_EVENT = "update_event"
 SERVICE_TAG_EVENT = "tag_event"
 SERVICE_UPDATE_CALENDAR_SETTINGS = "update_calendar_settings"
 
@@ -305,6 +328,24 @@ SCHEMAS = {
             vol.Optional("recurrence_id"): vol.Any(cv.string, None),
         }
     ),
+    # `recurrence_id` set = just that occurrence; otherwise the whole event,
+    # with `rrule` its (possibly unchanged) repeat rule.
+    SERVICE_UPDATE_EVENT: vol.Schema(
+        {
+            vol.Required("entity_id"): calendar_entity,
+            vol.Required("uid"): cv.string,
+            vol.Optional("recurrence_id"): vol.Any(cv.string, None),
+            vol.Required("summary"): cv.string,
+            vol.Required("start"): cv.string,
+            vol.Optional("end"): cv.string,
+            vol.Optional("all_day", default=False): cv.boolean,
+            vol.Optional("description", default=""): cv.string,
+            vol.Optional("location", default=""): cv.string,
+            vol.Optional("rrule"): vol.Any(rrule, None),
+            vol.Optional("for_member_id"): vol.Any(cv.string, None),
+            vol.Optional("attendee_ids", default=list): [cv.string],
+        }
+    ),
     SERVICE_TAG_EVENT: vol.Schema(
         {
             vol.Required("entity_id"): calendar_entity,
@@ -320,6 +361,7 @@ SCHEMAS = {
             vol.Optional("dinners_calendar"): vol.Any(calendar_entity, None),
             vol.Optional("shopping_list"): vol.Any(todo_entity, None),
             vol.Optional("show_dinners"): cv.boolean,
+            vol.Optional("show_workouts"): cv.boolean,
         }
     ),
 }
@@ -366,6 +408,51 @@ def build_handlers(
                 event_tag_key(call.data["entity_id"], call.data["uid"])
             )
 
+    async def handle_update_event(call: ServiceCall) -> dict[str, Any]:
+        """Changes an event in place. Calendars that can't update events
+        get a delete + re-add instead (one-off events only - a series can't
+        be safely rebuilt that way), and the tags move to the new uid."""
+        _require_parent(coordinator, call)
+        entity_id, uid = call.data["entity_id"], call.data["uid"]
+        recurrence_id = call.data.get("recurrence_id")
+        start, end = _event_bounds(call.data)
+        event: dict[str, Any] = {
+            "summary": call.data["summary"],
+            "dtstart": start,
+            "dtend": end,
+            "description": call.data["description"],
+            "location": call.data["location"],
+        }
+        if not recurrence_id and call.data.get("rrule"):
+            event["rrule"] = call.data["rrule"]
+        try:
+            await calendar.update_event(entity_id, uid, event, recurrence_id)
+        except ServiceError:
+            if recurrence_id or call.data.get("rrule"):
+                raise
+            _LOGGER.info("%s can't update events in place - re-adding %s", entity_id, uid)
+            await calendar.delete_event(entity_id, uid)
+            new_uid = await calendar.create_event(
+                entity_id,
+                call.data["summary"],
+                start,
+                end,
+                call.data["all_day"],
+                call.data["description"],
+                call.data["location"],
+            )
+            if new_uid:
+                await coordinator.async_move_event_tags(
+                    event_tag_key(entity_id, uid), event_tag_key(entity_id, new_uid)
+                )
+                uid = new_uid
+        await coordinator.async_set_event_tags(
+            event_tag_key(entity_id, uid),
+            call.data.get("for_member_id"),
+            call.data["attendee_ids"],
+        )
+        return {"uid": uid, "entity_id": entity_id}
+
     async def handle_tag_event(call: ServiceCall) -> dict[str, Any]:
         _require_parent(coordinator, call)
         return await coordinator.async_set_event_tags(
@@ -381,6 +468,7 @@ def build_handlers(
     return {
         SERVICE_CREATE_EVENT: handle_create_event,
         SERVICE_DELETE_EVENT: handle_delete_event,
+        SERVICE_UPDATE_EVENT: handle_update_event,
         SERVICE_TAG_EVENT: handle_tag_event,
         SERVICE_UPDATE_CALENDAR_SETTINGS: handle_update_calendar_settings,
     }

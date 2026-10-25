@@ -6,13 +6,24 @@ ingress gate."""
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pytest
+import voluptuous as vol
 from aiohttp.test_utils import TestClient, TestServer
 
-from hustle_addon import family_calendar, meals, migrate, mqtt, recipes, services, shopping, web
+from hustle_addon import (
+    family_calendar,
+    meals,
+    migrate,
+    mqtt,
+    recipes,
+    services,
+    shopping,
+    web,
+    workouts,
+)
 from hustle_addon.bridge import HassBridge
 from hustle_addon.config import AddonConfig
 from hustle_addon.coordinator import HustleCoordinator
@@ -34,6 +45,7 @@ class FakeHA:
         self.fired: list[tuple[str, dict]] = []
         self.service_calls: list[tuple[str, str, dict]] = []
         self.todo: dict[str, list[dict]] = {}
+        self.no_update = False
 
     async def get_calendars(self):
         return [{"entity_id": e, "name": e.split(".")[1].title()} for e in self.events]
@@ -57,6 +69,19 @@ class FakeHA:
                     "uid": f"uid-{len(self.commands)}",
                 }
             )
+        elif message["type"] == "calendar/event/update":
+            if self.no_update:
+                raise HomeAssistantError("This calendar does not support updating events")
+            event = message["event"]
+            key = "date" if len(event["dtstart"]) == 10 else "dateTime"
+            for e in self.events[message["entity_id"]]:
+                if e["uid"] == message["uid"]:
+                    e.update(
+                        summary=event["summary"],
+                        description=event.get("description"),
+                        start={key: event["dtstart"]},
+                        end={key: event["dtend"]},
+                    )
         elif message["type"] == "calendar/event/delete":
             self.events[message["entity_id"]] = [
                 e for e in self.events[message["entity_id"]] if e["uid"] != message["uid"]
@@ -334,6 +359,7 @@ def test_dinner_week_shapes_board_entries():
         "notes": "Red sauce",
         "is_today": True,
         "uid": "a",
+        "meal_prep": False,
     }
 
 
@@ -811,3 +837,210 @@ async def test_remove_meal_deletes_the_dinner(setup):
     [event] = ha.events["calendar.dinners"]
     await call("remove_meal", {"uid": event["uid"]}, ADMIN)
     assert ha.events["calendar.dinners"] == []
+
+
+# ------------------------------------------------------------ edit events
+
+
+async def _one_event(setup, all_day=False):
+    coordinator, ha, call, kid = await _family(setup)
+    ha.events["calendar.family"] = []
+    await call("update_calendar_settings", {"default_calendar": "calendar.family"}, ADMIN)
+    result = await call(
+        "create_event",
+        {
+            "summary": "Dentist",
+            "start": "2026-10-27T10:00:00-05:00",
+            "end": "2026-10-27T11:00:00-05:00",
+            "for_member_id": kid.id,
+        },
+        ADMIN,
+    )
+    return coordinator, ha, call, kid, result["uid"]
+
+
+async def test_edit_event_in_place_keeps_tags(setup):
+    coordinator, ha, call, kid, uid = await _one_event(setup)
+    result = await call(
+        "update_event",
+        {
+            "entity_id": "calendar.family",
+            "uid": uid,
+            "summary": "Dentist (moved)",
+            "start": "2026-10-28T14:00:00-05:00",
+            "end": "2026-10-28T15:00:00-05:00",
+            "for_member_id": kid.id,
+        },
+        ADMIN,
+    )
+    assert result["uid"] == uid
+    [event] = ha.events["calendar.family"]
+    assert event["summary"] == "Dentist (moved)"
+    assert event["start"] == {"dateTime": "2026-10-28T14:00:00-05:00"}
+    assert coordinator.event_tags[event_tag_key("calendar.family", uid)]["for_member_id"] == kid.id
+
+
+async def test_edit_falls_back_to_re_adding_and_moves_tags(setup):
+    coordinator, ha, call, kid, uid = await _one_event(setup)
+    ha.no_update = True
+    result = await call(
+        "update_event",
+        {
+            "entity_id": "calendar.family",
+            "uid": uid,
+            "summary": "Orthodontist",
+            "start": "2026-10-27T10:00:00-05:00",
+            "end": "2026-10-27T11:00:00-05:00",
+            "for_member_id": kid.id,
+        },
+        ADMIN,
+    )
+    [event] = ha.events["calendar.family"]
+    assert event["summary"] == "Orthodontist" and event["uid"] == result["uid"] != uid
+    assert event_tag_key("calendar.family", uid) not in coordinator.event_tags
+    assert coordinator.event_tags[event_tag_key("calendar.family", result["uid"])]
+
+
+async def test_editing_a_series_never_falls_back(setup):
+    _coordinator, ha, call, _kid, uid = await _one_event(setup)
+    ha.no_update = True
+    with pytest.raises(services.ServiceError, match="change the event"):
+        await call(
+            "update_event",
+            {
+                "entity_id": "calendar.family",
+                "uid": uid,
+                "recurrence_id": "20261027",
+                "summary": "Dentist",
+                "start": "2026-10-27T10:00:00-05:00",
+            },
+            ADMIN,
+        )
+    assert len(ha.events["calendar.family"]) == 1
+    with pytest.raises(services.ServiceError, match="parent"):
+        await call(
+            "update_event",
+            {"entity_id": "calendar.family", "uid": uid, "summary": "x", "start": "2026-10-27"},
+            {"id": "ha-kid"},
+        )
+
+
+# --------------------------------------------------------------- workouts
+
+
+class FakeGains:
+    def __init__(self, entries):
+        self.entries = entries
+
+    async def schedule(self, start, end):
+        return [e for e in self.entries if start.isoformat() <= e["date"] < end.isoformat()]
+
+
+def _gains_entry(**extra):
+    return {
+        "program_id": "p1",
+        "program_name": "Strong summer",
+        "occurrence_id": "week-3:s1",
+        "template_id": "s1",
+        "weekday": 1,
+        "ha_user_id": "ha-kid",
+        "athlete": "Kim",
+        "name": "Upper body",
+        "type": "workout",
+        "date": "2026-10-27",
+        "minutes": 50,
+        "status": "planned",
+        **extra,
+    }
+
+
+def test_gains_hostname():
+    assert workouts.gains_base_url("a1b2-family-hustle") == "http://a1b2-gains:8099"
+    assert workouts.gains_base_url("localhost") is None
+    assert workouts.gains_base_url("-family-hustle") is None
+
+
+async def test_workouts_become_events_with_start_times(setup):
+    coordinator, _ha, call, kid = await _family(setup)
+    gains = workouts.Workouts(FakeGains([_gains_entry()]), coordinator)
+    handlers = workouts.build_handlers(coordinator, gains)
+
+    async def set_time(data, user):
+        validated = workouts.SCHEMAS["set_workout_time"](data)
+        return await handlers["set_workout_time"](
+            services.ServiceCall(validated, services.Context(user["id"]), user)
+        )
+
+    [event] = await gains.events(date(2026, 10, 26), date(2026, 11, 2))
+    assert event["all_day"] is True and event["for_member_id"] == kid.id
+    assert event["workout"]["minutes"] == 50 and event["workout"]["start_time"] is None
+
+    target = {"program_id": "p1", "occurrence_id": "week-3:s1", "date": "2026-10-27"}
+    await set_time({**target, "time": "17:30"}, {"id": "ha-kid"})  # the athlete themself
+    [event] = await gains.events(date(2026, 10, 26), date(2026, 11, 2))
+    assert event["all_day"] is False
+    start = datetime.fromisoformat(event["start"])
+    end = datetime.fromisoformat(event["end"])
+    assert (start.hour, start.minute) == (17, 30) and end - start == timedelta(minutes=50)
+    assert event["workout"]["start_time_scope"] == "once"
+
+    # Weekly: every week's session - and it replaces this week's one-off.
+    await set_time({**target, "time": "06:00", "scope": "weekly"}, ADMIN)
+    assert coordinator.workout_times == {"once": {}, "weekly": {"p1|s1": "06:00"}}
+    [event] = await gains.events(date(2026, 10, 26), date(2026, 11, 2))
+    assert event["workout"]["start_time"] == "06:00"
+    assert event["workout"]["start_time_scope"] == "weekly"
+
+    await set_time({**target, "scope": "weekly"}, ADMIN)  # clear
+    assert coordinator.workout_times["weekly"] == {}
+
+
+async def test_only_the_athlete_or_a_parent_sets_workout_times(setup):
+    coordinator, _ha, call, _kid = await _family(setup)
+    await call(
+        "add_member",
+        {"ha_user_id": "ha-sib", "ha_display_name": "Sam", "role": "child"},
+        ADMIN,
+    )
+    gains = workouts.Workouts(FakeGains([_gains_entry()]), coordinator)
+    handler = workouts.build_handlers(coordinator, gains)["set_workout_time"]
+    data = workouts.SCHEMAS["set_workout_time"](
+        {"program_id": "p1", "occurrence_id": "week-3:s1", "date": "2026-10-27", "time": "07:00"}
+    )
+    with pytest.raises(services.ServiceError, match="your own"):
+        await handler(services.ServiceCall(data, services.Context("ha-sib"), {"id": "ha-sib"}))
+    missing = {**data, "occurrence_id": "week-9:s1"}
+    with pytest.raises(services.ServiceError, match="isn't on the Gains schedule"):
+        await handler(services.ServiceCall(missing, services.Context("ha-admin"), ADMIN))
+    with pytest.raises(vol.Invalid):
+        workouts.SCHEMAS["set_workout_time"]({**data, "time": "25:00"})
+
+
+async def test_no_gains_means_no_workouts(setup):
+    coordinator, *_ = await _family(setup)
+    nothing = workouts.Workouts(None, coordinator)
+    assert await nothing.events(date(2026, 10, 1), date(2026, 10, 8)) == []
+
+
+# -------------------------------------------------------------- meal prep
+
+
+async def test_meal_prep_dinners_are_marked(setup):
+    _coordinator, ha, call, _kid = await _family(setup)
+    ha.events["calendar.dinners"] = []
+    await call("update_calendar_settings", {"dinners_calendar": "calendar.dinners"}, ADMIN)
+    await call(
+        "schedule_meals",
+        {
+            "meals": [
+                {"name": "Chili", "description": "Big pot", "date": "2026-10-24", "meal_prep": True}
+            ]
+        },
+        ADMIN,
+    )
+    [event] = ha.events["calendar.dinners"]
+    assert event["description"] == "Meal prep · Big pot"
+    week = meals.dinner_week(
+        [normalize_event(event, "calendar.dinners", "Dinners", {})], date(2026, 10, 24)
+    )
+    assert week[0]["meal_prep"] is True and week[0]["notes"] == "Big pot"

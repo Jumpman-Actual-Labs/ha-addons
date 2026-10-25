@@ -60,6 +60,11 @@ ANTHROPIC_CHAT_MODEL = "claude-sonnet-5"
 
 MEAL_PLAN_MODES = ["dinner_planning", "meal_prep"]
 
+# Starts the description of a dinner that's part of a Meal Prep batch, so
+# the Meals tab knows which nights belong together (calendar events can't
+# carry anything else that survives Google).
+MEAL_PREP_MARKER = "Meal prep · "
+
 
 class AIError(ServiceError):
     """Any failure calling, or parsing the response of, the AI provider -
@@ -390,9 +395,10 @@ def dinner_week(events: list[dict[str, Any]], today: date) -> list[dict[str, Any
             {
                 "date": day.isoformat(),
                 "dish": event["summary"],
-                "notes": event["description"] or None,
+                "notes": event["description"].removeprefix(MEAL_PREP_MARKER) or None,
                 "is_today": day == today,
                 "uid": event["uid"],
+                "meal_prep": event["description"].startswith(MEAL_PREP_MARKER),
             }
         )
     week.sort(key=lambda entry: entry["date"])
@@ -463,6 +469,7 @@ SCHEMAS = {
                             vol.Required("name"): cv.string,
                             vol.Optional("description", default=""): cv.string,
                             vol.Required("date"): _date,
+                            vol.Optional("meal_prep", default=False): cv.boolean,
                         }
                     )
                 ],
@@ -475,6 +482,7 @@ SCHEMAS = {
             vol.Required("name"): cv.string,
             vol.Optional("description", default=""): cv.string,
             vol.Required("new_date"): _date,
+            vol.Optional("meal_prep", default=False): cv.boolean,
         }
     ),
     SERVICE_REMOVE_MEAL: vol.Schema({vol.Required("uid"): cv.string}),
@@ -531,7 +539,10 @@ def build_handlers(
         _require_parent(coordinator, call)
         entity_id = _dinners_calendar()
         for meal in call.data["meals"]:
-            await _add_dinner(entity_id, meal["name"], meal["description"], meal["date"])
+            description = meal["description"]
+            if meal["meal_prep"]:
+                description = MEAL_PREP_MARKER + description
+            await _add_dinner(entity_id, meal["name"], description, meal["date"])
         return {"scheduled": len(call.data["meals"])}
 
     async def handle_move_meal(call: ServiceCall) -> dict[str, Any]:
@@ -543,9 +554,10 @@ def build_handlers(
             await calendar.delete_event(entity_id, call.data["uid"])
         except ServiceError as err:
             raise ServiceError(f"Could not remove the existing event: {err}") from err
-        await _add_dinner(
-            entity_id, call.data["name"], call.data["description"], call.data["new_date"]
-        )
+        description = call.data["description"]
+        if call.data["meal_prep"]:
+            description = MEAL_PREP_MARKER + description
+        await _add_dinner(entity_id, call.data["name"], description, call.data["new_date"])
         return {"moved": True}
 
     async def handle_remove_meal(call: ServiceCall) -> None:

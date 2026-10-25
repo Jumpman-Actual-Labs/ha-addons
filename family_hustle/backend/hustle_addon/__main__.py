@@ -10,7 +10,7 @@ import signal
 import aiohttp
 from aiohttp import web
 
-from . import family_calendar, meals, recipes, services, shopping
+from . import family_calendar, meals, recipes, services, shopping, workouts
 from .bridge import HassBridge
 from .config import load_config
 from .coordinator import HustleCoordinator
@@ -22,6 +22,7 @@ from .scheduler import run_scheduler
 from .shopping import ShoppingList
 from .storage import HustleStore
 from .web import create_app
+from .workouts import GainsClient, Workouts, gains_base_url
 
 _LOGGER = logging.getLogger("hustle_addon")
 
@@ -49,12 +50,17 @@ async def main() -> None:
 
         calendar = FamilyCalendar(ha, coordinator)
         shopping_list = ShoppingList(ha, coordinator)
+        gains_url = gains_base_url(config.hostname)
+        gains_workouts = Workouts(
+            GainsClient(session, gains_url) if gains_url else None, coordinator
+        )
         schemas = {
             **services.SCHEMAS,
             **family_calendar.SCHEMAS,
             **meals.SCHEMAS,
             **recipes.SCHEMAS,
             **shopping.SCHEMAS,
+            **workouts.SCHEMAS,
         }
         handlers = {
             **services.build_handlers(coordinator),
@@ -62,9 +68,12 @@ async def main() -> None:
             **meals.build_handlers(coordinator, calendar, session, config),
             **recipes.build_handlers(coordinator, session, config),
             **shopping.build_handlers(coordinator, shopping_list),
+            **workouts.build_handlers(coordinator, gains_workouts),
         }
         runner = web.AppRunner(
-            create_app(config, coordinator, schemas, handlers, ha, calendar, shopping_list)
+            create_app(
+                config, coordinator, schemas, handlers, ha, calendar, shopping_list, gains_workouts
+            )
         )
         await runner.setup()
         await web.TCPSite(runner, "0.0.0.0", config.port).start()

@@ -13,6 +13,8 @@ Serves the panel itself plus everything it used to get from Home Assistant:
 - `api/calendar/calendars`, `api/calendar/events`, `api/meals/week` - read
   straight from Home Assistant's calendars on request; nothing about them
   is pushed (calendars have no change signal to push from).
+- `api/calendar/events?workouts=1` also returns the Gains add-on's program
+  workouts as events (workouts.py).
 - `api/shopping/lists`, `api/shopping/items` - Home Assistant's to-do
   lists and the shopping list's items, read on request the same way.
 - `images/...` - AI chore illustrations (was `/local/hustle_images/`).
@@ -52,6 +54,7 @@ from .meals import load_dinner_week
 from .services import Context, Handler, ServiceError, ServiceValidationError, async_call_service
 from .shopping import ShoppingList
 from .states import build_states
+from .workouts import Workouts
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,6 +72,7 @@ HANDLERS_KEY = web.AppKey("handlers", dict)
 HA_KEY = web.AppKey("ha", object)
 CALENDAR_KEY = web.AppKey("calendar", FamilyCalendar)
 SHOPPING_KEY = web.AppKey("shopping", ShoppingList)
+WORKOUTS_KEY = web.AppKey("workouts", Workouts)
 SOCKETS_KEY = web.AppKey("sockets", weakref.WeakSet)
 
 
@@ -280,9 +284,15 @@ async def calendar_events(request: web.Request) -> web.Response:
         if not entity_ids:
             settings = request.app[COORDINATOR_KEY].calendar_settings
             entity_ids = list(settings.get("family_calendars") or [])
-        if not entity_ids:
-            return web.json_response({"events": [], "errors": []})
-        return web.json_response(await request.app[CALENDAR_KEY].events(entity_ids, start, end))
+        result: dict[str, Any] = {"events": [], "errors": []}
+        if entity_ids:
+            result = await request.app[CALENDAR_KEY].events(entity_ids, start, end)
+        if request.query.get("workouts") == "1":
+            result["events"] = sorted(
+                result["events"] + await request.app[WORKOUTS_KEY].events(start, end),
+                key=lambda e: (e["start"], e["summary"]),
+            )
+        return web.json_response(result)
     except ServiceError as err:
         return _error(str(err))
 
@@ -324,6 +334,7 @@ def create_app(
     ha: HomeAssistantClient | None,
     calendar: FamilyCalendar,
     shopping: ShoppingList,
+    workouts: Workouts | None = None,
 ) -> web.Application:
     app = web.Application(middlewares=[_ingress_only])
     app[CONFIG_KEY] = config
@@ -333,6 +344,7 @@ def create_app(
     app[HA_KEY] = ha
     app[CALENDAR_KEY] = calendar
     app[SHOPPING_KEY] = shopping
+    app[WORKOUTS_KEY] = workouts or Workouts(None, coordinator)
     app[SOCKETS_KEY] = weakref.WeakSet()
 
     async def _on_startup(app: web.Application) -> None:

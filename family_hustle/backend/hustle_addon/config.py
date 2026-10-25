@@ -38,6 +38,10 @@ class AddonConfig:
     # there are no ingress headers. Must match a member's ha_user_id to use
     # the panel.
     dev_user_id: str = ""
+    # This container's hostname on Supervisor's add-on network,
+    # `<repository hash>-family-hustle` - Gains' is the same with `-gains`
+    # (see workouts.py).
+    hostname: str = ""
 
     @property
     def store_path(self) -> Path:
@@ -68,4 +72,5 @@ def load_config() -> AddonConfig:
         supervisor_token=os.environ.get("SUPERVISOR_TOKEN", ""),
         core_api_url=os.environ.get("HUSTLE_CORE_API_URL", "http://supervisor/core"),
         dev_user_id=os.environ.get("HUSTLE_DEV_USER_ID", ""),
+        hostname=os.environ.get("HOSTNAME", ""),
     )
