@@ -8,11 +8,6 @@ Serves the panel itself plus everything it used to get from Home Assistant:
   the `call_service` websocket command (with `return_response`) used to be
   (see services.py).
 
-- `internal/schedule` - every athlete's program workouts in a date range,
-  for the Family Hustle add-on's calendar (training.schedule_between). Only
-  Family Hustle may call it, from its own address on Supervisor's add-on
-  network - nothing else under `internal/` exists.
-
 Every path is relative, because ingress serves the add-on under
 `/api/hassio_ingress/<token>/` - the panel never builds an absolute URL.
 
@@ -30,8 +25,6 @@ import contextlib
 import json
 import logging
 import os
-import socket
-from datetime import date, timedelta
 from ipaddress import ip_address
 from typing import Any
 
@@ -68,45 +61,8 @@ def _allow_any_client() -> bool:
     return bool(os.environ.get("GAINS_ALLOW_ANY_CLIENT"))
 
 
-# Supervisor names an add-on's container `<repository hash>-<slug>`, with
-# underscores in the slug turned into hyphens.
-FAMILY_HUSTLE_HOST_SLUG = "family-hustle"
-MAX_SCHEDULE_DAYS = 62
-
-
-def sibling_hostname(own_hostname: str, slug: str) -> str | None:
-    """`a1b2c3d4-gains` -> `a1b2c3d4-family-hustle`. None outside
-    Supervisor, where the hostname isn't `<prefix>-gains`."""
-    prefix, sep, own_slug = own_hostname.rpartition("-")
-    if not sep or not prefix or own_slug != "gains":
-        return None
-    return f"{prefix}-{slug}"
-
-
-async def _resolve(hostname: str) -> set[str]:
-    try:
-        infos = await asyncio.get_running_loop().getaddrinfo(hostname, None)
-    except (OSError, socket.gaierror):
-        return set()
-    return {info[4][0] for info in infos}
-
-
-async def _is_family_hustle(request: web.Request) -> bool:
-    peer = request.remote
-    family = sibling_hostname(request.app[CONFIG_KEY].hostname, FAMILY_HUSTLE_HOST_SLUG)
-    if peer is None or family is None:
-        return False
-    # Resolved per request: the address changes whenever that container is
-    # recreated.
-    return peer in await _resolve(family)
-
-
 @web.middleware
 async def _access_control(request: web.Request, handler):
-    if request.path.startswith("/internal/"):
-        if not _allow_any_client() and not await _is_family_hustle(request):
-            return web.Response(status=403, text="Only the Family Hustle add-on may call this")
-        return await handler(request)
     if not _allow_any_client():
         peer = request.remote
         try:
@@ -235,24 +191,6 @@ async def call_service(request: web.Request) -> web.Response:
     return web.json_response({"response": response})
 
 
-# --------------------------------------------------------------- internal
-
-
-async def internal_schedule(request: web.Request) -> web.Response:
-    """`?start=&end=` (dates, end exclusive) -> `{"workouts": [...]}`."""
-    try:
-        start = date.fromisoformat(request.query["start"])
-        end = date.fromisoformat(request.query["end"])
-    except (KeyError, ValueError):
-        return _error("start and end must be YYYY-MM-DD dates")
-    if end <= start or end - start > timedelta(days=MAX_SCHEDULE_DAYS):
-        return _error(f"end must be 1-{MAX_SCHEDULE_DAYS} days after start")
-    from .training import schedule_between
-
-    data = request.app[COORDINATOR_KEY].data
-    return web.json_response({"workouts": schedule_between(data, start, end)})
-
-
 # -------------------------------------------------------------------- app
 
 
@@ -281,7 +219,6 @@ def create_app(
     app.router.add_get("/api/states", get_states)
     app.router.add_get("/api/websocket", websocket)
     app.router.add_post("/api/services/{service}", call_service)
-    app.router.add_get("/internal/schedule", internal_schedule)
     assets = config.static_dir / "assets"
     if assets.is_dir():
         app.router.add_static("/assets", assets)

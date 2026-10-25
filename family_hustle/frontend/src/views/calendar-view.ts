@@ -195,12 +195,9 @@ export class FamilyCalendarView extends LitElement {
     family: [] as string[],
     defaultCalendar: "",
     showDinners: true,
-    showWorkouts: true,
   };
   @state() private _busy = false;
   @state() private _dialogError = "";
-  @state() private _workoutTime = "";
-  @state() private _workoutScope: "once" | "weekly" = "once";
   /** Phone-sized: the iOS-Calendar-style month + day agenda instead of the
    * Skylight grids (see _phoneView). */
   @state() private _mobile = false;
@@ -285,9 +282,7 @@ export class FamilyCalendarView extends LitElement {
       .badge { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: .6rem; font-weight: 700; color: #fff; background: var(--c); border: 1.5px solid var(--sky-card); }
       .chip { border: 0; border-radius: 8px; padding: 3px 7px; font: inherit; font-size: .75rem; font-weight: 600; text-align: left; cursor: pointer; background: var(--bg); box-shadow: inset 3px 0 0 var(--c); color: var(--fh-event-ink, #2f3a4a); display: flex; gap: 4px; align-items: center; min-height: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
       .chip .badges { margin: 0 0 0 auto; flex-wrap: nowrap; }
-      .chip.done, .ev.done { opacity: .55; text-decoration: line-through; }
-      .ev .rep { --mdc-icon-size: 13px; opacity: .7; vertical-align: -2px; }
-      .chip.dinner { background: var(--dinner-bg); color: var(--dinner-ink); box-shadow: inset 3px 0 0 var(--dinner-gold); font-family: Georgia, "Times New Roman", serif; font-style: italic; --mdc-icon-size: 14px; }
+            .chip.dinner { background: var(--dinner-bg); color: var(--dinner-ink); box-shadow: inset 3px 0 0 var(--dinner-gold); font-family: Georgia, "Times New Roman", serif; font-style: italic; --mdc-icon-size: 14px; }
       .chip.dinner ha-icon { color: var(--dinner-gold); flex: none; }
       .chip .rep { --mdc-icon-size: 12px; opacity: .6; flex: none; }
 
@@ -462,19 +457,18 @@ export class FamilyCalendarView extends LitElement {
   private async _load(force: boolean): Promise<void> {
     if (!this.extras) return;
     const sources = this._sources().all;
-    const workouts = this.extras.calendarSettings.showWorkouts;
     const { start, end } = this._range();
-    const key = `${dateKey(start)}|${dateKey(end)}|${sources.join(",")}|${workouts}`;
+    const key = `${dateKey(start)}|${dateKey(end)}|${sources.join(",")}`;
     if (!force && key === this._loadedKey) return;
     this._loadedKey = key;
-    if (!sources.length && !workouts) {
+    if (!sources.length) {
       this._events = [];
       this._errors = [];
       return;
     }
     this._loading = true;
     try {
-      const result = await familyApi.events(dateKey(start), dateKey(end), sources, workouts);
+      const result = await familyApi.events(dateKey(start), dateKey(end), sources);
       if (key !== this._loadedKey) return; // a newer range is loading
       this._events = result.events;
       this._errors = result.errors;
@@ -544,8 +538,6 @@ export class FamilyCalendarView extends LitElement {
 
   private _openEvent(e: FamilyEvent): void {
     this._selected = e;
-    this._workoutTime = e.workout?.startTime ?? "";
-    this._workoutScope = e.workout?.startTimeScope === "weekly" ? "weekly" : "once";
     this._tagFor = e.forMemberId ?? "";
     this._tagAttendees = [...e.attendeeIds];
     this._dialogError = "";
@@ -771,33 +763,12 @@ export class FamilyCalendarView extends LitElement {
     );
   }
 
-  private _saveWorkoutTime(clear = false): void {
-    const w = this._selected?.workout;
-    if (!w) return;
-    if (!clear && !/^\d{2}:\d{2}$/.test(this._workoutTime)) {
-      this._dialogError = "Pick a start time.";
-      return;
-    }
-    void this._run(
-      () =>
-        familyApi.call(this.hass, "set_workout_time", {
-          program_id: w.programId,
-          occurrence_id: w.occurrenceId,
-          date: w.date,
-          scope: clear ? w.startTimeScope ?? "once" : this._workoutScope,
-          time: clear ? null : this._workoutTime,
-        }),
-      () => (this._selected = null)
-    );
-  }
-
   private async _openSettings(): Promise<void> {
     const s = this.extras.calendarSettings;
     this._settingsDraft = {
       family: [...s.familyCalendars],
       defaultCalendar: s.defaultCalendar ?? "",
       showDinners: s.showDinners,
-      showWorkouts: s.showWorkouts,
     };
     this._dialogError = "";
     this._settingsOpen = true;
@@ -820,7 +791,6 @@ export class FamilyCalendarView extends LitElement {
           family_calendars: draft.family,
           default_calendar: defaultCalendar,
           show_dinners: draft.showDinners,
-          show_workouts: draft.showWorkouts,
         }),
       () => (this._settingsOpen = false)
     );
@@ -856,9 +826,7 @@ export class FamilyCalendarView extends LitElement {
     }
     const c = this._color(e);
     const repeats = Boolean(e.rrule || e.recurrenceId);
-    const w = e.workout;
-    return html`<button class="chip ${w ? "workout" : ""} ${w && w.status !== "planned" ? "done" : ""}" style="--c:${c};--bg:${tint(c, 0.32)}" @click=${() => this._openEvent(e)} title=${`${e.summary} · ${w ? `~${w.minutes} min` : timeRange(e)}`}>
-      ${w ? html`<ha-icon class="rep" icon="mdi:dumbbell"></ha-icon>` : nothing}
+    return html`<button class="chip" style="--c:${c};--bg:${tint(c, 0.32)}" @click=${() => this._openEvent(e)} title=${`${e.summary} · ${timeRange(e)}`}>
       ${e.allDay ? "" : html`<span>${timeFmt.format(eventStart(e))}</span>`} ${e.summary}
       ${repeats ? html`<ha-icon class="rep" icon="mdi:repeat"></ha-icon>` : nothing}
       ${this._badges(e)}
@@ -1006,14 +974,13 @@ export class FamilyCalendarView extends LitElement {
                 const badges = maxBadges(p.lanes);
                 const badgeRoom = Math.min(p.event.attendeeIds.length, badges) * 20;
                 const repeats = Boolean(p.event.rrule || p.event.recurrenceId);
-                const w = p.event.workout;
                 return html`<button
-                  class="ev ${p.height < 40 ? "short" : ""} ${w && w.status !== "planned" ? "done" : ""}"
+                  class="ev ${p.height < 40 ? "short" : ""}"
                   style="top:${p.top}px;height:${p.height}px;left:calc(${p.lane * width}% + 3px);width:calc(${width}% - 6px);--c:${c};--bg:${tint(c, 0.32)};--bp:${badgeRoom}px"
                   title=${`${p.event.summary} · ${timeRange(p.event)}`}
                   @click=${() => this._openEvent(p.event)}
                 >
-                  <span class="t">${w ? html`<ha-icon class="rep" icon="mdi:dumbbell"></ha-icon> ` : nothing}${p.event.summary}</span>
+                  <span class="t">${p.event.summary}</span>
                   ${p.height > 34
                     ? html`<span class="w">${timeRange(p.event)}${repeats ? " · repeats" : ""}${single && p.event.location ? ` · ${p.event.location}` : ""}</span>`
                     : nothing}
@@ -1073,46 +1040,9 @@ export class FamilyCalendarView extends LitElement {
     </select>`;
   }
 
-  /** A Gains workout: when it is, how long Gains expects it to take, and
-   * (for the athlete or a parent) its start time - this one, or that
-   * session every week. */
-  private _workoutDialog(e: FamilyEvent) {
-    const w = e.workout!;
-    const canSet = this._isParent || this.hass.user?.id === w.haUserId;
-    const weekday = new Date(`${w.date}T12:00`).toLocaleDateString(undefined, { weekday: "long" });
-    const when = w.startTime
-      ? `${longDate.format(eventStart(e))} · ${timeRange(e)}`
-      : `${longDate.format(new Date(`${w.date}T12:00`))} · no start time yet`;
-    return html`<hustle-dialog open .heading=${e.summary} @hustle-dialog-closed=${() => (this._selected = null)}>
-      <p class="detail-time">${when}</p>
-      <div class="detail-meta"><ha-icon icon="mdi:dumbbell"></ha-icon>${w.athlete} · ${w.programName || "Gains program"}</div>
-      <div class="detail-meta"><ha-icon icon="mdi:timer-outline"></ha-icon>About ${w.minutes} minutes, Gains' estimate</div>
-      ${w.status !== "planned" ? html`<div class="detail-meta"><ha-icon icon="mdi:check-circle"></ha-icon>${w.status === "completed" ? "Done" : "Skipped"}</div>` : nothing}
-      ${w.startTimeScope === "weekly" ? html`<p class="detail-meta">Starts at this time every ${weekday}.</p>` : nothing}
-      ${canSet
-        ? html`<div class="row2">
-              <div><label>Start time</label><input type="time" .value=${this._workoutTime} @input=${(ev: Event) => (this._workoutTime = (ev.target as HTMLInputElement).value)} /></div>
-              <div><label>Ends</label><input disabled .value=${this._workoutTime ? timeFmt.format(new Date(new Date(`${w.date}T${this._workoutTime}`).getTime() + w.minutes * 60_000)) : "—"} /></div>
-            </div>
-            <label>Use this time for</label>
-            <select @change=${(ev: Event) => (this._workoutScope = (ev.target as HTMLSelectElement).value as "once" | "weekly")}>
-              <option value="once" ?selected=${this._workoutScope === "once"}>Just this workout</option>
-              <option value="weekly" ?selected=${this._workoutScope === "weekly"}>Every ${weekday} in ${w.programName || "this program"}</option>
-            </select>`
-        : html`<p class="detail-meta">${w.athlete} or a parent can set when this starts.</p>`}
-      ${this._dialogError ? html`<p class="err">${this._dialogError}</p>` : nothing}
-      <div class="actions">
-        ${canSet && w.startTime ? html`<button class="ghost left" ?disabled=${this._busy} @click=${() => this._saveWorkoutTime(true)}>Clear time</button>` : nothing}
-        <button class="ghost" @click=${() => (this._selected = null)}>Close</button>
-        ${canSet ? html`<button class="primary" ?disabled=${this._busy} @click=${() => this._saveWorkoutTime()}>Save</button>` : nothing}
-      </div>
-    </hustle-dialog>`;
-  }
-
   private _eventDialog() {
     const e = this._selected;
     if (!e) return nothing;
-    if (e.workout) return this._workoutDialog(e);
     const dinner = this._isDinner(e);
     const repeats = Boolean(e.rrule || e.recurrenceId);
     const day = longDate.format(eventStart(e));
@@ -1309,11 +1239,6 @@ export class FamilyCalendarView extends LitElement {
         Show dinners from the Meals tab
       </label>
       ${!dinners ? html`<p class="detail-meta">Pick a Dinners calendar on the Meals tab first.</p>` : nothing}
-      <label class="check">
-        <input type="checkbox" .checked=${draft.showWorkouts} @change=${(e: Event) =>
-          (this._settingsDraft = { ...draft, showWorkouts: (e.target as HTMLInputElement).checked })} />
-        Show workouts from Gains programs
-      </label>
       <h3 class="section">Family colors</h3>
       <p class="detail-meta">Each person's color, used for their events and everywhere else. Changes save straight away.</p>
       ${this._colorRows()}
@@ -1352,10 +1277,9 @@ export class FamilyCalendarView extends LitElement {
     return html`<button class="p-item ${dinner ? "dinner" : ""}" style="--c:${color}" @click=${() => this._openEvent(e)}>
       <span class="stripe"></span>
       <span class="main">
-        <span class="title">${dinner ? html`<ha-icon icon="mdi:silverware-fork-knife"></ha-icon>` : nothing}${e.workout ? html`<ha-icon icon="mdi:dumbbell"></ha-icon>` : nothing}${e.summary}${repeats ? html`<ha-icon icon="mdi:repeat"></ha-icon>` : nothing}</span>
-        ${e.location || e.attendeeIds.length || eventDays(e).length > 1 || e.workout
+        <span class="title">${dinner ? html`<ha-icon icon="mdi:silverware-fork-knife"></ha-icon>` : nothing}${e.summary}${repeats ? html`<ha-icon icon="mdi:repeat"></ha-icon>` : nothing}</span>
+        ${e.location || e.attendeeIds.length || eventDays(e).length > 1
           ? html`<span class="meta">
-              ${e.workout ? html`<span>${e.workout.athlete} · ~${e.workout.minutes} min${e.workout.status !== "planned" ? ` · ${e.workout.status}` : ""}</span>` : nothing}
               ${e.location ? html`<ha-icon icon="mdi:map-marker"></ha-icon>${e.location}` : nothing}
               ${eventDays(e).length > 1 ? html`<span>${timeRange(e)}</span>` : nothing}
               ${this._badges(e, 6)}

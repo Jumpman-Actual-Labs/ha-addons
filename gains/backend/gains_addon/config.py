@@ -52,10 +52,6 @@ class AddonConfig:
     # Supervisor's proxy to Home Assistant Core (config.yaml's
     # `homeassistant_api: true`) - used only for account pictures.
     core_api_url: str = "http://supervisor/core"
-    # This container's hostname on Supervisor's add-on network,
-    # `<repository hash>-gains` - Family Hustle's is the same with
-    # `-family-hustle` (see web.py's internal/ routes).
-    hostname: str = ""
 
     @property
     def store_path(self) -> Path:
@@ -103,5 +99,4 @@ def load_config() -> AddonConfig:
         log_level=str(options.get("log_level") or "info"),
         supervisor_token=os.environ.get("SUPERVISOR_TOKEN", ""),
         core_api_url=os.environ.get("GAINS_CORE_API_URL", "http://supervisor/core"),
-        hostname=os.environ.get("HOSTNAME", ""),
     )

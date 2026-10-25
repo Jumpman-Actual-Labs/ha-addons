@@ -367,7 +367,6 @@ SCHEMAS = {
             vol.Optional("dinners_calendar"): vol.Any(calendar_entity, None),
             vol.Optional("shopping_list"): vol.Any(todo_entity, None),
             vol.Optional("show_dinners"): cv.boolean,
-            vol.Optional("show_workouts"): cv.boolean,
         }
     ),
 }

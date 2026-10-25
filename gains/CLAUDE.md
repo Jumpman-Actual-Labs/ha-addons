@@ -92,12 +92,7 @@ Add-on layers around them:
   a path on HA's own origin, which the same-origin ingress iframe loads
   as-is. `None` outside Supervisor, where there are no pictures.
 - `web.py` - `api/states`, `api/websocket` (per-viewer pushes),
-  `api/services/<name>`, and `internal/schedule` for the Family Hustle
-  add-on's calendar: `training.schedule_between` (every active program's
-  dated sessions, minus rest days, with `session_minutes` - the planner's
-  `estimate_minutes`, shared with `session_engine`). The middleware only
-  answers `internal/` from the address `<prefix>-family-hustle` resolves to
-  (the same sibling-hostname trick Stash uses for Garage).
+  `api/services/<name>`.
 - `migrate.py` - first start only (no `/data/gains.json`):
   `.storage/gains_data` copied unchanged (ids and `ha_user_id`s survive),
   plus the config entry's AI options into `/data/imported_settings.json`,

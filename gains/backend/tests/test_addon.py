@@ -403,24 +403,3 @@ async def test_coach_athletes_carry_their_home_assistant_picture(coordinator):
     )
     by_name = {c["display_name"]: c["picture"] for c in snapshot["coachable_profiles"]}
     assert by_name == {"June": "/api/image/j", "jody": None}
-
-
-async def test_internal_schedule_is_only_for_family_hustle(
-    aiohttp_client, config, coordinator, monkeypatch
-):
-    from gains_addon.web import sibling_hostname
-
-    assert sibling_hostname("a1b2c3d4-gains", "family-hustle") == "a1b2c3d4-family-hustle"
-    assert sibling_hostname("localhost", "family-hustle") is None
-    monkeypatch.delenv("GAINS_ALLOW_ANY_CLIENT", raising=False)
-    client = await aiohttp_client(create_app(config, coordinator, build_handlers(coordinator)))
-    resp = await client.get("/internal/schedule?start=2026-10-01&end=2026-10-08")
-    assert resp.status == 403
-
-
-async def test_internal_schedule_answers(client):
-    resp = await client.get("/internal/schedule?start=2026-10-01&end=2026-10-08")
-    assert resp.status == 200
-    assert await resp.json() == {"workouts": []}
-    resp = await client.get("/internal/schedule?start=2026-10-01&end=2027-10-08")
-    assert resp.status == 400

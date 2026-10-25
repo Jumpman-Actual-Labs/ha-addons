@@ -80,18 +80,6 @@ Add-on layers:
   meals.py's `_generate_json` to complete a recipe from its name plus any
   fields already written (`known_fields`), which the prompt says to keep
   and which are put back over the reply regardless. It saves nothing.
-- `workouts.py`: Gains program workouts on the calendar. `GainsClient`
-  calls the Gains add-on's `internal/schedule` over Supervisor's add-on
-  network (`<prefix>-gains:8099`, derived from this container's
-  `<prefix>-family-hustle` hostname; `HUSTLE_GAINS_URL` overrides it for
-  dev runs). Gains gates that route to this add-on's address. Each workout
-  becomes an event (`entity_id` "gains", `uid` program|occurrence, plus a
-  `workout` block) for the member whose `ha_user_id` matches the athlete.
-  Start times live in `coordinator.workout_times`: `once`
-  (program|occurrence) beats `weekly` (program|session template). With no
-  start time a workout is all-day; with one it lasts Gains' `minutes`.
-  `set_workout_time` is for the athlete or any parent and looks the workout
-  up on Gains first. No Gains means no workouts, not an error.
 - `states.py`: the panel's read model. These are the exact payloads of the
   integration's `sensor.py` (`hustle_key`/`member_id`/`chore_definition_id`/
   `chore_assignment_id`/`bounty_id` markers), plus `calendar_settings`,
@@ -149,7 +137,10 @@ integration. `test_addon.py` covers the add-on layers against a fake HA.
   instead: iOS-Calendar-style month-only dates (`_range` returns just the
   month), a bar under each date in the colors of whoever has events that
   day (`_dayColors`; untagged = grey, dinners skipped), the picked day's
-  agenda below, and a sideways swipe to change month. Event color = the "for" member
+  agenda below, and a sideways swipe to change month.
+  1.2.0 also showed Gains program workouts here (via a Gains
+  `internal/schedule` endpoint); 1.2.1 removed that at Jordan's request as
+  too much for the calendar - don't bring it back unasked. Event color = the "for" member
   (`utils/member-colors.ts`: avatar color or a pastel by roster order).
 - `views/meals-view.ts`: the Meals tab, with **This week** and **Recipes**
   sections. This week lists the next seven dinners from

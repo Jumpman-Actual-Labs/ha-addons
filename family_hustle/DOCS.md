@@ -9,9 +9,7 @@ panel, laid out like a Skylight Calendar.
   it). The strip across the top shows each person's chores done today. Tap
   someone to see only their events. Parents add events with the **+**
   button, including multi-day and repeating ones, and tap one to tag, edit
-  or delete it. Workouts from Gains programs show too: tap one to set when
-  it starts (just that day, or every week), and it ends when Gains expects
-  the workout to be done.
+  or delete it.
   On a phone it looks like the iPhone Calendar app: each date has a colored
   bar showing who has events that day, and tapping a date lists its events.
 - **Chores**: everything Hustle did: chores and recurring chores, extra jobs
@@ -52,8 +50,6 @@ Light and Dark on each device.
 - The **Shopping List** integration (or any Home Assistant to-do list) for
   the Shopping tab. It uses `todo.shopping_list` unless a parent picks
   another list under Shopping › ⚙.
-- The **Gains** add-on (1.0.3 or newer), for program workouts on the
-  calendar. Optional.
 - An **OpenAI or Anthropic API key** for meal planning, and OpenAI for chore
   pictures. Optional: everything else works without one.
 

@@ -102,8 +102,6 @@ class HustleCoordinator:
         self.event_tags: dict[str, dict[str, Any]] = {}
         self.grocery_list: dict[str, Any] = {"categories": [], "generated_at": None}
         self.recipes: list[dict[str, Any]] = []
-        # Gains workout start times - see workouts.py.
-        self.workout_times: dict[str, dict[str, str]] = {"once": {}, "weekly": {}}
 
     # ----------------------------------------------------------- listeners
     # Stands in for DataUpdateCoordinator's push API from the integration
@@ -162,18 +160,16 @@ class HustleCoordinator:
         self.pay_periods = [PayPeriod.from_dict(p) for p in raw.get("pay_periods", [])]
         self.paychecks = [Paycheck.from_dict(p) for p in raw.get("paychecks", [])]
         self.earnings_reset_at = raw.get("earnings_reset_at")
+        defaults = default_calendar_settings()
+        stored_settings = raw.get("calendar_settings") or {}
         self.calendar_settings = {
-            **default_calendar_settings(),
-            **(raw.get("calendar_settings") or {}),
+            **defaults,
+            # Settings an older version had but this one doesn't are dropped.
+            **{k: v for k, v in stored_settings.items() if k in defaults},
         }
         self.event_tags = dict(raw.get("event_tags") or {})
         self.grocery_list = raw.get("grocery_list") or {"categories": [], "generated_at": None}
         self.recipes = list(raw.get("recipes") or [])
-        stored_times = raw.get("workout_times") or {}
-        self.workout_times = {
-            "once": dict(stored_times.get("once") or {}),
-            "weekly": dict(stored_times.get("weekly") or {}),
-        }
         self.recent_activity = [ActivityEntry.from_dict(a) for a in raw.get("recent_activity", [])]
 
         if migrated_stale_images:
@@ -205,7 +201,6 @@ class HustleCoordinator:
             "event_tags": self.event_tags,
             "grocery_list": self.grocery_list,
             "recipes": self.recipes,
-            "workout_times": self.workout_times,
         }
         await self.store.async_save(data)
         self.async_set_updated_data(self._build_public_data())
@@ -2024,15 +2019,6 @@ class HustleCoordinator:
         self.recipes.sort(key=lambda r: r["title"].lower())
         await self._async_save()
         return recipe
-
-    async def async_set_workout_time(self, scope: str, key: str, time: str | None) -> None:
-        """`scope` is "once" or "weekly"; no `time` clears it."""
-        times = self.workout_times[scope]
-        if time:
-            times[key] = time
-        elif times.pop(key, None) is None:
-            return
-        await self._async_save()
 
     async def async_move_event_tags(self, old_key: str, new_key: str) -> None:
         """An event re-created under a new uid keeps its tags."""

@@ -21,8 +21,7 @@ def estimate_minutes(exercises: list[dict], catalog: dict[str, dict] | None = No
     """How long a session takes: five minutes warmup, one minute per
     exercise for transitions, three seconds per repetition (timed sets count
     their seconds), and the rest between sets. Used to fit a planned session
-    to its time budget, and by the Family Hustle calendar for a workout's
-    end time."""
+    to its time budget."""
     catalog = catalog or {e["id"]: e for e in EXERCISE_LIBRARY}
     seconds = 0
     for e in exercises:

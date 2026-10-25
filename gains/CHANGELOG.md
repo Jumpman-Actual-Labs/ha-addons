@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.4
+
+- Program workouts no longer go to the Family Hustle calendar - the
+  schedule sharing added in 1.0.3 is removed.
+
 ## 1.0.3
 
 - Program workouts can show on the Family Hustle calendar: Gains shares

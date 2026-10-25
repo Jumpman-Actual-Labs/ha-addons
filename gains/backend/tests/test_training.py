@@ -1169,39 +1169,9 @@ async def test_regeneration_failure_preserves_program_and_rejects_other_athlete(
     assert program.to_dict() == before
 
 
-async def test_schedule_between_lists_dated_sessions_for_the_calendar(coordinator):
-    athlete = await coordinator.async_ensure_profile("u", "Jordan")
-    program = TrainingProgram(
-        id="p",
-        profile_id=athlete.id,
-        **training.validate_program(PROGRAM, athlete, coordinator.data),
-    )
-    coordinator.data.programs.append(program)
-    # Program starts Monday 2026-09-14: the workout is on Mondays, the rest
-    # day (Sundays) never shows up.
-    entries = training.schedule_between(coordinator.data, date(2026, 9, 14), date(2026, 9, 28))
-    workouts = [e for e in entries if e["type"] == "workout"]
-    assert [e["date"] for e in workouts] == ["2026-09-14", "2026-09-21"]
-    assert all(e["type"] != "rest" for e in entries)
-    first = workouts[0]
-    assert first["ha_user_id"] == "u" and first["athlete"] == "Jordan"
-    assert first["occurrence_id"] == "week-1:" + first["template_id"]
-    assert first["weekday"] == 0 and first["status"] == "planned"
-    assert first["minutes"] >= 5
-    # Nothing before the program starts; nothing for a paused program.
-    assert training.schedule_between(coordinator.data, date(2026, 9, 1), date(2026, 9, 14)) == []
-    program.status = "paused"
-    assert training.schedule_between(coordinator.data, date(2026, 9, 14), date(2026, 9, 28)) == []
-
-
-def test_session_minutes_falls_back_sensibly():
+def test_estimate_minutes():
     from gains_addon.session_engine import estimate_minutes
 
     exercises = [{"exercise_id": "nope", "sets": [{"reps": 10}] * 3, "rest_seconds": 60}]
     # 5 warmup + (60 + 90 + 120) seconds = 9.5 minutes
     assert estimate_minutes(exercises) == 9.5
-    assert training.session_minutes({"prescription": {"exercises": exercises}}, None) == 10
-    planned = {"prescription": {"planning": {"estimated_duration_minutes": 52.4}}}
-    assert training.session_minutes(planned, None) == 52
-    assert training.session_minutes({"target_duration_minutes": 30}, None) == 30
-    assert training.session_minutes({}, None) == 45

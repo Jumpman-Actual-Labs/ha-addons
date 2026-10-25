@@ -6,11 +6,10 @@ ingress gate."""
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
-import voluptuous as vol
 from aiohttp.test_utils import TestClient, TestServer
 
 from hustle_addon import (
@@ -22,7 +21,6 @@ from hustle_addon import (
     services,
     shopping,
     web,
-    workouts,
 )
 from hustle_addon.bridge import HassBridge
 from hustle_addon.config import AddonConfig
@@ -31,7 +29,7 @@ from hustle_addon.family_calendar import FamilyCalendar, event_tag_key, normaliz
 from hustle_addon.ha_client import HomeAssistantError
 from hustle_addon.shopping import ShoppingList
 from hustle_addon.states import build_states
-from hustle_addon.storage import HustleStore
+from hustle_addon.storage import HustleStore, default_data
 
 PAYDAY = {"type": "weekly", "day_of_week": "FRI"}
 
@@ -925,103 +923,6 @@ async def test_editing_a_series_never_falls_back(setup):
         )
 
 
-# --------------------------------------------------------------- workouts
-
-
-class FakeGains:
-    def __init__(self, entries):
-        self.entries = entries
-
-    async def schedule(self, start, end):
-        return [e for e in self.entries if start.isoformat() <= e["date"] < end.isoformat()]
-
-
-def _gains_entry(**extra):
-    return {
-        "program_id": "p1",
-        "program_name": "Strong summer",
-        "occurrence_id": "week-3:s1",
-        "template_id": "s1",
-        "weekday": 1,
-        "ha_user_id": "ha-kid",
-        "athlete": "Kim",
-        "name": "Upper body",
-        "type": "workout",
-        "date": "2026-10-27",
-        "minutes": 50,
-        "status": "planned",
-        **extra,
-    }
-
-
-def test_gains_hostname():
-    assert workouts.gains_base_url("a1b2-family-hustle") == "http://a1b2-gains:8099"
-    assert workouts.gains_base_url("localhost") is None
-    assert workouts.gains_base_url("-family-hustle") is None
-
-
-async def test_workouts_become_events_with_start_times(setup):
-    coordinator, _ha, call, kid = await _family(setup)
-    gains = workouts.Workouts(FakeGains([_gains_entry()]), coordinator)
-    handlers = workouts.build_handlers(coordinator, gains)
-
-    async def set_time(data, user):
-        validated = workouts.SCHEMAS["set_workout_time"](data)
-        return await handlers["set_workout_time"](
-            services.ServiceCall(validated, services.Context(user["id"]), user)
-        )
-
-    [event] = await gains.events(date(2026, 10, 26), date(2026, 11, 2))
-    assert event["all_day"] is True and event["for_member_id"] == kid.id
-    assert event["workout"]["minutes"] == 50 and event["workout"]["start_time"] is None
-
-    target = {"program_id": "p1", "occurrence_id": "week-3:s1", "date": "2026-10-27"}
-    await set_time({**target, "time": "17:30"}, {"id": "ha-kid"})  # the athlete themself
-    [event] = await gains.events(date(2026, 10, 26), date(2026, 11, 2))
-    assert event["all_day"] is False
-    start = datetime.fromisoformat(event["start"])
-    end = datetime.fromisoformat(event["end"])
-    assert (start.hour, start.minute) == (17, 30) and end - start == timedelta(minutes=50)
-    assert event["workout"]["start_time_scope"] == "once"
-
-    # Weekly: every week's session - and it replaces this week's one-off.
-    await set_time({**target, "time": "06:00", "scope": "weekly"}, ADMIN)
-    assert coordinator.workout_times == {"once": {}, "weekly": {"p1|s1": "06:00"}}
-    [event] = await gains.events(date(2026, 10, 26), date(2026, 11, 2))
-    assert event["workout"]["start_time"] == "06:00"
-    assert event["workout"]["start_time_scope"] == "weekly"
-
-    await set_time({**target, "scope": "weekly"}, ADMIN)  # clear
-    assert coordinator.workout_times["weekly"] == {}
-
-
-async def test_only_the_athlete_or_a_parent_sets_workout_times(setup):
-    coordinator, _ha, call, _kid = await _family(setup)
-    await call(
-        "add_member",
-        {"ha_user_id": "ha-sib", "ha_display_name": "Sam", "role": "child"},
-        ADMIN,
-    )
-    gains = workouts.Workouts(FakeGains([_gains_entry()]), coordinator)
-    handler = workouts.build_handlers(coordinator, gains)["set_workout_time"]
-    data = workouts.SCHEMAS["set_workout_time"](
-        {"program_id": "p1", "occurrence_id": "week-3:s1", "date": "2026-10-27", "time": "07:00"}
-    )
-    with pytest.raises(services.ServiceError, match="your own"):
-        await handler(services.ServiceCall(data, services.Context("ha-sib"), {"id": "ha-sib"}))
-    missing = {**data, "occurrence_id": "week-9:s1"}
-    with pytest.raises(services.ServiceError, match="isn't on the Gains schedule"):
-        await handler(services.ServiceCall(missing, services.Context("ha-admin"), ADMIN))
-    with pytest.raises(vol.Invalid):
-        workouts.SCHEMAS["set_workout_time"]({**data, "time": "25:00"})
-
-
-async def test_no_gains_means_no_workouts(setup):
-    coordinator, *_ = await _family(setup)
-    nothing = workouts.Workouts(None, coordinator)
-    assert await nothing.events(date(2026, 10, 1), date(2026, 10, 8)) == []
-
-
 # -------------------------------------------------------------- meal prep
 
 
@@ -1065,3 +966,19 @@ async def test_edit_this_and_following(setup):
     assert update["recurrence_id"] == "20261103"
     assert update["recurrence_range"] == "THISANDFUTURE"
     assert update["event"]["rrule"] == "FREQ=WEEKLY;BYDAY=TU"
+
+
+async def test_settings_from_older_versions_are_dropped(config):
+    """1.2.0 stored a show_workouts setting; it's gone now."""
+    store = HustleStore(config.store_path)
+    data = default_data()
+    data["calendar_settings"] = {**data["calendar_settings"], "show_workouts": False}
+    data["workout_times"] = {"once": {"p|w": "07:00"}, "weekly": {}}
+    await store.async_save(data)
+    coordinator = HustleCoordinator(HassBridge(None, None, config.images_dir), store)
+    await coordinator.async_load()
+    assert "show_workouts" not in coordinator.calendar_settings
+    await coordinator.async_save_grocery_list([])
+    saved = (await store.async_load())
+    assert "workout_times" not in saved
+    assert "show_workouts" not in saved["calendar_settings"]

@@ -13,8 +13,6 @@ export interface CalendarSettings {
   dinnersCalendar: string | null;
   /** Dinners also show on the Calendar tab's all-day row. */
   showDinners: boolean;
-  /** Gains program workouts show on the Calendar tab. */
-  showWorkouts: boolean;
   /** The Home Assistant to-do list behind the Shopping tab. */
   shoppingList: string | null;
 }
@@ -85,23 +83,6 @@ export interface CalendarInfo {
   name: string;
 }
 
-/** A Gains program workout shown on the calendar (backend workouts.py). */
-export interface WorkoutInfo {
-  programId: string;
-  programName: string;
-  occurrenceId: string;
-  templateId: string;
-  weekday: number | null;
-  date: string;
-  athlete: string;
-  haUserId: string;
-  minutes: number;
-  status: "planned" | "completed" | "skipped";
-  /** "HH:MM", or null when no start time is set yet. */
-  startTime: string | null;
-  startTimeScope: "once" | "weekly" | null;
-}
-
 export interface FamilyEvent {
   entityId: string;
   calendarName: string;
@@ -118,8 +99,6 @@ export interface FamilyEvent {
   allDay: boolean;
   forMemberId: string | null;
   attendeeIds: string[];
-  /** Set for a Gains workout - not a real calendar event. */
-  workout: WorkoutInfo | null;
 }
 
 export interface DinnerEntry {
@@ -156,7 +135,6 @@ export function parseFamilyExtras(hass: HomeAssistant): FamilyExtras {
       defaultCalendar: (settings.default_calendar as string | null) ?? null,
       dinnersCalendar: (settings.dinners_calendar as string | null) ?? null,
       showDinners: settings.show_dinners !== false,
-      showWorkouts: settings.show_workouts !== false,
       shoppingList: (settings.shopping_list as string | null) ?? null,
     },
     groceryList: Array.isArray(grocery.categories)
@@ -230,24 +208,6 @@ function toEvent(raw: Record<string, unknown>): FamilyEvent {
     allDay: Boolean(raw.all_day),
     forMemberId: (raw.for_member_id as string | null) ?? null,
     attendeeIds: strings(raw.attendee_ids),
-    workout: raw.workout ? toWorkout(raw.workout as Record<string, unknown>) : null,
-  };
-}
-
-function toWorkout(w: Record<string, unknown>): WorkoutInfo {
-  return {
-    programId: String(w.program_id),
-    programName: String(w.program_name ?? ""),
-    occurrenceId: String(w.occurrence_id),
-    templateId: String(w.template_id),
-    weekday: w.weekday === null || w.weekday === undefined ? null : Number(w.weekday),
-    date: String(w.date),
-    athlete: String(w.athlete ?? ""),
-    haUserId: String(w.ha_user_id ?? ""),
-    minutes: Number(w.minutes) || 45,
-    status: (w.status as WorkoutInfo["status"]) ?? "planned",
-    startTime: (w.start_time as string | null) ?? null,
-    startTimeScope: (w.start_time_scope as WorkoutInfo["startTimeScope"]) ?? null,
   };
 }
 
@@ -259,12 +219,10 @@ export const familyApi = {
   async events(
     start: string,
     end: string,
-    entityIds: string[] = [],
-    workouts = false
+    entityIds: string[] = []
   ): Promise<{ events: FamilyEvent[]; errors: string[] }> {
     const params = new URLSearchParams({ start, end });
     entityIds.forEach((id) => params.append("entity_id", id));
-    if (workouts) params.set("workouts", "1");
     const body = await getJson<{ events: Array<Record<string, unknown>>; errors: string[] }>(
       `api/calendar/events?${params}`
     );

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1
+
+- Gains workouts are off the calendar again (too much on it). Their start
+  times and the "Show workouts" setting are cleared. Event editing and meal
+  prep from 1.2.0 stay.
+
 ## 1.2.0
 
 - Calendar: edit events - title, time, dates, place, notes, repeat and

@@ -46,7 +46,6 @@ def default_data() -> dict[str, Any]:
         "event_tags": {},
         "grocery_list": {"categories": [], "generated_at": None},
         "recipes": [],
-        "workout_times": {"once": {}, "weekly": {}},
     }
 
 
@@ -64,8 +63,6 @@ def default_calendar_settings() -> dict[str, Any]:
         "dinners_calendar": None,
         # Dinners also show on the Calendar tab's all-day row.
         "show_dinners": True,
-        # Gains program workouts show on the Calendar tab (workouts.py).
-        "show_workouts": True,
         # The Shopping tab - Home Assistant's own Shopping List integration
         # unless a parent picks another to-do list.
         "shopping_list": "todo.shopping_list",
