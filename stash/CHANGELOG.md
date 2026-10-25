@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.2
+
+- Budgets shows each bill once. An overdue bill and its next occurrence
+  no longer appear as two rows - the row shows the overdue one, with the
+  next amount and due date underneath.
+- Clicking a bill on Budgets shows its next payment due (plus anything due
+  after it) and its last 3 payments across every month.
+- A recurring bill's next occurrence now keeps its "Pay to" company.
+
 ## 1.0.1
 
 - New "Midnight Cobalt" look with a dark and a light theme, including

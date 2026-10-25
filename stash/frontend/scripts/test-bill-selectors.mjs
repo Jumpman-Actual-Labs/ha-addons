@@ -10,7 +10,7 @@ try {
   execFileSync(process.execPath, [resolve('node_modules/typescript/bin/tsc'),
     'src/bill-selectors.ts', '--module', 'commonjs', '--target', 'ES2022',
     '--skipLibCheck', '--outDir', output], { stdio: 'inherit' });
-  const { remainingForBill, isOverdue, dueOrder, compareBills, lastPaymentDate } = createRequire(import.meta.url)(join(output, 'bill-selectors.js'));
+  const { remainingForBill, isOverdue, dueOrder, compareBills, lastPaymentDate, groupBillSeries, outstandingInSeries, recentSeriesPayments, seriesPayTo } = createRequire(import.meta.url)(join(output, 'bill-selectors.js'));
   const bill = { name: 'Internet', amount: 125, status: 'partially_paid', dueDate: '2026-09-10', payments: [{ total: 40 }] };
   assert.equal(remainingForBill(bill), 85, 'partial payment is deducted from fee-inclusive total');
   assert.equal(remainingForBill({ ...bill, status: 'paid' }), 0);
@@ -45,6 +45,31 @@ try {
   assert.equal(lastPaymentDate({...fixtures[1],payments:[]}), '');
   assert.deepEqual(fixtures.map(b=>b.billId),['a','b','c']);
   console.log('All five bill sort keys, both directions, partial payments and missing dates/payees passed.');
+  const occ = (id, dueDate, status, extra = {}) => ({ billId: id, name: 'Power', payTo: '', categoryId: 'util', amount: 100, status,
+    dueDate, month: dueDate.slice(0, 7), recurringParentId: 'p1', payments: [], ...extra });
+  const pay = (date, total) => ({ date, total });
+  const power = [
+    occ('p1', '2026-07-22', 'paid', { recurringParentId: null, payTo: 'Duke Energy', payments: [pay('2026-07-20', 100)] }),
+    occ('p2', '2026-08-22', 'paid', { payments: [pay('2026-08-21', 100)] }),
+    occ('p3', '2026-09-22', 'paid', { payments: [pay('2026-09-25', 100)] }),
+    occ('p4', '2026-10-22', 'unpaid'),
+    occ('p5', '2026-11-22', 'unpaid'),
+    // Re-entered by hand: new lineage, same name and category.
+    occ('dup', '2026-10-31', 'unpaid', { recurringParentId: null, name: ' power ', payTo: 'Duke Energy' }),
+  ];
+  const water = occ('w1', '2026-10-30', 'unpaid', { name: 'Water', recurringParentId: null });
+  const otherCat = occ('o1', '2026-10-22', 'unpaid', { categoryId: 'other', recurringParentId: null });
+  const series = groupBillSeries([...power, water, otherCat], '2026-10');
+  assert.equal(series.length, 3, 'one series per bill, same name in another category stays separate');
+  const p = series.find(s => s.bills.some(b => b.billId === 'p1'));
+  assert.equal(p.bills.length, 6);
+  assert.equal(p.focus.billId, 'p4', 'overdue occurrence is the row, not the next one');
+  assert.deepEqual(outstandingInSeries(p).map(b => b.billId), ['p4', 'dup', 'p5']);
+  assert.deepEqual(recentSeriesPayments(p).map(x => x.bill.billId), ['p3', 'p2', 'p1'], 'last 3 payments, newest first');
+  assert.equal(seriesPayTo(p), 'Duke Energy', 'payee falls back to another occurrence');
+  const caughtUp = groupBillSeries(power.slice(0, 3).concat(occ('p4', '2026-10-22', 'paid'), occ('p5', '2026-11-22', 'unpaid')), '2026-10')[0];
+  assert.equal(caughtUp.focus.billId, 'p4', 'all paid this month: show this month, not next');
+  console.log('Bill series grouping checks passed.');
 } finally {
   rmSync(output, { recursive: true, force: true });
 }

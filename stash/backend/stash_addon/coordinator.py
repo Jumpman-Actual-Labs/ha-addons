@@ -749,6 +749,7 @@ class FinanceCoordinator:
             frequency=bill.frequency,
             bill_type=bill.bill_type,
             notes=bill.notes,
+            pay_to=bill.pay_to,
             month=next_date.isoformat()[:7],
             manual_responsibility=bill.manual_responsibility,
             responsible_member_id=bill.responsible_member_id,

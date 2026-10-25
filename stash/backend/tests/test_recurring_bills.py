@@ -101,3 +101,12 @@ def test_ensure_recurring_bills_skips_one_time_and_future_bills():
 
     assert changed is False
     assert len(instance.bills) == 2
+
+
+def test_next_occurrence_keeps_the_payee():
+    power = make_bill(id="power", name="Power", pay_to="Duke Energy")
+    instance = coordinator([power])
+
+    asyncio.run(instance._maybe_generate_recurring(power))
+
+    assert instance.bills[-1].pay_to == "Duke Energy"

@@ -4,6 +4,7 @@ import type { HomeAssistant } from "../ha-api";
 import { financeApi } from "../ha-api";
 import type { Bill, BillPayment, Contribution, FinanceState } from "../types";
 import { money } from "../format";
+import { isOverdue, outstandingInSeries, recentSeriesPayments, remainingForBill, seriesPayTo, type BillSeries } from "../bill-selectors";
 import { glassCardStyle, bankingStyle } from "../styles";
 import { paletteColor } from "../colors";
 import "./finance-dialog";
@@ -25,12 +26,17 @@ function today(): string {
  * listen for `bill-workspace-closed` to know when the caller should clear
  * it (the sub-dialogs it opens - edit/pay/late fee - are otherwise fully
  * self-contained local state).
+ *
+ * With `series` set (the Budgets tab), the details show the bill as a whole -
+ * the next payment due and the last 3 payments across every occurrence -
+ * and `bill` should be the series' focus occurrence, which Pay/Edit act on.
  */
 @customElement("finance-bill-workspace")
 export class FinanceBillWorkspace extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @property({ attribute: false }) financeState!: FinanceState;
   @property({ attribute: false }) bill: Bill | null = null;
+  @property({ attribute: false }) series: BillSeries | null = null;
 
   @state() private _saving = false;
 
@@ -104,6 +110,17 @@ export class FinanceBillWorkspace extends LitElement {
     .donut-legend .legend-amount { color: var(--secondary-text-color, #727272); }
     .bill-details-notes { margin: 4px 0 16px; padding: 12px; border-radius: 8px; background: var(--secondary-background-color, #f5f5f5); font-size: 0.9rem; }
     .bill-details-history-title { font-weight: 500; margin-bottom: 4px; }
+    .next-due { padding: 16px; border-radius: 12px; background: var(--secondary-background-color, #f5f5f5); margin-bottom: 20px; }
+    .next-due-label { font-size: 0.8rem; color: var(--secondary-text-color, #727272); }
+    .next-due-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 4px; }
+    .next-due-row strong { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+    .next-due-then { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider-color, #ddd); font-size: 0.85rem; color: var(--secondary-text-color, #727272); }
+    .next-due .status { font-size: 0.8rem; padding: 3px 8px; border-radius: 12px; text-transform: capitalize; white-space: nowrap; }
+    .next-due .status.unpaid { background: var(--stash-muted-bg); color: var(--secondary-text-color); }
+    .next-due .status.partially_paid { background: var(--stash-warning-bg); color: var(--stash-warning); }
+    .next-due .status.deferred { background: var(--stash-deferred-bg); color: var(--stash-deferred); }
+    .next-due .status.overdue { background: var(--stash-danger-bg); color: var(--stash-danger); }
+    .history-entry-for { color: var(--secondary-text-color, #727272); font-size: 0.8rem; margin-top: 2px; }
     .bill-details-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; margin-top: 20px; }
     .history-entry { padding: 12px 0; border-bottom: 1px solid var(--divider-color, #e0e0e0); }
     .history-entry:last-child { border-bottom: none; }
@@ -193,9 +210,37 @@ export class FinanceBillWorkspace extends LitElement {
     if (bill.payments.length === 0) {
       return html`<div class="empty">No payments recorded yet.</div>`;
     }
+    return html`${[...bill.payments].reverse().map((p) => this._renderHistoryEntry(bill, p))}`;
+  }
+
+  private _renderSeriesDetails(series: BillSeries) {
+    const [next, ...later] = outstandingInSeries(series);
+    const recent = recentSeriesPayments(series, 3);
     return html`
-      ${[...bill.payments].reverse().map(
-        (p) => html`
+      <div class="next-due">
+        <div class="next-due-label">Next payment due</div>
+        ${next
+          ? html`
+              <div class="next-due-row">
+                <span>${next.dueDate}</span>
+                <strong>${money(remainingForBill(next))}</strong>
+                <span class="status ${isOverdue(next) ? "overdue" : next.status}">${isOverdue(next) ? "overdue" : next.status.replace("_", " ")}</span>
+              </div>
+              ${later.length > 0
+                ? html`<div class="next-due-then">Then ${later.map((b) => `${money(remainingForBill(b))} due ${b.dueDate}`).join(", ")}</div>`
+                : ""}
+            `
+          : html`<div class="empty">All caught up - nothing due.</div>`}
+      </div>
+      <div class="bill-details-history-title">Past payments</div>
+      ${recent.length === 0
+        ? html`<div class="empty">No payments recorded yet.</div>`
+        : recent.map(({ bill, payment }) => this._renderHistoryEntry(bill, payment, true))}
+    `;
+  }
+
+  private _renderHistoryEntry(bill: Bill, p: BillPayment, showDue = false) {
+    return html`
           <div class="history-entry">
             <div class="history-entry-header">
               <span>${this._paymentTypeLabel(p.type)}</span>
@@ -222,10 +267,9 @@ export class FinanceBillWorkspace extends LitElement {
                   </div>
                 `
               : ""}
+            ${showDue ? html`<div class="history-entry-for">For the bill due ${bill.dueDate}</div>` : ""}
             ${p.notes ? html`<div class="history-entry-notes">${p.notes}</div>` : ""}
           </div>
-        `
-      )}
     `;
   }
 
@@ -330,6 +374,14 @@ export class FinanceBillWorkspace extends LitElement {
   private _renderBillDetailsContent() {
     const bill = this.bill;
     if (!bill) return html``;
+    if (this.series) {
+      return html`
+        ${this._renderSeriesDetails(this.series)}
+        <p class="bill-meta">${seriesPayTo(this.series) ? `Paid to ${seriesPayTo(this.series)} · ` : ""}${bill.frequency.replace("_", " ")} · ${bill.responsibleMemberId ? `Individual bill · ${this._memberName(bill.responsibleMemberId)}` : "Shared household bill"}</p>
+        ${bill.notes ? html`<div class="bill-details-notes"><strong>Notes:</strong> ${bill.notes}</div>` : ""}
+        ${this._renderDetailsActions(bill)}
+      `;
+    }
     return html`
       <div class="bill-breakdown">
         <div><span>Original amount</span><strong>${money(bill.baseAmount)}</strong></div>
@@ -341,6 +393,12 @@ export class FinanceBillWorkspace extends LitElement {
       ${bill.notes ? html`<div class="bill-details-notes"><strong>Notes:</strong> ${bill.notes}</div>` : ""}
       <div class="bill-details-history-title">Payment History</div>
       ${this._renderBillHistory(bill)}
+      ${this._renderDetailsActions(bill)}
+    `;
+  }
+
+  private _renderDetailsActions(bill: Bill) {
+    return html`
       <div class="bill-details-actions">
         <button class="link" @click=${() => this._deleteBillFromDetails(bill)}>Delete</button>
         <div class="actions">

@@ -10,7 +10,7 @@ import type {
   Frequency,
 } from "../types";
 import { money } from "../format";
-import { compareBills, lastPaymentDate, isOverdue, remainingForBill, type BillSortKey, type SortDirection } from "../bill-selectors";
+import { compareBills, groupBillSeries, lastPaymentDate, isOverdue, outstandingInSeries, remainingForBill, seriesPayTo, type BillSeries, type BillSortKey, type SortDirection } from "../bill-selectors";
 import { glassCardStyle, bankingStyle } from "../styles";
 import { paletteColor } from "../colors";
 import "../components/finance-dialog";
@@ -52,6 +52,9 @@ export class FinanceBillsView extends LitElement {
 
   // Bill details/payment/edit/late-fee - handled by finance-bill-workspace
   @state() private _selectedBill: Bill | null = null;
+  // Budgets tab opens a whole series (every occurrence of one bill) instead;
+  // kept as a key so it re-resolves against fresh state after a payment.
+  @state() private _selectedSeriesKey: string | null = null;
 
   // Add bill dialog
   @state() private _addOpen = false;
@@ -616,23 +619,31 @@ export class FinanceBillsView extends LitElement {
     `;
   }
 
-  private _renderBillRow(bill: Bill) {
+  private _renderBillRow(bill: Bill, series?: BillSeries) {
+    const open = () => {
+      if (series) this._selectedSeriesKey = series.key;
+      else this._selectedBill = bill;
+    };
+    const outstanding = series ? outstandingInSeries(series) : [];
+    const moreDue = outstanding.filter((b) => b.billId !== bill.billId);
+    const payTo = series ? seriesPayTo(series) : bill.payTo;
     return html`
       <ha-card class="bill-card" role="button" tabindex="0" aria-label=${`View ${bill.name}`}
         @keydown=${(e: KeyboardEvent) => {
-          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); this._selectedBill = bill; }
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
         }}
-        @click=${() => (this._selectedBill = bill)}>
+        @click=${open}>
         <div class="bill-row">
           <span class="bill-avatar"><ha-icon icon="mdi:receipt-text-outline"></ha-icon></span>
           <div class="bill-main">
-            <div class="bill-name">${bill.name}${bill.payTo ? html` <span class="pay-to">- ${bill.payTo}</span>` : ""}</div>
+            <div class="bill-name">${bill.name}${payTo ? html` <span class="pay-to">- ${payTo}</span>` : ""}</div>
             <div class="bill-meta">
               Due ${bill.dueDate} · ${bill.frequency.replace("_", " ")}
               ${bill.responsibleMemberId ? html` · Individual: ${this.financeState.members.find(m => m.memberId === bill.responsibleMemberId)?.name ?? "Former member"}` : ""}
               ${bill.status !== "paid" && bill.payments.length > 0 ? html`<span> · ${money(remainingForBill(bill))} left to pay</span>` : ""}
               ${this._sort === "paidDate" && this.section === "bills" ? html`<span> · ${lastPaymentDate(bill) ? `Last payment ${lastPaymentDate(bill)}` : "No recorded payment date"}</span>` : ""}
               ${this._sort === "amountDue" && this.section === "bills" ? html`<span> · Bill total ${money(bill.amount)}</span>` : ""}
+              ${moreDue.length > 0 ? html`<span> · next ${money(moreDue[0].amount)} due ${moreDue[0].dueDate}${moreDue.length > 1 ? ` (+${moreDue.length - 1} more)` : ""}</span>` : ""}
               ${bill.lateFee > 0 ? html`<span class="fee-badge">Includes ${money(bill.lateFee)} late fees</span>` : ""}
             </div>
           </div>
@@ -714,9 +725,16 @@ export class FinanceBillsView extends LitElement {
     }).sort((a, b) => compareBills(a, b, this._sort, this._sortDirection));
     const unpaid = this.financeState.bills.filter(b => b.status !== "paid");
     const late = unpaid.filter(b => isOverdue(b));
-    const uncategorizedBills = this.financeState.bills
-      .filter((b) => !knownCategoryIds.has(b.categoryId) && b.month === currentMonth)
-      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    // Budgets: one row per bill, not per occurrence - an overdue occurrence
+    // and the next one due show as a single row (the overdue one).
+    const monthSeries = groupBillSeries(this.financeState.bills, currentMonth)
+      .filter((s) => s.bills.some((b) => b.month === currentMonth));
+    const selectedSeries = this._selectedSeriesKey
+      ? groupBillSeries(this.financeState.bills, currentMonth).find((s) => s.key === this._selectedSeriesKey) ?? null
+      : null;
+    const uncategorizedSeries = monthSeries
+      .filter((s) => !knownCategoryIds.has(s.focus.categoryId))
+      .sort((a, b) => a.focus.dueDate.localeCompare(b.focus.dueDate));
 
     return html`
       <div class="toolbar">
@@ -777,9 +795,9 @@ export class FinanceBillsView extends LitElement {
       </section>
 
       ${categories.map((category, i) => {
-        const categoryBills = this.financeState.bills
-          .filter((b) => b.categoryId === category.categoryId && b.month === currentMonth)
-          .sort((a, b) => b.amount - a.amount);
+        const categorySeries = monthSeries
+          .filter((s) => s.focus.categoryId === category.categoryId)
+          .sort((a, b) => b.focus.amount - a.focus.amount);
         const pct = totalBudget > 0 ? (category.total / totalBudget) * 100 : 0;
         const overBudget = category.plannedBudget > 0 && category.total > category.plannedBudget;
         return html`
@@ -799,10 +817,10 @@ export class FinanceBillsView extends LitElement {
               </button>
               <button class="link" @click=${() => this._openExpenseDialog(category)}>+ Add Item</button>
             </div>
-            ${categoryBills.length === 0 && category.expenses.length === 0
+            ${categorySeries.length === 0 && category.expenses.length === 0
               ? html`<div class="empty">Nothing in this category yet.</div>`
               : ""}
-            ${categoryBills.map((bill) => this._renderBillRow(bill))}
+            ${categorySeries.map((s) => this._renderBillRow(s.focus, s))}
             ${category.expenses.map(
               (expense) => html`
                 <div class="item-row">
@@ -830,13 +848,13 @@ export class FinanceBillsView extends LitElement {
         `;
       })}
 
-      ${uncategorizedBills.length > 0
+      ${uncategorizedSeries.length > 0
         ? html`
             <ha-card class="category-section">
               <div class="category-header">
                 <span class="category-name">Uncategorized</span>
               </div>
-              ${uncategorizedBills.map((bill) => this._renderBillRow(bill))}
+              ${uncategorizedSeries.map((s) => this._renderBillRow(s.focus, s))}
             </ha-card>
           `
         : ""}
@@ -912,8 +930,9 @@ export class FinanceBillsView extends LitElement {
       <finance-bill-workspace
         .hass=${this.hass}
         .financeState=${this.financeState}
-        .bill=${this._selectedBill}
-        @bill-workspace-closed=${() => (this._selectedBill = null)}
+        .bill=${selectedSeries?.focus ?? this._selectedBill}
+        .series=${selectedSeries}
+        @bill-workspace-closed=${() => { this._selectedBill = null; this._selectedSeriesKey = null; }}
       ></finance-bill-workspace>
 
       <finance-category-expense-dialog
