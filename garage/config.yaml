@@ -1,5 +1,5 @@
 name: Garage
-version: "1.1.0"
+version: "1.1.1"
 slug: garage
 description: Vehicles, fuel, maintenance and documents for your household
 url: https://github.com/Jumpman-Actual-Labs/ha-addons
@@ -11,6 +11,7 @@ ingress: true
 ingress_stream: true
 panel_icon: mdi:garage
 panel_title: Garage
+panel_admin: false
 # Driver notify.* reminders, the HA user list, and Stash sync when Stash is
 # still the old integration go through Home Assistant Core's API. (The Stash
 # add-on is called directly - see backend/garage_addon/stash_client.py.)
@@ -27,7 +28,10 @@ options:
   openai_api_key: ""
   mqtt_enabled: true
   log_level: info
+  allowed_users: []
 schema:
   openai_api_key: password?
   mqtt_enabled: bool
   log_level: list(debug|info|warning|error)
+  allowed_users:
+    - str

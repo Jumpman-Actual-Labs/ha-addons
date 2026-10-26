@@ -82,7 +82,12 @@ versioned update flow. Those two repos are retired; start Cache work here.
 - **Ingress only.** The backend (aiohttp, port 8099) serves the panel and
   its API. `web.py`'s middleware refuses any client but Supervisor's
   ingress proxy (172.30.32.2) - ingress is what authenticates users, and
-  it passes who they are in `X-Remote-User-*` headers.
+  it passes who they are in `X-Remote-User-*` headers. Every add-on here
+  sets `panel_admin: false` and has an `allowed_users` option: a second
+  middleware (`_allowed_users_only`; Relay's `lib/access.js`) refuses any
+  request without a user header, and when the list isn't empty, any
+  username (id as fallback) not on it - case-insensitive, with a themed
+  403 page. Dev runs (`*_ALLOW_ANY_CLIENT` / `RELAY_DEV`) skip both checks.
 - **The panel still thinks it's talking to Home Assistant.** It was
   written against `hass.states` + `hass.callService`; the backend's
   `states.py` builds the same entity payloads the integration's sensors

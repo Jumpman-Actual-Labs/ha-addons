@@ -29,6 +29,9 @@ class AddonConfig:
     ai_provider: str = "openai"
     mqtt_enabled: bool = True
     log_level: str = "info"
+    # The Configuration tab's Allowed users, stripped and casefolded so
+    # web.py can compare them as-is. Empty means everyone.
+    allowed_users: tuple[str, ...] = ()
     supervisor_token: str = ""
     # Supervisor's proxy to Home Assistant Core (config.yaml's
     # `homeassistant_api: true`) - used for member notifications,
@@ -65,6 +68,11 @@ def load_config() -> AddonConfig:
         ai_provider=str(options.get("ai_provider") or "openai"),
         mqtt_enabled=bool(options.get("mqtt_enabled", True)),
         log_level=str(options.get("log_level") or "info"),
+        allowed_users=tuple(
+            str(name).strip().casefold()
+            for name in options.get("allowed_users") or []
+            if str(name).strip()
+        ),
         supervisor_token=os.environ.get("SUPERVISOR_TOKEN", ""),
         core_api_url=os.environ.get("HUSTLE_CORE_API_URL", "http://supervisor/core"),
         dev_user_id=os.environ.get("HUSTLE_DEV_USER_ID", ""),

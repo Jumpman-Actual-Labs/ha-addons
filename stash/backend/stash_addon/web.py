@@ -127,6 +127,118 @@ async def _access_control(request: web.Request, handler):
     return await handler(request)
 
 
+# Shown to anyone the Configuration tab's Allowed users leaves out. Styled
+# like the panel (Midnight Cobalt palette), which never loads for them.
+_NO_ACCESS_PAGE = """<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stash</title>
+    <style>
+      :root {
+        --bg: #050d1f;
+        --card: #0b1730;
+        --line: #1c2c4d;
+        --ink: #eaf1ff;
+        --muted: #93a7c9;
+        --accent: #2f7dff;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f3f7fc;
+          --card: #ffffff;
+          --line: #d8e2f0;
+          --ink: #0b1b3a;
+          --muted: #5b6b86;
+          --accent: #1667ff;
+        }
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--muted);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main {
+        display: flex;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+        padding: 0 16px;
+      }
+      .card {
+        max-width: 420px;
+        padding: 32px 28px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--card);
+        text-align: center;
+      }
+      .mark {
+        width: 44px;
+        height: 44px;
+        margin: 0 auto 16px;
+        border-radius: 50%;
+        border: 2px solid var(--accent);
+        color: var(--accent);
+        font-size: 22px;
+        line-height: 44px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        color: var(--ink);
+        font-size: 1.15rem;
+      }
+      p {
+        margin: 0;
+        font-size: 0.9rem;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="card">
+        <div class="mark">&#x2715;</div>
+        <h1>You don't have access to this add-on</h1>
+        <p>
+          Ask a Home Assistant administrator to add your username to
+          Stash's Allowed users option.
+        </p>
+      </div>
+    </main>
+  </body>
+</html>
+"""
+
+
+@web.middleware
+async def _allowed_users_only(request: web.Request, handler):
+    """The Configuration tab's Allowed users. Runs after _access_control,
+    so the X-Remote-User-* headers are ingress's and can't be forged. A request
+    without one is refused even when the list is empty (everyone).
+    `internal/` is left to _access_control's Garage check - Garage's sync
+    carries no user.
+    """
+    if not _allow_any_client() and not request.path.startswith("/internal/"):
+        user = (
+            request.headers.get("X-Remote-User-Name")
+            or request.headers.get("X-Remote-User-Id")
+            or ""
+        ).strip()
+        allowed = request.app[CONFIG_KEY].allowed_users
+        if not user:
+            _LOGGER.info("Refused a request with no Home Assistant user")
+            return web.Response(status=403, text=_NO_ACCESS_PAGE, content_type="text/html")
+        if allowed and user.casefold() not in allowed:
+            _LOGGER.info("Refused %s - not in Allowed users", user)
+            return web.Response(status=403, text=_NO_ACCESS_PAGE, content_type="text/html")
+    return await handler(request)
+
+
 # ------------------------------------------------------------------- user
 
 
@@ -296,7 +408,7 @@ def create_app(
     handlers: dict[str, Handler],
     ha: HomeAssistantClient | None,
 ) -> web.Application:
-    app = web.Application(middlewares=[_access_control])
+    app = web.Application(middlewares=[_access_control, _allowed_users_only])
     app[CONFIG_KEY] = config
     app[COORDINATOR_KEY] = coordinator
     app[HANDLERS_KEY] = handlers

@@ -1,5 +1,5 @@
 name: Gains
-version: "1.0.4"
+version: "1.0.5"
 slug: gains
 description: AI-assisted workout planning and tracking for your household
 url: https://github.com/Jumpman-Actual-Labs/ha-addons
@@ -11,6 +11,7 @@ ingress: true
 ingress_stream: true
 panel_icon: mdi:dumbbell
 panel_title: Gains
+panel_admin: false
 # Only for account pictures - the Coach tab shows each athlete's Home
 # Assistant person picture.
 homeassistant_api: true
@@ -29,6 +30,7 @@ options:
   openai_api_key: ""
   mqtt_enabled: true
   log_level: info
+  allowed_users: []
 schema:
   ai_provider: list(anthropic|openai)?
   anthropic_api_key: password?
@@ -37,3 +39,5 @@ schema:
   openai_model: str?
   mqtt_enabled: bool
   log_level: list(debug|info|warning|error)
+  allowed_users:
+    - str

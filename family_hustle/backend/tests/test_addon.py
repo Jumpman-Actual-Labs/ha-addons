@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
+from ipaddress import ip_address
 from pathlib import Path
 
 import pytest
@@ -23,7 +24,7 @@ from hustle_addon import (
     web,
 )
 from hustle_addon.bridge import HassBridge
-from hustle_addon.config import AddonConfig
+from hustle_addon.config import AddonConfig, load_config
 from hustle_addon.coordinator import HustleCoordinator
 from hustle_addon.family_calendar import FamilyCalendar, event_tag_key, normalize_event
 from hustle_addon.ha_client import HomeAssistantError
@@ -1026,3 +1027,53 @@ def test_lunch_meal_prep_prompt():
     prompt = meals._meal_plan_prompt("meal_prep", 2, 5, 5, None, [], "lunch")
     assert "lunch" in prompt and "packable" in prompt
     assert "dinner recipes" in meals._meal_plan_prompt("dinner_planning", 4, 7, 7, None, [])
+
+
+# ------------------------------------------------------------ allowed users
+
+
+@pytest.fixture
+def through_ingress(monkeypatch):
+    """Makes the test client (127.0.0.1) look like Supervisor's ingress proxy,
+    so _allowed_users_only runs the way it does in the add-on."""
+    monkeypatch.delenv("HUSTLE_ALLOW_ANY_CLIENT", raising=False)
+    monkeypatch.setattr(web, "_INGRESS_PROXY", ip_address("127.0.0.1"))
+
+
+@pytest.fixture
+def allowed_client(client, config, through_ingress):
+    return client[0], config
+
+
+async def test_empty_allowed_users_lets_everyone_in(allowed_client):
+    client, config = allowed_client
+    assert config.allowed_users == ()
+    assert (await client.get("/", headers={"X-Remote-User-Name": "guest"})).status == 200
+
+
+async def test_requests_without_a_user_are_refused(allowed_client):
+    client, _config = allowed_client
+    resp = await client.get("/")
+    assert resp.status == 403
+    assert "You don't have access to this add-on" in await resp.text()
+
+
+async def test_allowed_users_restricts_every_route(allowed_client):
+    client, config = allowed_client
+    config.allowed_users = ("jordan",)
+    for headers in ({"X-Remote-User-Name": " Jordan "}, {"X-Remote-User-Id": "JORDAN"}):
+        assert (await client.get("/", headers=headers)).status == 200
+    # The username decides when there is one - the id is only a fallback.
+    guest = {"X-Remote-User-Name": "guest", "X-Remote-User-Id": "jordan"}
+    for path in ("/", "/api/states", "/api/websocket"):
+        resp = await client.get(path, headers=guest)
+        assert resp.status == 403
+        assert resp.content_type == "text/html"
+    assert (await client.post("/api/services/x", json={}, headers=guest)).status == 403
+
+
+def test_allowed_users_option_is_normalised(tmp_path, monkeypatch):
+    options = {"allowed_users": [" Jordan ", "", "kim"]}
+    (tmp_path / "options.json").write_text(json.dumps(options))
+    monkeypatch.setenv("HUSTLE_DATA_DIR", str(tmp_path))
+    assert load_config().allowed_users == ("jordan", "kim")

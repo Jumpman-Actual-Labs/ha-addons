@@ -5,12 +5,13 @@ store (storage.py), and the HTTP API the panel calls (web.py)."""
 from __future__ import annotations
 
 import json
+from ipaddress import ip_address
 
 import aiohttp
 import pytest
 
-from cache_addon import mqtt
-from cache_addon.config import AddonConfig
+from cache_addon import mqtt, web
+from cache_addon.config import AddonConfig, load_config
 from cache_addon.coordinator import CacheCoordinator
 from cache_addon.migrate import migrate_from_integration
 from cache_addon.services import build_service_context
@@ -345,3 +346,57 @@ async def test_is_nfa_round_trips_through_services_and_states(client, coordinato
         "/api/services/update_firearm", json={"firearm_id": firearm_id, "is_nfa": False}
     )
     assert coordinator.data["dashboard_stats"]["nfa_items"] == 0
+
+
+# ------------------------------------------------------------ allowed users
+
+
+@pytest.fixture
+def through_ingress(monkeypatch):
+    """Makes the test client (127.0.0.1) look like Supervisor's ingress proxy,
+    so _allowed_users_only runs the way it does in the add-on."""
+    monkeypatch.delenv("CACHE_ALLOW_ANY_CLIENT", raising=False)
+    monkeypatch.setattr(web, "_INGRESS_PROXY", ip_address("127.0.0.1"))
+
+
+@pytest.fixture
+async def allowed_client(aiohttp_client, config, coordinator, through_ingress):
+    async with aiohttp.ClientSession() as session:
+        app = create_app(
+            config, coordinator, build_service_context(coordinator, config, session), session
+        )
+        yield await aiohttp_client(app), config
+
+
+async def test_empty_allowed_users_lets_everyone_in(allowed_client):
+    client, config = allowed_client
+    assert config.allowed_users == ()
+    assert (await client.get("/", headers={"X-Remote-User-Name": "guest"})).status == 200
+
+
+async def test_requests_without_a_user_are_refused(allowed_client):
+    client, _config = allowed_client
+    resp = await client.get("/")
+    assert resp.status == 403
+    assert "You don't have access to this add-on" in await resp.text()
+
+
+async def test_allowed_users_restricts_every_route(allowed_client):
+    client, config = allowed_client
+    config.allowed_users = ("jordan",)
+    for headers in ({"X-Remote-User-Name": " Jordan "}, {"X-Remote-User-Id": "JORDAN"}):
+        assert (await client.get("/", headers=headers)).status == 200
+    # The username decides when there is one - the id is only a fallback.
+    guest = {"X-Remote-User-Name": "guest", "X-Remote-User-Id": "jordan"}
+    for path in ("/", "/api/states", "/api/websocket", "/uploads/photo.jpg"):
+        resp = await client.get(path, headers=guest)
+        assert resp.status == 403
+        assert resp.content_type == "text/html"
+    assert (await client.post("/api/services/x", json={}, headers=guest)).status == 403
+
+
+def test_allowed_users_option_is_normalised(tmp_path, monkeypatch):
+    options = {"allowed_users": [" Jordan ", "", "kim"]}
+    (tmp_path / "options.json").write_text(json.dumps(options))
+    monkeypatch.setenv("CACHE_DATA_DIR", str(tmp_path))
+    assert load_config().allowed_users == ("jordan", "kim")

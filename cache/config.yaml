@@ -1,5 +1,5 @@
 name: Cache
-version: "1.0.11"
+version: "1.0.12"
 slug: cache
 description: Firearm, parts, ammunition, maintenance and range tracking
 url: https://github.com/Jumpman-Actual-Labs/ha-addons
@@ -11,6 +11,7 @@ ingress: true
 ingress_stream: true
 panel_icon: mdi:ammunition
 panel_title: Cache
+panel_admin: false
 # Read-only, only so the first start can import the old integration's
 # .storage/cache_data_* document and www/cache_uploads/ files, and fall back
 # to secrets.yaml's openai_api_key. Nothing is ever written there.
@@ -22,7 +23,10 @@ options:
   openai_api_key: ""
   mqtt_enabled: true
   log_level: info
+  allowed_users: []
 schema:
   openai_api_key: password?
   mqtt_enabled: bool
   log_level: list(debug|info|warning|error)
+  allowed_users:
+    - str

@@ -1,5 +1,5 @@
 name: Stash
-version: "1.0.2"
+version: "1.0.3"
 slug: stash
 description: Household bills, income, budgets, savings and settlements
 url: https://github.com/Jumpman-Actual-Labs/ha-addons
@@ -11,6 +11,7 @@ ingress: true
 ingress_stream: true
 panel_icon: mdi:cash-multiple
 panel_title: Stash
+panel_admin: false
 # Only for Home Assistant's user list - linking a member to an account, and
 # knowing which viewers are admins.
 homeassistant_api: true
@@ -23,6 +24,9 @@ services:
 options:
   mqtt_enabled: true
   log_level: info
+  allowed_users: []
 schema:
   mqtt_enabled: bool
   log_level: list(debug|info|warning|error)
+  allowed_users:
+    - str

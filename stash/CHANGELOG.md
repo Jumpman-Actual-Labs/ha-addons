@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.3
+
+- Panel now visible to non-admin users. Added Allowed users option to restrict access to specific accounts.
+
 ## 1.0.2
 
 - Budgets shows each bill once. An overdue bill and its next occurrence

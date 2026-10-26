@@ -1,5 +1,5 @@
 name: Family Hustle
-version: "1.2.2"
+version: "1.2.3"
 slug: family_hustle
 description: Family calendar, chores, allowance, meal planning and shopping list in one place
 url: https://github.com/Jumpman-Actual-Labs/ha-addons
@@ -11,6 +11,7 @@ ingress: true
 ingress_stream: true
 panel_icon: mdi:calendar-heart
 panel_title: Family Hustle
+panel_admin: false
 # The family's Google Calendar (via Home Assistant's calendars), member
 # notify.* alerts, hustle_* events and the HA user list all go through Home
 # Assistant Core's API.
@@ -29,9 +30,12 @@ options:
   ai_provider: openai
   mqtt_enabled: true
   log_level: info
+  allowed_users: []
 schema:
   openai_api_key: password?
   anthropic_api_key: password?
   ai_provider: list(openai|anthropic)
   mqtt_enabled: bool
   log_level: list(debug|info|warning|error)
+  allowed_users:
+    - str

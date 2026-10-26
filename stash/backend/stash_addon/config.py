@@ -23,6 +23,9 @@ class AddonConfig:
     port: int = 8099
     mqtt_enabled: bool = True
     log_level: str = "info"
+    # The Configuration tab's Allowed users, stripped and casefolded so
+    # web.py can compare them as-is. Empty means everyone.
+    allowed_users: tuple[str, ...] = ()
     supervisor_token: str = ""
     # Supervisor's proxy to Home Assistant Core (config.yaml's
     # `homeassistant_api: true`) - used only for the HA user list (linking
@@ -52,6 +55,11 @@ def load_config() -> AddonConfig:
         port=int(os.environ.get("STASH_PORT", "8099")),
         mqtt_enabled=bool(options.get("mqtt_enabled", True)),
         log_level=str(options.get("log_level") or "info"),
+        allowed_users=tuple(
+            str(name).strip().casefold()
+            for name in options.get("allowed_users") or []
+            if str(name).strip()
+        ),
         supervisor_token=os.environ.get("SUPERVISOR_TOKEN", ""),
         core_api_url=os.environ.get("STASH_CORE_API_URL", "http://supervisor/core"),
         hostname=os.environ.get("HOSTNAME", ""),

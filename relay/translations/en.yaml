@@ -38,3 +38,6 @@ configuration:
   home_area:
     name: Your area
     description: Like "Charlotte, NC". Helps look-ups pick the local team, store or weather when a question is ambiguous. If empty, Relay uses your Home Assistant location.
+  allowed_users:
+    name: Allowed users
+    description: HA usernames allowed to use this add-on. Leave empty to allow all users.

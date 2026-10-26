@@ -11,6 +11,7 @@ import { route } from './lib/router.js';
 import { runClaude, claudeConnected } from './lib/claude.js';
 import { runCodex } from './lib/codex.js';
 import { codexStatus, startCodexLogin, codexLoginState, codexLogout } from './lib/auth.js';
+import { allowedUsers, remoteUser, isAllowed, NO_ACCESS_PAGE } from './lib/access.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8099);
@@ -19,6 +20,7 @@ const INGRESS_IP = '172.30.32.2';
 
 ensureDirs();
 const opts = loadOptions();
+const allowed = allowedUsers(opts);
 const cooldowns = { claude: 0, codex: 0 };
 const running = new Map(); // conversationId -> AbortController
 const NAMES = { claude: 'Claude', codex: 'ChatGPT' };
@@ -234,6 +236,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (!DEV && ip !== INGRESS_IP) return send(res, 403, { error: 'Relay is only reachable through Home Assistant.' });
+
+  if (!DEV) {
+    const user = remoteUser(req);
+    if (!isAllowed(user, allowed)) {
+      console.log(user ? `Refused ${user} - not in Allowed users` : 'Refused a request with no Home Assistant user');
+      return send(res, 403, NO_ACCESS_PAGE, 'text/html; charset=utf-8');
+    }
+  }
 
   try {
     if (req.method === 'GET' && STATIC[p]) {

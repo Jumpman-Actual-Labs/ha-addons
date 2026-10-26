@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.12
+
+- Panel now visible to non-admin users. Added Allowed users option to restrict access to specific accounts.
+
 ## 1.0.11
 
 - Ammunition: one card per caliber, listing every load of that caliber as

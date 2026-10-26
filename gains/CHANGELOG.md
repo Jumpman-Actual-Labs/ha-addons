@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.5
+
+- Panel now visible to non-admin users. Added Allowed users option to restrict access to specific accounts.
+
 ## 1.0.4
 
 - Program workouts no longer go to the Family Hustle calendar - the

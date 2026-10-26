@@ -24,6 +24,9 @@ class AddonConfig:
     openai_api_key: str = ""
     mqtt_enabled: bool = True
     log_level: str = "info"
+    # The Configuration tab's Allowed users, stripped and casefolded so
+    # web.py can compare them as-is. Empty means everyone.
+    allowed_users: tuple[str, ...] = ()
     supervisor_token: str = ""
 
     @property
@@ -54,5 +57,10 @@ def load_config() -> AddonConfig:
         openai_api_key=str(options.get("openai_api_key") or ""),
         mqtt_enabled=bool(options.get("mqtt_enabled", True)),
         log_level=str(options.get("log_level") or "info"),
+        allowed_users=tuple(
+            str(name).strip().casefold()
+            for name in options.get("allowed_users") or []
+            if str(name).strip()
+        ),
         supervisor_token=os.environ.get("SUPERVISOR_TOKEN", ""),
     )

@@ -7,11 +7,12 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, time
+from ipaddress import ip_address
 
 import pytest
 
 from stash_addon import mqtt, web
-from stash_addon.config import AddonConfig
+from stash_addon.config import AddonConfig, load_config
 from stash_addon.const import STORAGE_KEY, STORAGE_VERSION, BillType, Frequency
 from stash_addon.coordinator import FinanceCoordinator
 from stash_addon.ha_client import is_admin
@@ -354,3 +355,53 @@ async def test_internal_api_refuses_other_addons(aiohttp_client, config, coordin
     monkeypatch.setattr(web, "_resolve", _resolve)
     client = await aiohttp_client(_app(config, coordinator))
     assert (await client.get("/internal/categories")).status == 403
+
+
+# ------------------------------------------------------------ allowed users
+
+
+@pytest.fixture
+def through_ingress(monkeypatch):
+    """Makes the test client (127.0.0.1) look like Supervisor's ingress proxy,
+    so _allowed_users_only runs the way it does in the add-on."""
+    monkeypatch.delenv("STASH_ALLOW_ANY_CLIENT", raising=False)
+    monkeypatch.setattr(web, "_INGRESS_PROXY", ip_address("127.0.0.1"))
+
+
+@pytest.fixture
+async def allowed_client(aiohttp_client, config, coordinator, through_ingress):
+    return await aiohttp_client(_app(config, coordinator)), config
+
+
+async def test_empty_allowed_users_lets_everyone_in(allowed_client):
+    client, config = allowed_client
+    assert config.allowed_users == ()
+    assert (await client.get("/", headers={"X-Remote-User-Name": "guest"})).status == 200
+
+
+async def test_requests_without_a_user_are_refused(allowed_client):
+    client, _config = allowed_client
+    resp = await client.get("/")
+    assert resp.status == 403
+    assert "You don't have access to this add-on" in await resp.text()
+
+
+async def test_allowed_users_restricts_every_route(allowed_client):
+    client, config = allowed_client
+    config.allowed_users = ("jordan",)
+    for headers in ({"X-Remote-User-Name": " Jordan "}, {"X-Remote-User-Id": "JORDAN"}):
+        assert (await client.get("/", headers=headers)).status == 200
+    # The username decides when there is one - the id is only a fallback.
+    guest = {"X-Remote-User-Name": "guest", "X-Remote-User-Id": "jordan"}
+    for path in ("/", "/api/states", "/api/websocket", "/api/ha_users"):
+        resp = await client.get(path, headers=guest)
+        assert resp.status == 403
+        assert resp.content_type == "text/html"
+    assert (await client.post("/api/services/x", json={}, headers=guest)).status == 403
+
+
+def test_allowed_users_option_is_normalised(tmp_path, monkeypatch):
+    options = {"allowed_users": [" Jordan ", "", "kim"]}
+    (tmp_path / "options.json").write_text(json.dumps(options))
+    monkeypatch.setenv("STASH_DATA_DIR", str(tmp_path))
+    assert load_config().allowed_users == ("jordan", "kim")

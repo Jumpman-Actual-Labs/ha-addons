@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1
+
+- Panel now visible to non-admin users. Added Allowed users option to restrict access to specific accounts.
+
 ## 1.1.0
 
 - Stash sync works with the new Stash add-on (talking to it directly), and

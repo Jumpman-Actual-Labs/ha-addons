@@ -95,6 +95,116 @@ async def _ingress_only(request: web.Request, handler):
     return await handler(request)
 
 
+# Shown to anyone the Configuration tab's Allowed users leaves out. Styled
+# like the panel (light/dark palette), which never loads for them.
+_NO_ACCESS_PAGE = """<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Family Hustle</title>
+    <style>
+      :root {
+        --bg: #f6f7f9;
+        --card: #ffffff;
+        --line: #e1e5ea;
+        --ink: #2f3a4a;
+        --muted: #7b8796;
+        --accent: #23765c;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #12151a;
+          --card: #1a1e25;
+          --line: #2a303a;
+          --ink: #e6e9ef;
+          --muted: #9aa4b2;
+          --accent: #7fc8c0;
+        }
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--muted);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main {
+        display: flex;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+        padding: 0 16px;
+      }
+      .card {
+        max-width: 420px;
+        padding: 32px 28px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--card);
+        text-align: center;
+      }
+      .mark {
+        width: 44px;
+        height: 44px;
+        margin: 0 auto 16px;
+        border-radius: 50%;
+        border: 2px solid var(--accent);
+        color: var(--accent);
+        font-size: 22px;
+        line-height: 44px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        color: var(--ink);
+        font-size: 1.15rem;
+      }
+      p {
+        margin: 0;
+        font-size: 0.9rem;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="card">
+        <div class="mark">&#x2715;</div>
+        <h1>You don't have access to this add-on</h1>
+        <p>
+          Ask a Home Assistant administrator to add your username to
+          Family Hustle's Allowed users option.
+        </p>
+      </div>
+    </main>
+  </body>
+</html>
+"""
+
+
+@web.middleware
+async def _allowed_users_only(request: web.Request, handler):
+    """The Configuration tab's Allowed users. Runs after _ingress_only,
+    so the X-Remote-User-* headers are ingress's and can't be forged. A request
+    without one is refused even when the list is empty (everyone).
+    """
+    if not _allow_any_client():
+        user = (
+            request.headers.get("X-Remote-User-Name")
+            or request.headers.get("X-Remote-User-Id")
+            or ""
+        ).strip()
+        allowed = request.app[CONFIG_KEY].allowed_users
+        if not user:
+            _LOGGER.info("Refused a request with no Home Assistant user")
+            return web.Response(status=403, text=_NO_ACCESS_PAGE, content_type="text/html")
+        if allowed and user.casefold() not in allowed:
+            _LOGGER.info("Refused %s - not in Allowed users", user)
+            return web.Response(status=403, text=_NO_ACCESS_PAGE, content_type="text/html")
+    return await handler(request)
+
+
 # ------------------------------------------------------------------- user
 
 
@@ -326,7 +436,7 @@ def create_app(
     calendar: FamilyCalendar,
     shopping: ShoppingList,
 ) -> web.Application:
-    app = web.Application(middlewares=[_ingress_only])
+    app = web.Application(middlewares=[_ingress_only, _allowed_users_only])
     app[CONFIG_KEY] = config
     app[COORDINATOR_KEY] = coordinator
     app[SCHEMAS_KEY] = schemas

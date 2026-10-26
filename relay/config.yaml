@@ -1,5 +1,5 @@
 name: Relay
-version: "0.3.1"
+version: "0.3.2"
 slug: relay
 description: One chat for your Claude Pro and ChatGPT Plus subscriptions
 url: https://github.com/Jumpman-Actual-Labs/ha-addons
@@ -10,6 +10,7 @@ ingress: true
 ingress_stream: true
 panel_icon: mdi:transit-connection-variant
 panel_title: Relay
+panel_admin: false
 homeassistant_api: true
 map:
   - share:rw
@@ -27,6 +28,7 @@ options:
   home_access: true
   home_hidden_entities: []
   home_area: ""
+  allowed_users: []
 schema:
   claude_oauth_token: password
   default_chat_provider: list(claude|codex)
@@ -42,3 +44,5 @@ schema:
   home_hidden_entities:
     - str
   home_area: str?
+  allowed_users:
+    - str

@@ -7,12 +7,13 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, date, datetime, time
+from ipaddress import ip_address
 
 import aiohttp
 import pytest
 
 from garage_addon import mqtt, web
-from garage_addon.config import AddonConfig
+from garage_addon.config import AddonConfig, load_config
 from garage_addon.coordinator import GarageCoordinator
 from garage_addon.lookups import map_drivetrain, map_fuel_type
 from garage_addon.migrate import migrate_from_integration, rewrite_upload_path
@@ -432,3 +433,55 @@ async def test_stash_client_against_a_stash_shaped_server(aiohttp_server):
         await server.close()
         with pytest.raises(StashUnavailable):
             await client.find_category_id("Transportation")
+
+
+# ------------------------------------------------------------ allowed users
+
+
+@pytest.fixture
+def through_ingress(monkeypatch):
+    """Makes the test client (127.0.0.1) look like Supervisor's ingress proxy,
+    so _allowed_users_only runs the way it does in the add-on."""
+    monkeypatch.delenv("GARAGE_ALLOW_ANY_CLIENT", raising=False)
+    monkeypatch.setattr(web, "_INGRESS_PROXY", ip_address("127.0.0.1"))
+
+
+@pytest.fixture
+async def allowed_client(aiohttp_client, config, coordinator, through_ingress):
+    async with aiohttp.ClientSession() as session:
+        app = create_app(config, coordinator, build_handlers(coordinator, config), session, None)
+        yield await aiohttp_client(app), config
+
+
+async def test_empty_allowed_users_lets_everyone_in(allowed_client):
+    client, config = allowed_client
+    assert config.allowed_users == ()
+    assert (await client.get("/", headers={"X-Remote-User-Name": "guest"})).status == 200
+
+
+async def test_requests_without_a_user_are_refused(allowed_client):
+    client, _config = allowed_client
+    resp = await client.get("/")
+    assert resp.status == 403
+    assert "You don't have access to this add-on" in await resp.text()
+
+
+async def test_allowed_users_restricts_every_route(allowed_client):
+    client, config = allowed_client
+    config.allowed_users = ("jordan",)
+    for headers in ({"X-Remote-User-Name": " Jordan "}, {"X-Remote-User-Id": "JORDAN"}):
+        assert (await client.get("/", headers=headers)).status == 200
+    # The username decides when there is one - the id is only a fallback.
+    guest = {"X-Remote-User-Name": "guest", "X-Remote-User-Id": "jordan"}
+    for path in ("/", "/api/states", "/api/websocket"):
+        resp = await client.get(path, headers=guest)
+        assert resp.status == 403
+        assert resp.content_type == "text/html"
+    assert (await client.post("/api/services/x", json={}, headers=guest)).status == 403
+
+
+def test_allowed_users_option_is_normalised(tmp_path, monkeypatch):
+    options = {"allowed_users": [" Jordan ", "", "kim"]}
+    (tmp_path / "options.json").write_text(json.dumps(options))
+    monkeypatch.setenv("GARAGE_DATA_DIR", str(tmp_path))
+    assert load_config().allowed_users == ("jordan", "kim")

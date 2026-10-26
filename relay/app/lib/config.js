@@ -20,6 +20,7 @@ const DEFAULTS = {
   home_access: true,
   home_hidden_entities: [],
   home_area: '',
+  allowed_users: [],
 };
 
 export const paths = {

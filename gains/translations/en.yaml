@@ -20,3 +20,6 @@ configuration:
   log_level:
     name: Log level
     description: How much Gains writes to the add-on log.
+  allowed_users:
+    name: Allowed users
+    description: HA usernames allowed to use this add-on. Leave empty to allow all users.
