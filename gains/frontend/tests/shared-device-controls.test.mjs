@@ -64,6 +64,7 @@ test("normal log button and timed completion keep drafts, athlete and units sepa
   await screen._logSet(workout,0,0,workout.exercises[0].sets[0]);
   assert.equal(calls[0].fields.participant_profile_id,"a");
   assert.equal(calls[0].fields.reps,31);
+  session.participants[0].exercises[0].sets[0].completed=true;
   session.turn={profile_id:"b",exercise_index:0,set_index:0};
   screen._draftLogs["wb:0:0"]={weight:6};
   screen._timedSetTimer={workoutId:"wb",exerciseIndex:0,setIndex:0,seconds:22};

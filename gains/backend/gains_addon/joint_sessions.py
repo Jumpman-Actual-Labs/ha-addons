@@ -54,26 +54,18 @@ class JointSessionMixin:
                     for e in owned.exercises if get_exercise(e.exercise_id) and athlete
                 }
         active = [p for p in session["participants"] if p["status"] == "active"]
-        session["turn"] = None
         template = next(
             (w for w in members if any(p["workout_id"] == w.id for p in active)), workout
         )
-        # Exercise, then set, then participant: A1, B1, A2, B2.
-        for ei, exercise in enumerate(template.exercises):
-            for si in range(len(exercise.sets)):
-                for participant in active:
-                    owned = next((w for w in members if w.id == participant["workout_id"]), None)
-                    if owned and not owned.exercises[ei].sets[si].completed:
-                        session["turn"] = {
-                            "profile_id": participant["profile_id"],
-                            "exercise_index": ei,
-                            "set_index": si,
-                        }
-                        break
-                if session["turn"]:
-                    break
-            if session["turn"]:
-                break
+        # The turn follows whichever exercise the acting athlete is on, then
+        # wraps around, so jumping ahead to another exercise doesn't leave
+        # the shared "whose turn" pointing back at an unfinished earlier one.
+        count = len(template.exercises)
+        start = workout.current_exercise_index
+        start = start if isinstance(start, int) and 0 <= start < count else 0
+        session["turn"] = self._joint_turn(
+            members, active, template, [*range(start, count), *range(start)]
+        )
         if not active and session["status"] == "active":
             session["status"] = (
                 "completed"
@@ -84,6 +76,47 @@ class JointSessionMixin:
             owned.joint_session = copy.deepcopy(session)
             if owned.id != workout.id:
                 owned.revision += 1
+
+    @staticmethod
+    def _joint_turn(
+        members: list[Workout], active: list[dict], template: Workout, exercise_order: list[int]
+    ) -> dict | None:
+        """First unlogged set in exercise_order, by set then participant
+        within each exercise: A1, B1, A2, B2."""
+        for ei in exercise_order:
+            for si in range(len(template.exercises[ei].sets)):
+                for participant in active:
+                    owned = next((w for w in members if w.id == participant["workout_id"]), None)
+                    if (
+                        owned
+                        and ei < len(owned.exercises)
+                        and si < len(owned.exercises[ei].sets)
+                        and not owned.exercises[ei].sets[si].completed
+                    ):
+                        return {
+                            "profile_id": participant["profile_id"],
+                            "exercise_index": ei,
+                            "set_index": si,
+                        }
+        return None
+
+    def _joint_peers(self, workout: Workout) -> list[Workout]:
+        """Other active athletes' workouts in this live joint session.
+
+        Exercise add/remove is mirrored onto these so every member keeps the
+        same exercise positions -- turn-taking indexes all members alike.
+        """
+        session = workout.joint_session
+        if not session or session["status"] != "active":
+            return []
+        active_ids = {p["workout_id"] for p in session["participants"] if p["status"] == "active"}
+        if workout.id not in active_ids:
+            return []
+        return [
+            w
+            for w in self._joint_members(workout)
+            if w.id != workout.id and w.id in active_ids and w.status == "active"
+        ]
 
     def _joint_guard(
         self, workout: Workout, action: str, ei: int | None = None, si: int | None = None
@@ -106,8 +139,12 @@ class JointSessionMixin:
                 raise ValueError("Invalid exercise or set")
             if workout.exercises[ei].sets[si].completed:
                 return  # Corrections keep attribution and do not consume a turn.
+            # Turns alternate within each exercise, but athletes may move
+            # between exercises in any order.
+            active = [p for p in session["participants"] if p["status"] == "active"]
+            turn = self._joint_turn(self._joint_members(workout), active, workout, [ei])
             expected = {"profile_id": workout.profile_id, "exercise_index": ei, "set_index": si}
-            if expected != session["turn"]:
+            if expected != turn:
                 raise ValueError("It is another athlete's turn or a different set is next")
         elif action not in {
             "complete_workout",
@@ -116,6 +153,9 @@ class JointSessionMixin:
             "notes",
             "set_bar",
             "plan_set",
+            "skip_exercise",
+            "add_exercise",
+            "remove_exercise",
         }:
             raise ValueError("Leave Workout Together before changing the session structure")
 
@@ -272,7 +312,7 @@ class JointSessionMixin:
             self.data.share_requests.append(request)
             await self._async_save()
             return {"invite_id": request.id, "pending": True}
-        elif action in {"log_set", "log_effort", "complete_workout"}:
+        elif action in {"log_set", "log_effort", "complete_workout", "set_bar"}:
             session = workout.joint_session
             if (
                 not session
@@ -305,6 +345,18 @@ class JointSessionMixin:
                 raise ValueError("Participant workout is no longer active")
             if action == "complete_workout":
                 await self._async_complete_workout_for_workout(user_id, target)
+            elif action == "set_bar":
+                ei = training.number(
+                    fields.get("exercise_index"), 0, len(target.exercises) - 1, True
+                )
+                self._apply_set_bar(
+                    target,
+                    target.exercises[ei],
+                    fields.get("equipment_id"),
+                    fields.get("bar_weight"),
+                )
+                self._audit_workout(target, user_id, "set_bar")
+                await self._async_save()
             elif action == "log_effort":
                 ei = training.number(
                     fields.get("exercise_index"), 0, len(target.exercises) - 1, True
