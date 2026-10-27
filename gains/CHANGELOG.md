@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.6
+
+- Replace exercise shows its list right away: Similar / All exercises /
+  Show unavailable buttons up top, the other filters folded under "More
+  filters", and the whole dialog scrolls instead of squeezing the results.
+- An exercise page has Prev / Next buttons, and Skip exercise moves on to
+  the next one.
+- The "Details" button (the same as the info icon) is now History: your
+  last 10 sessions of that exercise with sets, volume, estimated 1RM, PRs
+  and effort.
+- Add exercise button on planned and in-progress workouts.
+- Workout Together: move between exercises in any order (turns alternate
+  within each exercise), remove or add exercises for both athletes, and
+  switch bars - including a partner's on a shared device. Removing an
+  exercise is refused if your partner already logged sets on it.
+- Removing an exercise now shows an error if it fails instead of doing
+  nothing.
+
 ## 1.0.5
 
 - Panel now visible to non-admin users. Added Allowed users option to restrict access to specific accounts.

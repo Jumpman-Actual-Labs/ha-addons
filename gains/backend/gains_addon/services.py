@@ -231,6 +231,14 @@ REPLACE_EXERCISE_SCHEMA = vol.Schema(
     }
 )
 
+ADD_EXERCISE_SCHEMA = vol.Schema(
+    {
+        vol.Required("workout_id"): cv.string,
+        vol.Required("exercise_id"): _valid_exercise_id,
+        vol.Optional("sets", default=3): vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
+    }
+)
+
 CREATE_RUN_SCHEMA = vol.Schema(
     {
         vol.Required("name"): cv.string,

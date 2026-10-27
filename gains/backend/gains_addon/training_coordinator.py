@@ -12,7 +12,7 @@ from . import logic, training
 from .ai import AIProviderError
 from .equipment import get_equipment_item
 from .exercises import get_exercise
-from .models import AthleteProfile, TrainingProgram, WorkoutExercise, WorkoutSet
+from .models import AthleteProfile, TrainingProgram, Workout, WorkoutExercise, WorkoutSet
 from .planning_contracts import PlanningContext, context_digest
 
 
@@ -686,6 +686,61 @@ class TrainingCoordinatorMixin:
                 raise
             return {'week_number': week_number, 'generated': True}
 
+    def _apply_set_bar(
+        self, workout: Workout, exercise: WorkoutExercise, equipment_id: object, bar_weight: object
+    ) -> None:
+        """Select a configured bar for one exercise of the workout owner's gym."""
+        equipment_id = training.text(equipment_id)
+        bar_weight = training.number(bar_weight, 0.1, 200)
+        item = get_equipment_item(equipment_id)
+        if (
+            item is None
+            or item.get("category") != "bars_and_plates"
+            or item.get("equipment_category") != "barbell"
+            or equipment_id in {"landmine", "plates"}
+        ):
+            raise ValueError("Select a valid bar")
+
+        target = self.get_profile(workout.profile_id)
+        gym = (
+            self.get_gym_profile(target.gym_profile_id)
+            if target is not None and target.gym_profile_id
+            else None
+        )
+        configured = gym.equipment.get(equipment_id, []) if gym is not None else []
+        from .inventory_units import convert_weight
+        available_weights = [
+            convert_weight(item["default_weight"], "imperial", target.units)
+            if value is None
+            else convert_weight(
+                value, gym.inventory_units or target.units, target.units
+            )
+            for value in configured
+            if value is not None or item.get("default_weight") is not None
+        ]
+        if not any(abs(weight - bar_weight) < 0.01 for weight in available_weights):
+            raise ValueError("That bar is not configured in this gym")
+
+        exercise_def = get_exercise(exercise.exercise_id)
+        required_id = exercise_def.get("requires_equipment_id") if exercise_def else None
+        if required_id in {
+            "olympic_barbell",
+            "ez_bar",
+            "trap_bar",
+            "short_bar",
+            "safety_squat_bar",
+        } and equipment_id != required_id:
+            raise ValueError("That exercise requires a different bar")
+
+        exercise.selected_bar_equipment_id = equipment_id
+        exercise.selected_bar_weight = bar_weight
+        if target is not None:
+            target.last_bar_by_exercise[exercise.exercise_id] = {
+                "equipment_id": equipment_id,
+                "weight": bar_weight,
+            }
+            target.updated_at = now()
+
     async def async_session_action(
         self, user_id: str, target_id: str | None, action: str, fields: dict
     ) -> dict:
@@ -701,6 +756,7 @@ class TrainingCoordinatorMixin:
             "log_exercise_effort": services.LOG_EXERCISE_EFFORT_SCHEMA,
             "remove_exercise": services.REMOVE_EXERCISE_SCHEMA,
             "replace_exercise": services.REPLACE_EXERCISE_SCHEMA,
+            "add_exercise": services.ADD_EXERCISE_SCHEMA,
             "log_run": services.LOG_RUN_SCHEMA,
             "skip_run": services.RUN_ID_SCHEMA,
         }
@@ -744,11 +800,10 @@ class TrainingCoordinatorMixin:
                             training.number(
                                 fields["set_index"], 0, len(workout.exercises[ei].sets) - 1, True
                             )
-                    if action == "replace_exercise":
+                    if action in {"replace_exercise", "add_exercise"}:
                         target = self.get_profile(workout.profile_id)
-                        if fields["new_exercise_id"] not in training.allowed_exercises(
-                            target, self.data
-                        ):
+                        new_id = fields.get("new_exercise_id", fields.get("exercise_id"))
+                        if new_id not in training.allowed_exercises(target, self.data):
                             raise ValueError("Exercise unavailable for this athlete")
                 if action == "log_set":
                     if fields.get("reps") is not None:
@@ -785,56 +840,9 @@ class TrainingCoordinatorMixin:
                     raise ValueError("Maximum 20 sets")
                 exercise.sets.append(WorkoutSet(planned_reps=8, planned_weight=0))
             elif action == "set_bar":
-                equipment_id = training.text(fields.get("equipment_id"))
-                bar_weight = training.number(fields.get("bar_weight"), 0.1, 200)
-                item = get_equipment_item(equipment_id)
-                if (
-                    item is None
-                    or item.get("category") != "bars_and_plates"
-                    or item.get("equipment_category") != "barbell"
-                    or equipment_id in {"landmine", "plates"}
-                ):
-                    raise ValueError("Select a valid bar")
-
-                target = self.get_profile(workout.profile_id)
-                gym = (
-                    self.get_gym_profile(target.gym_profile_id)
-                    if target is not None and target.gym_profile_id
-                    else None
+                self._apply_set_bar(
+                    workout, exercise, fields.get("equipment_id"), fields.get("bar_weight")
                 )
-                configured = gym.equipment.get(equipment_id, []) if gym is not None else []
-                from .inventory_units import convert_weight
-                available_weights = [
-                    convert_weight(item["default_weight"], "imperial", target.units)
-                    if value is None
-                    else convert_weight(
-                        value, gym.inventory_units or target.units, target.units
-                    )
-                    for value in configured
-                    if value is not None or item.get("default_weight") is not None
-                ]
-                if not any(abs(weight - bar_weight) < 0.01 for weight in available_weights):
-                    raise ValueError("That bar is not configured in this gym")
-
-                exercise_def = get_exercise(exercise.exercise_id)
-                required_id = exercise_def.get("requires_equipment_id") if exercise_def else None
-                if required_id in {
-                    "olympic_barbell",
-                    "ez_bar",
-                    "trap_bar",
-                    "short_bar",
-                    "safety_squat_bar",
-                } and equipment_id != required_id:
-                    raise ValueError("That exercise requires a different bar")
-
-                exercise.selected_bar_equipment_id = equipment_id
-                exercise.selected_bar_weight = bar_weight
-                if target is not None:
-                    target.last_bar_by_exercise[exercise.exercise_id] = {
-                        "equipment_id": equipment_id,
-                        "weight": bar_weight,
-                    }
-                    target.updated_at = now()
             elif action in {"remove_set", "plan_set"}:
                 si = training.number(fields.get("set_index"), 0, len(exercise.sets) - 1, True)
                 selected = exercise.sets[si]

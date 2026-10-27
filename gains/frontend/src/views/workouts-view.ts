@@ -7,7 +7,7 @@ import { LitElement, css, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "../ha-api";
 import { gainsApi, serviceErrorMessage, trainingService } from "../ha-api";
-import { canLogJointSet, isJointParticipant, isSharedController, participantWorkout } from "../joint-session";
+import { canLogJointSet, exerciseTurn, isJointParticipant, isSharedController, participantWorkout } from "../joint-session";
 import type { Effort, GainsState, Workout, WorkoutExercise, WorkoutSet } from "../types";
 import { EFFORT_LEVELS, EQUIPMENT_CATALOG, EXERCISE_LIBRARY } from "../types";
 import { glassCardStyle, formStyles } from "../styles";
@@ -328,6 +328,10 @@ export class GainsWorkoutsView extends LitElement {
   @state() private _activeExerciseIndex: number | null = null;
   @state() private _effortPromptExerciseIndex: number | null = null;
   @state() private _videoModalOpen = false;
+  @state() private _historyModalOpen = false;
+  /** Workout the exercise picker is adding to, or null when the picker is
+   * choosing for the Build a Workout draft. */
+  @state() private _addingToWorkout: Workout | null = null;
   @state() private _loadingPicker: {
     workoutId: string;
     exerciseIndex: number;
@@ -466,6 +470,23 @@ export class GainsWorkoutsView extends LitElement {
       .replacement-filters label { display: flex; flex-direction: column; gap: 4px; }
       .replacement-filters select { width: 100%; min-width: 0; }
       .exercise-row:disabled { opacity: .65; cursor: default; }
+      /* The replace dialog has more controls above its list than the plain
+         picker, so a fixed-height flex body left only a row or two of
+         results visible. Let the dialog scroll as a whole instead. */
+      .replace-body { height: auto; max-height: none; gap: 8px; }
+      .replace-body .exercise-results { flex: none; overflow: visible; min-height: 0; }
+      .replace-body .filter-chips { margin: 4px 0; }
+      .replacement-more-filters summary { cursor: pointer; color: var(--secondary-text-color, #727272); font-size: .9rem; }
+      .exercise-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0; }
+      .exercise-nav .session-progress { margin: 0; text-align: center; flex: 1; }
+      .exercise-nav button { display: inline-flex; align-items: center; gap: 2px; }
+      .add-exercise-button { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 12px; }
+      .history-body { padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+      .history-entry { border: 1px solid var(--divider-color, #e0e0e0); border-radius: 12px; padding: 12px; }
+      .history-entry-header { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+      .history-sets { margin: 8px 0; padding-left: 20px; }
+      .history-sets li { padding: 2px 0; }
+      .history-pr { --mdc-icon-size: 16px; color: var(--warning-color, #ffa600); }
 
       ha-card.panel {
         padding: 20px;
@@ -1415,7 +1436,10 @@ export class GainsWorkoutsView extends LitElement {
   }
 
   private _selectExercise(exerciseId: string): void {
-    this._pendingExerciseId = exerciseId;
+    const addingTo = this._addingToWorkout;
+    if (addingTo) void this._addExerciseToWorkout(addingTo, exerciseId);
+    else this._pendingExerciseId = exerciseId;
+    this._addingToWorkout = null;
     this._pickerOpen = false;
     this._openChipMenu = null;
     this._search = "";
@@ -1447,6 +1471,7 @@ export class GainsWorkoutsView extends LitElement {
 
   private _closePicker(): void {
     this._pickerOpen = false;
+    this._addingToWorkout = null;
     this._openChipMenu = null;
     this._search = "";
   }
@@ -1463,7 +1488,7 @@ export class GainsWorkoutsView extends LitElement {
           <button class="icon-button" @click=${() => this._closePicker()}>
             <ha-icon icon="mdi:arrow-left"></ha-icon>
           </button>
-          <h2>Choose Exercise</h2>
+          <h2>${this._addingToWorkout ? `Add to ${this._addingToWorkout.name}` : "Choose Exercise"}</h2>
         </div>
         <div class="picker-body">
           <div class="search-row">
@@ -1615,8 +1640,19 @@ export class GainsWorkoutsView extends LitElement {
     exerciseIndex: number,
     exerciseId: string
   ): Promise<void> {
-    if (!window.confirm(`Remove ${exerciseName(exerciseId)} from this workout?`)) return;
-    await gainsApi.removeExercise(this.hass, workout.id, exerciseIndex);
+    const together = isJointParticipant(workout.jointSession, workout.profileId);
+    if (!window.confirm(together
+      ? `Remove ${exerciseName(exerciseId)} for everyone in this Workout Together session?`
+      : `Remove ${exerciseName(exerciseId)} from this workout?`)) return;
+    if (!(await this._sessionEdit(workout, "remove_exercise", { exercise_index: exerciseIndex }))) return;
+    this._draftLogs = Object.fromEntries(Object.entries(this._draftLogs).flatMap(([key, draft]) => {
+      if (!key.startsWith(`${workout.id}:`)) return [[key, draft]];
+      const [, rawIndex, rawSet] = key.split(":");
+      const index = Number(rawIndex);
+      if (index === exerciseIndex) return [];
+      return [[index > exerciseIndex ? `${workout.id}:${index - 1}:${rawSet}` : key, draft]];
+    }));
+    this._persistSession();
   }
 
   private _openReplacePicker(workout: Workout, exerciseIndex: number, exerciseId: string): void {
@@ -1863,7 +1899,7 @@ export class GainsWorkoutsView extends LitElement {
     const barPlates = expandPlateLoadout(loadout.counts);
     const leftBarPlates = [...barPlates].reverse();
     const choices = this._configuredBarChoices(exercise.exerciseId).map(b => ({...b, weight: b.weight * conversion}));
-    const editable = !isJointParticipant(workout.jointSession, workout.profileId) && (workout.status === "active" || workout.status === "planned");
+    const editable = workout.status === "active" || workout.status === "planned";
     const perSideLabel = Number.isInteger(loadout.perSide)
       ? String(loadout.perSide)
       : loadout.perSide.toFixed(1);
@@ -1980,11 +2016,7 @@ export class GainsWorkoutsView extends LitElement {
                         ?disabled=${!editable}
                         @click=${async () => {
                           if (!editable) return;
-                          await this._sessionEdit(workout, "set_bar", {
-                            exercise_index: picker.exerciseIndex,
-                            equipment_id: choice.equipmentId,
-                            bar_weight: choice.weight,
-                          });
+                          await this._setBar(workout, picker.exerciseIndex, choice);
                           this._loadingPicker = null;
                         }}
                       >
@@ -2892,7 +2924,7 @@ export class GainsWorkoutsView extends LitElement {
   private _renderActiveWorkout(workout: Workout) {
     if (this._activeExerciseIndex !== null) {
       const exercise = workout.exercises[this._activeExerciseIndex];
-      if (exercise) return html`${this._renderError()}${this._renderJointBanner(workout)}${this._renderExerciseDetailPage(workout,exercise,this._activeExerciseIndex)}${this._renderEffortPromptDialog(workout)}${this._renderWorkoutRecap()}`;
+      if (exercise) return html`${this._renderError()}${this._renderJointBanner(workout)}${this._renderExerciseDetailPage(workout,exercise,this._activeExerciseIndex)}${this._renderHistoryModal(exercise)}${this._renderEffortPromptDialog(workout)}${this._renderWorkoutRecap()}`;
       this._activeExerciseIndex = null;
     }
     const shared = this._sharedController(workout);
@@ -2952,6 +2984,12 @@ export class GainsWorkoutsView extends LitElement {
           <div class="exercise-overview-list">
             ${workout.exercises.map((exercise,index)=>this._renderExerciseListRow(workout,exercise,index))}
           </div>
+          ${["planned", "active"].includes(workout.status) ? html`
+            <button class="secondary add-exercise-button" @click=${() => { this._addingToWorkout = workout; this._pickerOpen = true; }}>
+              <ha-icon icon="mdi:plus"></ha-icon>Add exercise
+            </button>
+            ${isJointParticipant(workout.jointSession, workout.profileId) ? html`<p class="muted small">Adding or removing an exercise applies to everyone in this Workout Together session.</p>` : ""}
+          ` : ""}
         </section>
 
         ${this._renderRestTimerBanner()}
@@ -2978,7 +3016,7 @@ export class GainsWorkoutsView extends LitElement {
           <button class="secondary" @click=${()=>this._sharingWorkout=workout}>Share</button>
           <button class="secondary danger-text" @click=${()=>this._deleteWorkout(workout.id,workout.name)}>Delete</button>
         </div>
-        ${this._renderEffortPromptDialog(workout)}${this._renderExerciseMenuDialog()}${this._renderReplaceExerciseDialog()}${this._renderShareDialog()}${this._renderWorkoutRecap()}
+        ${this._renderEffortPromptDialog(workout)}${this._renderExerciseMenuDialog()}${this._renderReplaceExerciseDialog()}${this._renderPickerDialog()}${this._renderShareDialog()}${this._renderWorkoutRecap()}
       </div>
     `;
   }
@@ -3001,13 +3039,7 @@ export class GainsWorkoutsView extends LitElement {
 
     return html`
       <div class="exercise-list-row">
-        <button class="exercise-card-header" @click=${() => {
-          this._activeExerciseIndex = exerciseIndex;
-          this._error = "";
-          if (workout.status === "active") {
-            void this._sessionEdit(workout,"focus",{exercise_index:exerciseIndex,set_index:0});
-          }
-        }}>
+        <button class="exercise-card-header" @click=${() => this._goToExercise(workout, exerciseIndex)}>
           <gains-muscle-map class="exercise-thumbnail" compact both .exerciseIds=${[exercise.exerciseId]}></gains-muscle-map>
           <span class="exercise-card-info">
             <span class="exercise-card-name">${exerciseName(exercise.exerciseId)}</span>
@@ -3036,7 +3068,7 @@ export class GainsWorkoutsView extends LitElement {
           </button>
         </div>
         ${target ? html`<div class="exercise-menu">
-          <button class="secondary" @click=${() => {
+          <button class="secondary" ?disabled=${isJointParticipant(target.workout.jointSession, target.workout.profileId)} @click=${() => {
             this._exerciseMenu = null;
             this._openReplacePicker(target.workout, target.exerciseIndex, target.exerciseId);
           }}><ha-icon icon="mdi:swap-horizontal"></ha-icon>Change exercise</button>
@@ -3044,6 +3076,7 @@ export class GainsWorkoutsView extends LitElement {
             this._exerciseMenu = null;
             void this._removeExercise(target.workout, target.exerciseIndex, target.exerciseId);
           }}><ha-icon icon="mdi:trash-can-outline"></ha-icon>Remove exercise</button>
+          ${isJointParticipant(target.workout.jointSession, target.workout.profileId) ? html`<p class="muted small">While working out together, swap an exercise by removing it and adding the new one -- that keeps both athletes on the same list. Removing applies to everyone.</p>` : ""}
         </div>` : ""}
       </ha-dialog>
     `;
@@ -3068,24 +3101,34 @@ export class GainsWorkoutsView extends LitElement {
           </button>
           <h2>Replace exercise</h2>
         </div>
-        <div class="picker-body">
-          <p>Equipment checked for ${gym?.name ?? "your selected gym"}. Logged sets stay with the original exercise.</p>
-          <input type="search" aria-label="Search exercises" placeholder="Search exercises" .value=${filters.search}
-            @input=${(e: Event) => update({ search: (e.target as HTMLInputElement).value })}>
-          <div class="replacement-filters">
-            <label>Replacement mode<select .value=${filters.mode} @change=${(e: Event) => update({ mode: (e.target as HTMLSelectElement).value as LibraryFilters["mode"] })}>
-              <option value="recommended">Recommended alternatives</option><option value="all">Entire library</option></select></label>
-            <label>Muscle<select .value=${filters.muscle} @change=${(e: Event) => update({ muscle: (e.target as HTMLSelectElement).value, mode: "all" })}>
-              <option value="">All muscles</option>${Object.keys(MUSCLE_DICTIONARY).map(id => html`<option value=${id}>${muscleLabels([id as MuscleId])}</option>`)}</select></label>
-            <label>Equipment<select .value=${filters.equipment} @change=${(e: Event) => update({ equipment: (e.target as HTMLSelectElement).value, mode: "all" })}>
-              <option value="">All equipment</option>${[...new Set(EXERCISE_LIBRARY.map(e => e.equipment))].sort().map(id => html`<option value=${id}>${labelize(id)}</option>`)}</select></label>
-            <label>Movement<select .value=${filters.movement} @change=${(e: Event) => update({ movement: (e.target as HTMLSelectElement).value, mode: "all" })}>
-              <option value="">All movements</option>${[...new Set(EXERCISE_LIBRARY.map(e => e.category))].sort().map(id => html`<option value=${id}>${labelize(id)}</option>`)}</select></label>
+        <div class="picker-body replace-body">
+          <p class="muted small">Equipment checked for ${gym?.name ?? "your selected gym"}. Logged sets stay with the original exercise.</p>
+          <div class="search-row">
+            <ha-icon icon="mdi:magnify"></ha-icon>
+            <input type="search" aria-label="Search exercises" placeholder="Search exercises" .value=${filters.search}
+              @input=${(e: Event) => update({ search: (e.target as HTMLInputElement).value })}>
           </div>
-          <label>Sort<select .value=${filters.sort ?? "recommended"} @change=${(e: Event) => update({ sort: (e.target as HTMLSelectElement).value as "recommended" | "name" })}>
-            <option value="recommended">Best match</option><option value="name">Exercise name</option></select></label>
-          <label><input type="checkbox" .checked=${filters.showUnavailable} @change=${(e: Event) => update({ showUnavailable: (e.target as HTMLInputElement).checked })}> Show unavailable</label>
-          <p role="status">${options.length} exercises${options.length ? "" : ". Try Entire library or Show unavailable to inspect missing equipment."}</p>
+          <div class="filter-chips" role="group" aria-label="Which exercises to show">
+            <button class="chip ${filters.mode === "recommended" ? "active" : ""}" aria-pressed=${filters.mode === "recommended"} @click=${() => update({ mode: "recommended" })}>Similar</button>
+            <button class="chip ${filters.mode === "all" ? "active" : ""}" aria-pressed=${filters.mode === "all"} @click=${() => update({ mode: "all" })}>All exercises</button>
+            <button class="chip ${filters.showUnavailable ? "active" : ""}" aria-pressed=${filters.showUnavailable} @click=${() => update({ showUnavailable: !filters.showUnavailable })}>Show unavailable</button>
+          </div>
+          <details class="replacement-more-filters" ?open=${!!(filters.muscle || filters.equipment || filters.movement)}>
+            <summary>More filters</summary>
+            <div class="replacement-filters">
+              <label>Muscle<select @change=${(e: Event) => update({ muscle: (e.target as HTMLSelectElement).value, mode: "all" })}>
+                <option value="" ?selected=${!filters.muscle}>All muscles</option>${Object.keys(MUSCLE_DICTIONARY).map(id => html`<option value=${id} ?selected=${filters.muscle === id}>${muscleLabels([id as MuscleId])}</option>`)}</select></label>
+              <label>Equipment<select @change=${(e: Event) => update({ equipment: (e.target as HTMLSelectElement).value, mode: "all" })}>
+                <option value="" ?selected=${!filters.equipment}>All equipment</option>${EQUIPMENT_OPTIONS.map(id => html`<option value=${id} ?selected=${filters.equipment === id}>${labelize(id)}</option>`)}</select></label>
+              <label>Movement<select @change=${(e: Event) => update({ movement: (e.target as HTMLSelectElement).value, mode: "all" })}>
+                <option value="" ?selected=${!filters.movement}>All movements</option>${[...CATEGORY_OPTIONS].sort().map(id => html`<option value=${id} ?selected=${filters.movement === id}>${labelize(id)}</option>`)}</select></label>
+              <label>Sort<select @change=${(e: Event) => update({ sort: (e.target as HTMLSelectElement).value as "recommended" | "name" })}>
+                <option value="recommended" ?selected=${filters.sort !== "name"}>Best match</option><option value="name" ?selected=${filters.sort === "name"}>Exercise name</option></select></label>
+            </div>
+          </details>
+          <p role="status" class="muted small">${options.length} exercise${options.length === 1 ? "" : "s"}${filters.mode === "recommended" ? " similar to this one" : ""}</p>
+          ${filters.mode === "recommended" && options.length < 8 ? html`<button class="secondary" @click=${() => update({ mode: "all" })}>Browse the entire library</button>` : ""}
+          ${!options.length && !filters.showUnavailable ? html`<button class="secondary" @click=${() => update({ showUnavailable: true })}>Show exercises missing equipment</button>` : ""}
           <div class="exercise-results">
             ${options.map(
               ({ exercise: ex, availability, score }) => html`
@@ -3160,11 +3203,12 @@ export class GainsWorkoutsView extends LitElement {
     const setCount = allSets.length;
     const nextSetIndex = exercise.sets.findIndex((s) => !s.completed);
     const controller = this._sharedController(workout);
-    const turn = controller?.jointSession?.turn;
+    const turn = controller ? exerciseTurn(controller.jointSession, exerciseIndex) : null;
     const turnWorkout = controller && turn ? participantWorkout(controller, turn.profile_id) : undefined;
     const loggingWorkout = turnWorkout ?? workout;
     const loggingExercise = loggingWorkout.exercises[exerciseIndex];
-    const loggingSetIndex = controller ? (turn?.exercise_index === exerciseIndex ? turn.set_index : -1) : nextSetIndex;
+    const loggingSetIndex = controller ? (turn ? turn.set_index : -1) : nextSetIndex;
+    const jointLocked = isJointParticipant(workout.jointSession, workout.profileId);
     const canLogNext = loggingSetIndex >= 0 && canLogJointSet(loggingWorkout.jointSession, loggingWorkout.profileId, exerciseIndex, loggingSetIndex, false);
     const timedExercise = isTimedExercise(exercise.exerciseId);
     const barbellExercise = exerciseEquipment(exercise.exerciseId) === "barbell";
@@ -3204,9 +3248,13 @@ export class GainsWorkoutsView extends LitElement {
           </button>
         </div>
         <div class="exercise-focus"><div><p>Target muscles</p><strong>${muscleGroupsForExercise(exercise.exerciseId)}</strong></div><gains-muscle-map compact both .exerciseIds=${[exercise.exerciseId]}></gains-muscle-map></div>
-        <p class="session-progress">${exerciseIndex+1} of ${workout.exercises.length} exercises \u00b7 ${loggedCount}/${setCount} sets logged</p>
-        <button class="secondary" @click=${() => this._videoModalOpen = true}>${muscleGroupsForExercise(exercise.exerciseId)} \u00b7 Details</button>
-        ${workout.status === "active" ? html`<div class="actions"><button class="secondary" ?disabled=${isJointParticipant(workout.jointSession,workout.profileId)} @click=${()=>this._sessionEdit(workout,"add_set",{exercise_index:exerciseIndex})}>Add set</button><button class="secondary" ?disabled=${isJointParticipant(workout.jointSession,workout.profileId)} @click=${()=>this._sessionEdit(workout,"skip_exercise",{exercise_index:exerciseIndex})}>Skip exercise</button></div><details><summary>Exercise notes</summary><textarea .value=${exercise.notes} @change=${(e:Event)=>this._sessionEdit(workout,"notes",{exercise_index:exerciseIndex,notes:(e.target as HTMLTextAreaElement).value})}></textarea></details>`:""}
+        <div class="exercise-nav">
+          <button class="secondary" aria-label="Previous exercise" ?disabled=${exerciseIndex === 0} @click=${() => this._goToExercise(workout, exerciseIndex - 1)}><ha-icon icon="mdi:chevron-left"></ha-icon>Prev</button>
+          <p class="session-progress">${exerciseIndex+1} of ${workout.exercises.length} exercises \u00b7 ${loggedCount}/${setCount} sets logged</p>
+          <button class="secondary" aria-label="Next exercise" ?disabled=${exerciseIndex >= workout.exercises.length - 1} @click=${() => this._goToExercise(workout, exerciseIndex + 1)}>Next<ha-icon icon="mdi:chevron-right"></ha-icon></button>
+        </div>
+        <button class="secondary" @click=${() => this._historyModalOpen = true}><ha-icon icon="mdi:history"></ha-icon> History</button>
+        ${workout.status === "active" ? html`<div class="actions"><button class="secondary" ?disabled=${jointLocked} title=${jointLocked ? "Sets stay matched while working out together" : ""} @click=${()=>this._sessionEdit(workout,"add_set",{exercise_index:exerciseIndex})}>Add set</button><button class="secondary" @click=${()=>this._skipExercise(workout,exerciseIndex)}>Skip exercise</button></div><details><summary>Exercise notes</summary><textarea .value=${exercise.notes} @change=${(e:Event)=>this._sessionEdit(workout,"notes",{exercise_index:exerciseIndex,notes:(e.target as HTMLTextAreaElement).value})}></textarea></details>`:""}
         <div class="set-grid-header ${barbellExercise ? "with-loading" : ""}">
           <span>Set</span>
           <span>${timedExercise ? "Seconds" : "Reps"}</span>
@@ -3217,7 +3265,7 @@ export class GainsWorkoutsView extends LitElement {
           const target = participantWorkout(controller, p.profile_id)!;
           const set = target.exercises[exerciseIndex]?.sets[setIndex];
           if (!set) return "";
-          const current = p.profile_id === turn?.profile_id && exerciseIndex === turn.exercise_index && setIndex === turn.set_index;
+          const current = p.profile_id === turn?.profile_id && setIndex === turn.set_index;
           return html`<div class="participant-set"><p class="muted small">${p.display_name}${current ? " - Your turn" : ""} (${this._workoutUnits(target) === "metric" ? "kg" : "lb"})</p>${this._renderSetRow(target, exerciseIndex, setIndex, set, current)}</div>`;
         })) : exercise.sets.map((set, setIndex) =>
           this._renderSetRow(workout, exerciseIndex, setIndex, set, setIndex === nextSetIndex)
@@ -3311,11 +3359,110 @@ export class GainsWorkoutsView extends LitElement {
     `;
   }
 
-  private async _sessionEdit(workout:Workout,action:string,fields:Record<string,unknown>):Promise<void>{
+  private async _sessionEdit(workout:Workout,action:string,fields:Record<string,unknown>):Promise<boolean>{
     this._error="";
-    try {await trainingService(this.hass,"session_action",{action,fields:{workout_id:workout.id,expected_revision:workout.revision,...fields},...(this.viewContext?.mode==="coach"?{target_profile_id:this.viewContext.activeProfileId}:{})});
+    try {await trainingService(this.hass,"session_action",{action,fields:{workout_id:workout.id,expected_revision:workout.revision,...fields},...this._coachTarget()});
       this.dispatchEvent(new CustomEvent("training-refresh",{bubbles:true,composed:true}));
-    } catch(e) {this._error=serviceErrorMessage(e);}
+      return true;
+    } catch(e) {this._error=serviceErrorMessage(e); return false;}
+  }
+
+  private _coachTarget(): Record<string, string> {
+    return this.viewContext?.mode==="coach" ? {target_profile_id:this.viewContext.activeProfileId} : {};
+  }
+
+  private _goToExercise(workout: Workout, exerciseIndex: number): void {
+    if (exerciseIndex < 0 || exerciseIndex >= workout.exercises.length) return;
+    this._activeExerciseIndex = exerciseIndex;
+    this._videoModalOpen = false;
+    this._historyModalOpen = false;
+    this._error = "";
+    if (workout.status !== "active") return;
+    // No expected_revision: focus only moves the "current exercise" pointer
+    // (and Workout Together's turn), so quick Prev/Next taps shouldn't trip
+    // the stale-revision check. Best effort -- navigation works regardless.
+    void trainingService(this.hass, "session_action", {action: "focus",
+      fields: {workout_id: workout.id, exercise_index: exerciseIndex, set_index: 0}, ...this._coachTarget()})
+      .then(() => this.dispatchEvent(new CustomEvent("training-refresh", {bubbles: true, composed: true})))
+      .catch(() => undefined);
+  }
+
+  private async _skipExercise(workout: Workout, exerciseIndex: number): Promise<void> {
+    if (!(await this._sessionEdit(workout, "skip_exercise", {exercise_index: exerciseIndex}))) return;
+    // The backend already moved its focus forward; follow it on screen.
+    this._videoModalOpen = false;
+    this._historyModalOpen = false;
+    this._activeExerciseIndex = exerciseIndex < workout.exercises.length - 1 ? exerciseIndex + 1 : null;
+  }
+
+  private async _addExerciseToWorkout(workout: Workout, exerciseId: string): Promise<void> {
+    await this._sessionEdit(workout, "add_exercise", {exercise_id: exerciseId});
+  }
+
+  private async _setBar(workout: Workout, exerciseIndex: number, choice: BarChoice): Promise<void> {
+    const controller = this._sharedController(workout);
+    if (!controller || controller.id === workout.id) {
+      await this._sessionEdit(workout, "set_bar", {exercise_index: exerciseIndex, equipment_id: choice.equipmentId, bar_weight: choice.weight});
+      return;
+    }
+    // Same-device Workout Together: the partner's workout isn't this
+    // account's, so it goes through the shared session controller.
+    this._error = "";
+    try {
+      await trainingService(this.hass, "joint_session_action", {action: "set_bar", fields: {
+        workout_id: controller.id, expected_revision: controller.revision,
+        participant_profile_id: workout.profileId, exercise_index: exerciseIndex,
+        equipment_id: choice.equipmentId, bar_weight: choice.weight,
+      }});
+      this.dispatchEvent(new CustomEvent("training-refresh", {bubbles: true, composed: true}));
+    } catch (e) { this._error = serviceErrorMessage(e); }
+  }
+
+  /** Most recent completed sessions that logged this exercise, newest first. */
+  private _exerciseHistory(exerciseId: string): { workout: Workout; stats: RecapExerciseStats }[] {
+    const when = (w: Workout) => Date.parse(w.completedAt ?? w.startedAt ?? w.createdAt) || 0;
+    return this.gainsState.workouts
+      .filter(w => w.status === "completed" && w.exercises.some(e => e.exerciseId === exerciseId && e.sets.some(set => set.completed)))
+      .sort((a, b) => when(b) - when(a))
+      .slice(0, 10)
+      .map(workout => ({ workout, stats: recapExerciseStats(workout, exerciseId) }));
+  }
+
+  private _renderHistoryModal(exercise: Workout["exercises"][number]) {
+    if (!this._historyModalOpen) return "";
+    const name = exerciseName(exercise.exerciseId);
+    const timed = isTimedExercise(exercise.exerciseId);
+    const units = this.gainsState.profile?.units === "metric" ? "kg" : "lb";
+    const history = this._exerciseHistory(exercise.exerciseId);
+    return html`
+      <ha-dialog .open=${true} hideActions @closed=${() => (this._historyModalOpen = false)}>
+        <div class="picker-header">
+          <button class="icon-button" aria-label="Close history" @click=${() => (this._historyModalOpen = false)}>
+            <ha-icon icon="mdi:arrow-left"></ha-icon>
+          </button>
+          <div><p class="muted small">History \u00b7 ${this.gainsState.profile?.displayName ?? ""}</p><h2>${name}</h2></div>
+        </div>
+        <div class="history-body">
+          ${history.length ? history.map(({ workout, stats }) => {
+            const date = new Date(workout.completedAt ?? workout.startedAt ?? workout.createdAt);
+            const effort = workout.exercises.find(e => e.exerciseId === exercise.exerciseId && e.effort)?.effort;
+            return html`
+              <section class="history-entry">
+                <div class="history-entry-header">
+                  <strong>${Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}</strong>
+                  <span class="muted small">${workout.name}</span>
+                </div>
+                <ol class="history-sets">
+                  ${stats.sets.map(set => html`<li>${set.actualReps ?? "\u2014"}${timed ? "s" : " reps"}${!timed || set.actualWeight ? ` \u00d7 ${set.actualWeight ?? 0} ${units}` : ""}${set.isPersonalRecord ? html` <ha-icon class="history-pr" icon="mdi:arm-flex" title="Personal record"></ha-icon>` : ""}</li>`)}
+                </ol>
+                <p class="muted small">
+                  ${timed ? `${stats.totalReps}s total` : `${Math.round(stats.volume)} ${units} volume`}${stats.bestEstimated1RM != null ? ` \u00b7 est. 1RM ${stats.bestEstimated1RM.toFixed(1)} ${units}` : ""}${effort ? ` \u00b7 felt ${effort}` : ""}
+                </p>
+              </section>`;
+          }) : html`<p class="muted">No completed sessions with ${name} yet. Finish a workout with it and it will show up here.</p>`}
+        </div>
+      </ha-dialog>
+    `;
   }
 
   private _renderSetRow(

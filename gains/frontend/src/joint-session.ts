@@ -61,7 +61,24 @@ export function isJointParticipant(session: JointSession | undefined, profileId:
   return session?.status === "active" && session.participants.some(p => p.profile_id === profileId && p.status === "active");
 }
 
+/** Whose turn it is on one exercise: the first unlogged set, by set then
+ * participant (A1, B1, A2, B2). Mirrors the backend's per-exercise guard,
+ * so athletes can move between exercises in any order but still alternate
+ * within each one. */
+export function exerciseTurn(session: JointSession | undefined, exerciseIndex: number): { profile_id: string; set_index: number } | null {
+  const active = session?.participants.filter(p => p.status === "active") ?? [];
+  const setCount = Math.max(0, ...active.map(p => p.exercises[exerciseIndex]?.sets.length ?? 0));
+  for (let setIndex = 0; setIndex < setCount; setIndex++) {
+    for (const participant of active) {
+      const set = participant.exercises[exerciseIndex]?.sets[setIndex];
+      if (set && !set.completed) return { profile_id: participant.profile_id, set_index: setIndex };
+    }
+  }
+  return null;
+}
+
 export function canLogJointSet(session: JointSession | undefined, profileId: string, exerciseIndex: number, setIndex: number, completed: boolean): boolean {
   if (!isJointParticipant(session, profileId) || completed) return true;
-  return session?.turn?.profile_id === profileId && session.turn.exercise_index === exerciseIndex && session.turn.set_index === setIndex;
+  const turn = exerciseTurn(session, exerciseIndex);
+  return turn?.profile_id === profileId && turn.set_index === setIndex;
 }

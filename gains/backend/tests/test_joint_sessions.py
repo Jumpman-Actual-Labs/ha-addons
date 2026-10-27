@@ -4,6 +4,7 @@ import asyncio
 import copy
 
 import pytest
+import voluptuous as vol
 
 from gains_addon.models import GainsData, GymProfile
 from tests.test_coordinator import coordinator as base_coordinator
@@ -407,3 +408,122 @@ async def test_changed_source_cannot_activate_from_old_invite(coordinator):
         await c.async_respond_share("b", sent["invite_id"], True)
     assert not c.workouts_for_profile(b.id)
     assert c.data.share_requests[0].status == "pending"
+
+
+async def joined_two_exercises(c, device_mode="different_devices"):
+    a = await c.async_ensure_profile("a", "A")
+    b = await c.async_ensure_profile("b", "B")
+    w = await c.async_create_workout("a", "Two exercises", [
+        {"exercise_id": "push_up", "sets": [{"reps": 8, "weight": 0}, {"reps": 8, "weight": 0}]},
+        {"exercise_id": "plank", "sets": [{"reps": 30, "weight": 0}]},
+    ])
+    invite = await c.async_joint_action("a", "join", {
+        "workout_id": w.id, "expected_revision": w.revision,
+        "partner_profile_id": b.id, "device_mode": device_mode})
+    other = await c.async_respond_share("b", invite["invite_id"], True)
+    return a, b, w, other
+
+
+async def test_athletes_can_move_between_exercises_out_of_order(coordinator):
+    c = coordinator
+    a, b, w, other = await joined_two_exercises(c)
+    # Jumping ahead to the second exercise is allowed and the turn follows.
+    await c.async_log_set("a", w.id, 1, 0, 30, 0)
+    assert w.joint_session["turn"] == {"profile_id": b.id, "exercise_index": 1, "set_index": 0}
+    # Turns still alternate within an exercise.
+    with pytest.raises(ValueError, match="turn"):
+        await c.async_log_set("b", other.id, 0, 1, 8, 0)
+    await c.async_log_set("b", other.id, 1, 0, 30, 0)
+    # Back on the first exercise: A then B for each set, wrapping around.
+    assert w.joint_session["turn"] == {"profile_id": a.id, "exercise_index": 0, "set_index": 0}
+    await c.async_log_set("a", w.id, 0, 0, 8, 0)
+    assert w.joint_session["turn"] == {"profile_id": b.id, "exercise_index": 0, "set_index": 0}
+    # Focusing an exercise moves the shared turn there too.
+    await c.async_session_action("b", None, "focus", {
+        "workout_id": other.id, "exercise_index": 0, "set_index": 0})
+    assert w.joint_session == other.joint_session
+
+
+async def test_joint_add_and_remove_exercise_apply_to_every_athlete(coordinator):
+    c = coordinator
+    a, b, w, other = await joined_two_exercises(c)
+    await c.async_session_action("a", None, "add_exercise", {
+        "workout_id": w.id, "exercise_id": "bodyweight_squat", "sets": 2})
+    assert [e.exercise_id for e in w.exercises] == [e.exercise_id for e in other.exercises]
+    assert w.exercises[-1].exercise_id == "bodyweight_squat"
+    assert len(other.exercises[-1].sets) == 2
+    await c.async_log_set("a", w.id, 2, 0, 8, 0)
+    assert w.joint_session["turn"] == {"profile_id": b.id, "exercise_index": 2, "set_index": 0}
+    # Partner already logged on push-ups: removing it would delete their work.
+    await c.async_log_set("a", w.id, 0, 0, 8, 0)
+    await c.async_log_set("b", other.id, 0, 0, 8, 0)
+    with pytest.raises(ValueError, match="already logged"):
+        await c.async_session_action("a", None, "remove_exercise", {
+            "workout_id": w.id, "exercise_index": 0})
+    assert len(w.exercises) == len(other.exercises) == 3
+    await c.async_session_action("b", None, "remove_exercise", {
+        "workout_id": other.id, "exercise_index": 1})
+    assert [e.exercise_id for e in w.exercises] == ["push_up", "bodyweight_squat"]
+    assert [e.exercise_id for e in other.exercises] == ["push_up", "bodyweight_squat"]
+    assert w.joint_session == other.joint_session
+    # Set structure stays locked so set positions keep lining up.
+    with pytest.raises(ValueError, match="Leave"):
+        await c.async_session_action("a", None, "add_set", {
+            "workout_id": w.id, "exercise_index": 0})
+
+
+async def test_solo_add_exercise_validates_and_appends(coordinator):
+    c = coordinator
+    await c.async_ensure_profile("a", "A")
+    w = await c.async_create_workout("a", "Solo", [
+        {"exercise_id": "push_up", "sets": [{"reps": 8, "weight": 0}]}])
+    await c.async_session_action("a", None, "add_exercise", {
+        "workout_id": w.id, "exercise_id": "plank"})
+    assert [e.exercise_id for e in w.exercises] == ["push_up", "plank"]
+    assert len(w.exercises[1].sets) == 3
+    assert w.exercises[1].sets[0].planned_reps == 30
+    with pytest.raises((ValueError, vol.Invalid)):
+        await c.async_session_action("a", None, "add_exercise", {
+            "workout_id": w.id, "exercise_id": "not_a_real_exercise"})
+    await c.async_complete_workout("a", w.id)
+    with pytest.raises(ValueError, match="editable"):
+        await c.async_session_action("a", None, "add_exercise", {
+            "workout_id": w.id, "exercise_id": "plank"})
+
+
+@pytest.mark.parametrize("mode", ["same_device", "different_devices"])
+async def test_joint_athletes_can_switch_bars(coordinator, mode):
+    c = coordinator
+    await c.async_ensure_profile("a", "A")
+    b = await c.async_ensure_profile("b", "B")
+    for uid in ["a", "b"]:
+        gym = await c.async_create_gym_profile(uid, f"{uid} gym", {
+            "olympic_barbell": [45.0], "short_bar": [20.0], "plates": [45.0, 25.0, 10.0, 5.0]})
+        await c.async_select_gym_profile(uid, gym.id)
+    w = await c.async_create_workout("a", "Squat", [
+        {"exercise_id": "barbell_back_squat", "sets": [{"reps": 8, "weight": 45}]}])
+    invite = await c.async_joint_action("a", "join", {
+        "workout_id": w.id, "expected_revision": w.revision,
+        "partner_profile_id": b.id, "device_mode": mode})
+    other = await c.async_respond_share("b", invite["invite_id"], True)
+    await c.async_session_action("a", None, "set_bar", {
+        "workout_id": w.id, "exercise_index": 0, "equipment_id": "short_bar", "bar_weight": 20})
+    assert w.exercises[0].selected_bar_equipment_id == "short_bar"
+    fields = {"workout_id": w.id, "expected_revision": w.revision,
+              "participant_profile_id": b.id, "exercise_index": 0,
+              "equipment_id": "short_bar", "bar_weight": 20}
+    if mode == "same_device":
+        await c.async_joint_action("a", "set_bar", fields)
+        assert other.exercises[0].selected_bar_equipment_id == "short_bar"
+        assert w.joint_session["participants"][1]["exercises"][0][
+            "selected_bar_equipment_id"] == "short_bar"
+        with pytest.raises(ValueError, match="not configured"):
+            await c.async_joint_action("a", "set_bar", {
+                **fields, "expected_revision": w.revision, "bar_weight": 15})
+    else:
+        with pytest.raises(ValueError, match="shared session device"):
+            await c.async_joint_action("a", "set_bar", fields)
+        await c.async_session_action("b", None, "set_bar", {
+            "workout_id": other.id, "exercise_index": 0,
+            "equipment_id": "short_bar", "bar_weight": 20})
+        assert other.exercises[0].selected_bar_equipment_id == "short_bar"

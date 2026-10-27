@@ -638,8 +638,88 @@ class GainsCoordinator(JointSessionMixin, TrainingCoordinatorMixin):
         self._joint_guard(workout, "remove_exercise")
         if not (0 <= exercise_index < len(workout.exercises)):
             return None
-        del workout.exercises[exercise_index]
+        # Workout Together: the exercise goes for every active athlete, so
+        # shared exercise positions stay aligned -- but never someone else's
+        # logged work.
+        peers = [p for p in self._joint_peers(workout) if exercise_index < len(p.exercises)]
+        for peer in peers:
+            if any(s.completed for s in peer.exercises[exercise_index].sets):
+                athlete = self.get_profile(peer.profile_id)
+                name = athlete.display_name if athlete else "Your partner"
+                raise ValueError(f"{name} has already logged sets on this exercise")
+        for owned in [workout, *peers]:
+            del owned.exercises[exercise_index]
+            if owned.current_exercise_index > exercise_index:
+                owned.current_exercise_index -= 1
+            owned.current_exercise_index = max(
+                0, min(owned.current_exercise_index, len(owned.exercises) - 1)
+            )
+        for peer in peers:
+            self._audit_workout(peer, ha_user_id, "remove_exercise")
         self._audit_workout(workout, ha_user_id, "remove_exercise")
+        await self._async_save()
+        return workout
+
+    def _prescribed_exercise(
+        self, workout: Workout, exercise_id: str, set_count: int
+    ) -> WorkoutExercise:
+        """A new exercise prescribed for the workout's owner, the same way
+        replace_exercise prescribes its replacement sets."""
+        from .load_policy import exercise_availability
+        from .prescription_engine import prescribe
+        profile = self.get_profile(workout.profile_id)
+        definition = get_exercise(exercise_id)
+        if definition is None or profile is None:
+            raise ValueError("Unknown exercise or athlete")
+        availability = exercise_availability(definition, profile, self.data)
+        if not availability["selectable"]:
+            raise ValueError(
+                f"{profile.display_name}: " + "; ".join(availability["reasons"])
+            )
+        reps = 30 if definition.get("is_timed") else 8
+        planned = {"sets": [{"reps": reps, "weight": None} for _ in range(set_count)]}
+        if availability["feasible"]:
+            prescribe(definition, planned, profile, self.data, "hypertrophy")
+        bar_id, bar_weight = self._bar_for_exercise(profile, exercise_id)
+        return WorkoutExercise(
+            exercise_id=exercise_id,
+            sets=[WorkoutSet(planned_reps=s["reps"], planned_weight=s["weight"])
+                  for s in planned["sets"]],
+            selected_bar_equipment_id=bar_id, selected_bar_weight=bar_weight,
+        )
+
+    async def async_add_exercise(
+        self,
+        ha_user_id: str,
+        workout_id: str,
+        exercise_id: str,
+        sets: int = 3,
+        *,
+        target_profile_id: str | None = None,
+    ) -> Workout | None:
+        """Appends a library exercise to a planned or active workout. In a
+        live Workout Together session every active athlete gets it, each
+        prescribed for their own history and gym."""
+        workout = self._workout_for_actor(ha_user_id, workout_id, target_profile_id)
+        if workout is None:
+            return None
+        self._joint_guard(workout, "add_exercise")
+        if workout.status not in {"planned", "active"}:
+            raise ValueError("Workout is not editable")
+        if len(workout.exercises) >= 30:
+            raise ValueError("Maximum 30 exercises")
+        peers = self._joint_peers(workout)
+        # Prescribe for everyone before mutating anyone, so one athlete's
+        # missing equipment leaves every workout unchanged.
+        additions = [
+            (owned, self._prescribed_exercise(owned, exercise_id, sets))
+            for owned in [workout, *peers]
+        ]
+        for owned, exercise in additions:
+            owned.exercises.append(exercise)
+        for peer in peers:
+            self._audit_workout(peer, ha_user_id, "add_exercise")
+        self._audit_workout(workout, ha_user_id, "add_exercise")
         await self._async_save()
         return workout
 
