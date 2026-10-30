@@ -122,7 +122,7 @@ export class GarageVehicleCard extends LitElement {
             <div><span>Est. range</span><strong>${v.estimatedRangeMiles !== null ? mileage(v.estimatedRangeMiles) : "—"}</strong></div>
             <div><span>Avg. MPG</span><strong>${v.averageMpg?.toFixed(1) ?? "—"}</strong></div>
           </div>
-          <div class="fuel-head"><span><ha-icon aria-hidden="true" icon="mdi:gas-station-outline"></ha-icon>Fuel level</span><strong>${pct(fuel)}</strong></div>
+          <div class="fuel-head"><span><ha-icon aria-hidden="true" icon="mdi:gas-station-outline"></ha-icon>Fuel level${v.fuelLevelEntityId ? " · live" : ""}</span><strong>${pct(fuel)}</strong></div>
           ${fuel !== null ? html`<progress aria-label="Fuel level" max="1" value=${fuel}></progress>` : html`<div class="model">No fuel reading recorded</div>`}
           ${alerts.length ? html`<div class="alerts">${alerts.map(a => html`<span class="alert">${a}</span>`)}</div>` : ""}
         </div>

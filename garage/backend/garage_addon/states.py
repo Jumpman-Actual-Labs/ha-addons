@@ -113,6 +113,8 @@ def vehicle_summary_attributes(summary: dict[str, Any]) -> dict[str, Any]:
         "photo_path": vehicle.photo_path,
         "primary_driver_id": vehicle.primary_driver_id,
         "additional_driver_ids": vehicle.additional_driver_ids,
+        "odometer_entity_id": vehicle.odometer_entity_id,
+        "fuel_level_entity_id": vehicle.fuel_level_entity_id,
         "registration_expires": vehicle.registration_expires,
         "insurance_expires": vehicle.insurance_expires,
         "health_score": summary["health_score"],

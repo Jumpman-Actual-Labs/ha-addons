@@ -32,6 +32,8 @@ export interface Vehicle {
   photoPath: string | null;
   primaryDriverId: string | null;
   additionalDriverIds: string[];
+  odometerEntityId: string;
+  fuelLevelEntityId: string;
   registrationExpires: string | null;
   insuranceExpires: string | null;
   healthScore: number;

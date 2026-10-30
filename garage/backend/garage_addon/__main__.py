@@ -14,6 +14,7 @@ from .coordinator import GarageCoordinator
 from .ha_client import HomeAssistantClient
 from .migrate import migrate_from_integration
 from .mqtt import MqttPublisher, async_get_broker
+from .obd import run_live_readings
 from .reminders import run_daily_tasks
 from .services import build_handlers
 from .stash_client import StashClient, stash_base_url
@@ -50,6 +51,8 @@ async def main() -> None:
         _LOGGER.info("Garage listening on port %s", config.port)
 
         tasks = [asyncio.create_task(run_daily_tasks(coordinator, ha))]
+        if ha is not None:
+            tasks.append(asyncio.create_task(run_live_readings(coordinator, ha)))
         if config.mqtt_enabled:
             broker = await async_get_broker(session, config.supervisor_token)
             if broker:

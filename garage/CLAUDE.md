@@ -52,6 +52,12 @@ Add-on layers around them:
   sensors are dynamic; their discovery topics sit under a `garage` node id
   so the publisher reads back what's retained on connect and clears
   vehicles that no longer exist.
+- `obd.py` - live odometer / fuel level: polls each vehicle's linked
+  `odometer_entity_id` / `fuel_level_entity_id` (HA sensors, e.g. a WiCAN
+  OBD dongle's) every minute via `ha_client.get_state` and feeds
+  `coordinator.async_apply_live_readings` (mileage only moves forward,
+  `%` becomes a 0-1 fraction, km becomes miles, unavailable is skipped).
+  `web.py`'s `api/ha_sensors` lists numeric sensors for the dialog's pickers.
 - `lookups.py` - fuel pump photo scan (OpenAI vision) and VIN decode
   (NHTSA vPIC + optional OpenAI tank/oil capacity guess). Key: add-on
   option, then secrets.yaml (where the integration read it).

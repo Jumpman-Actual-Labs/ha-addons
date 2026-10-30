@@ -28,6 +28,15 @@ Published via MQTT discovery under a **Garage** device:
 - one `sensor.garage_<nickname>` per vehicle - its Health Score, with
   mileage, fuel level, MPG, costs and next maintenance due as attributes.
 
+## Live odometer and fuel level (OBD)
+
+If your car has an OBD-II dongle in Home Assistant (a WiCAN, for example),
+edit the vehicle and pick its sensors under **Live sensors** - the odometer
+(e.g. `sensor.wican_<id>_local_a6_odometer`) and the fuel tank level (e.g.
+`sensor.wican_<id>_local_2f_fueltanklevel`). Garage reads them about once a
+minute and keeps Current Mileage and Fuel % current. Mileage never goes
+backwards, and readings while the car is off (unavailable) are ignored.
+
 ## Stash and reminders
 
 - **Stash sync** (Settings tab): when on and Stash is installed (the Stash

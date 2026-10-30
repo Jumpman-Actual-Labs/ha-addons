@@ -10,6 +10,8 @@ Serves the panel itself plus everything it used to get from Home Assistant:
   from where files land.
 - `api/ha_users` - Home Assistant's user list for linking a driver to an
   account (the panel used to ask HA's websocket for it directly).
+- `api/ha_sensors` - Home Assistant's numeric sensors, for linking a
+  vehicle's odometer / fuel level to an OBD dongle's (see obd.py).
 - `uploads/...` - uploaded documents and vehicle photos (was
   `/local/garage_documents/` and `/local/garage_vehicles/`).
 
@@ -296,6 +298,42 @@ async def ha_users(request: web.Request) -> web.Response:
     )
 
 
+async def ha_sensors(request: web.Request) -> web.Response:
+    """Best-effort like ha_users - [] without Home Assistant. Only `sensor.*`
+    entities whose state is a number or currently unavailable (an OBD
+    dongle asleep with the car off still needs to be linkable)."""
+    ha = request.app[HA_KEY]
+    if not isinstance(ha, HomeAssistantClient):
+        return web.json_response([])
+    try:
+        states = await ha.get_states()
+    except HomeAssistantError:
+        _LOGGER.warning("Couldn't list Home Assistant sensors", exc_info=True)
+        return web.json_response([])
+    sensors = []
+    for state in states:
+        entity_id = str(state.get("entity_id", ""))
+        if not entity_id.startswith("sensor."):
+            continue
+        value = state.get("state")
+        if value not in ("unavailable", "unknown"):
+            try:
+                float(value)
+            except (TypeError, ValueError):
+                continue
+        attributes = state.get("attributes") or {}
+        sensors.append(
+            {
+                "entity_id": entity_id,
+                "name": attributes.get("friendly_name") or entity_id,
+                "state": value,
+                "unit": attributes.get("unit_of_measurement") or "",
+            }
+        )
+    sensors.sort(key=lambda s: s["entity_id"])
+    return web.json_response(sensors)
+
+
 # ---------------------------------------------------------------- uploads
 
 
@@ -454,6 +492,7 @@ def create_app(
     app.router.add_get("/api/websocket", websocket)
     app.router.add_post("/api/services/{service}", call_service)
     app.router.add_get("/api/ha_users", ha_users)
+    app.router.add_get("/api/ha_sensors", ha_sensors)
     app.router.add_post("/api/upload", upload_document)
     app.router.add_post("/api/vehicle_photo", upload_vehicle_photo)
     app.router.add_post("/api/analyze_fuel_photo", analyze_fuel_photo_view)

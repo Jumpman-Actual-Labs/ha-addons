@@ -34,6 +34,10 @@ class Vehicle:
     insurance_expires: str | None = None
     primary_driver_id: str | None = None
     additional_driver_ids: list[str] = field(default_factory=list)
+    # Home Assistant sensors (e.g. a WiCAN OBD dongle's) that keep
+    # current_mileage / current_fuel_pct live - see obd.py.
+    odometer_entity_id: str = ""
+    fuel_level_entity_id: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -61,6 +65,8 @@ class Vehicle:
             "insurance_expires": self.insurance_expires,
             "primary_driver_id": self.primary_driver_id,
             "additional_driver_ids": list(self.additional_driver_ids),
+            "odometer_entity_id": self.odometer_entity_id,
+            "fuel_level_entity_id": self.fuel_level_entity_id,
         }
 
     @staticmethod
@@ -90,6 +96,8 @@ class Vehicle:
             insurance_expires=data.get("insurance_expires"),
             primary_driver_id=data.get("primary_driver_id"),
             additional_driver_ids=list(data.get("additional_driver_ids", [])),
+            odometer_entity_id=data.get("odometer_entity_id", ""),
+            fuel_level_entity_id=data.get("fuel_level_entity_id", ""),
         )
 
 

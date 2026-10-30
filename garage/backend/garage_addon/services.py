@@ -64,6 +64,8 @@ SCHEMAS = {
             vol.Optional("insurance_expires"): vol.Any(cv.string, None),
             vol.Optional("primary_driver_id"): vol.Any(cv.string, None),
             vol.Optional("additional_driver_ids"): [cv.string],
+            vol.Optional("odometer_entity_id"): cv.string,
+            vol.Optional("fuel_level_entity_id"): cv.string,
         }
     ),
     SERVICE_EDIT_VEHICLE: vol.Schema(
@@ -91,6 +93,8 @@ SCHEMAS = {
             vol.Optional("insurance_expires"): vol.Any(cv.string, None),
             vol.Optional("primary_driver_id"): vol.Any(cv.string, None),
             vol.Optional("additional_driver_ids"): [cv.string],
+            vol.Optional("odometer_entity_id"): cv.string,
+            vol.Optional("fuel_level_entity_id"): cv.string,
         }
     ),
     SERVICE_DELETE_VEHICLE: vol.Schema({vol.Required("vehicle_id"): cv.string}),

@@ -54,6 +54,13 @@ export interface HaUserSummary {
   name: string;
 }
 
+export interface HaSensorSummary {
+  entityId: string;
+  name: string;
+  state: string;
+  unit: string;
+}
+
 const DOMAIN = "garage";
 
 function entitiesWith(hass: HomeAssistant, attr: string): HassEntity[] {
@@ -163,6 +170,8 @@ export function parseGarageState(hass: HomeAssistant): GarageState {
     additionalDriverIds: Array.isArray(e.attributes.additional_driver_ids)
       ? (e.attributes.additional_driver_ids as string[])
       : [],
+    odometerEntityId: String(e.attributes.odometer_entity_id ?? ""),
+    fuelLevelEntityId: String(e.attributes.fuel_level_entity_id ?? ""),
     registrationExpires: strOrNull(e.attributes.registration_expires),
     insuranceExpires: strOrNull(e.attributes.insurance_expires),
     healthScore: num(e.state),
@@ -294,6 +303,19 @@ export const garageApi = {
       system_generated?: boolean;
     }>;
     return users.filter((u) => !u.system_generated).map((u) => ({ id: u.id, name: u.name }));
+  },
+  // Numeric sensor.* entities for linking a vehicle's odometer / fuel level
+  // (e.g. a WiCAN OBD dongle's); [] when HA is unreachable.
+  async listHaSensors(): Promise<HaSensorSummary[]> {
+    const response = await fetch("api/ha_sensors");
+    if (!response.ok) return [];
+    const sensors = (await response.json()) as Array<{
+      entity_id: string;
+      name: string;
+      state: string;
+      unit: string;
+    }>;
+    return sensors.map((s) => ({ entityId: s.entity_id, name: s.name, state: s.state, unit: s.unit }));
   },
   logFuel(hass: HomeAssistant, fields: Record<string, unknown>) {
     return callGarageService(hass, "log_fuel", fields);

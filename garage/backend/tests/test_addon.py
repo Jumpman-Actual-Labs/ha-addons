@@ -485,3 +485,86 @@ def test_allowed_users_option_is_normalised(tmp_path, monkeypatch):
     (tmp_path / "options.json").write_text(json.dumps(options))
     monkeypatch.setenv("GARAGE_DATA_DIR", str(tmp_path))
     assert load_config().allowed_users == ("jordan", "kim")
+
+
+# ------------------------------------------------------------- live sensors
+
+
+def _sensor(state, unit=""):
+    return {"state": state, "attributes": {"unit_of_measurement": unit}}
+
+
+def test_parse_odometer_units_and_bad_states():
+    from garage_addon.obd import parse_odometer
+
+    assert parse_odometer(_sensor("112341.61", "mi")) == 112342
+    assert parse_odometer(_sensor("160934.4", "km")) == 100000
+    for bad in ("unavailable", "unknown", "0", "-1", "nan"):
+        assert parse_odometer(_sensor(bad, "mi")) is None
+    assert parse_odometer(None) is None
+
+
+def test_parse_fuel_level_percent_and_fraction():
+    from garage_addon.obd import parse_fuel_level
+
+    assert parse_fuel_level(_sensor("45.88", "%")) == 0.459
+    assert parse_fuel_level(_sensor("0.5")) == 0.5
+    assert parse_fuel_level(_sensor("0.5", "%")) == 0.005
+    assert parse_fuel_level(_sensor("150", "%")) is None
+    assert parse_fuel_level(_sensor("unavailable", "%")) is None
+
+
+class FakeStatesHa:
+    def __init__(self, states):
+        self.states = states
+
+    async def get_state(self, entity_id):
+        return self.states.get(entity_id)
+
+
+async def test_live_readings_update_vehicle_and_never_roll_back_mileage(coordinator):
+    from garage_addon.obd import async_poll_once
+
+    vehicle = await _add_vehicle(coordinator)
+    await coordinator.async_edit_vehicle(
+        vehicle.id,
+        odometer_entity_id="sensor.wican_a6_odometer",
+        fuel_level_entity_id="sensor.wican_2f_fueltanklevel",
+    )
+    ha = FakeStatesHa(
+        {
+            "sensor.wican_a6_odometer": _sensor("112341.61", "mi"),
+            "sensor.wican_2f_fueltanklevel": _sensor("45.88", "%"),
+        }
+    )
+    await async_poll_once(coordinator, ha)
+    assert vehicle.current_mileage == 112342
+    assert vehicle.current_fuel_pct == 0.459
+    attrs = build_states(coordinator.data)[f"sensor.garage_vehicle_{vehicle.id}"]["attributes"]
+    assert attrs["current_mileage"] == 112342
+    assert attrs["odometer_entity_id"] == "sensor.wican_a6_odometer"
+
+    ha.states["sensor.wican_a6_odometer"] = _sensor("5", "mi")
+    ha.states["sensor.wican_2f_fueltanklevel"] = _sensor("unavailable", "%")
+    await async_poll_once(coordinator, ha)
+    assert vehicle.current_mileage == 112342
+    assert vehicle.current_fuel_pct == 0.459
+
+
+async def test_edit_vehicle_service_accepts_sensor_links(client, coordinator):
+    vehicle = await _add_vehicle(coordinator)
+    resp = await client.post(
+        "/api/services/edit_vehicle",
+        json={
+            "vehicle_id": vehicle.id,
+            "odometer_entity_id": "sensor.x",
+            "fuel_level_entity_id": "",
+        },
+    )
+    assert resp.status == 200
+    assert vehicle.odometer_entity_id == "sensor.x"
+
+
+async def test_ha_sensors_empty_without_home_assistant(client):
+    resp = await client.get("/api/ha_sensors")
+    assert await resp.json() == []

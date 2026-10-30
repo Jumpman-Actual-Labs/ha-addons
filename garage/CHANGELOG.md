@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0
+
+- Live sensors: link a vehicle to Home Assistant sensors (for example a
+  WiCAN OBD-II dongle's odometer and fuel tank level) under Edit Vehicle →
+  Live sensors. Garage reads them about once a minute and keeps Current
+  Mileage and Fuel % up to date, so mileage-based maintenance, the health
+  score, estimated range and low-fuel reminders follow the car. Mileage only
+  ever goes up; readings while the dongle is asleep are ignored. Kilometre
+  odometers are converted to miles.
+
 ## 1.1.1
 
 - Panel now visible to non-admin users. Added Allowed users option to restrict access to specific accounts.

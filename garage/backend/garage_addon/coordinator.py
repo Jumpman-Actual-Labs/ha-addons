@@ -698,6 +698,27 @@ class GarageCoordinator:
         await self._async_save()
         return self.settings
 
+    async def async_apply_live_readings(
+        self, vehicle_id: str, odometer: int | None, fuel_pct: float | None
+    ) -> bool:
+        """Readings from the vehicle's linked HA sensors (obd.py). Odometer
+        only ever moves forward, like a logged fill-up or service; only
+        saves when something changed. Returns whether it did."""
+        try:
+            vehicle = self._get_vehicle(vehicle_id)
+        except ValueError:
+            return False  # deleted while the poll was in flight
+        changed = False
+        if odometer is not None and odometer > vehicle.current_mileage:
+            vehicle.current_mileage = odometer
+            changed = True
+        if fuel_pct is not None and fuel_pct != vehicle.current_fuel_pct:
+            vehicle.current_fuel_pct = fuel_pct
+            changed = True
+        if changed:
+            await self._async_save()
+        return changed
+
     def async_refresh(self) -> None:
         """Recomputes the date-dependent summaries (due status, health score,
         this month's spend) without a mutation - reminders.py calls it once a

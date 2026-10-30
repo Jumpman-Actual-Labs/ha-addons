@@ -1,6 +1,6 @@
 import { LitElement, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import type { HomeAssistant } from "../ha-api";
+import type { HaSensorSummary, HomeAssistant } from "../ha-api";
 import { garageApi } from "../ha-api";
 import type { Driver, Vehicle } from "../types";
 import { formStyles } from "../styles";
@@ -34,6 +34,9 @@ export class GarageVehicleDialog extends LitElement {
   @state() private _insuranceExpires = "";
   @state() private _primaryDriverId = "";
   @state() private _notes = "";
+  @state() private _odometerEntityId = "";
+  @state() private _fuelLevelEntityId = "";
+  @state() private _haSensors: HaSensorSummary[] = [];
   @state() private _saving = false;
   @state() private _photoPath: string | null = null;
   @state() private _photoUploading = false;
@@ -71,6 +74,9 @@ export class GarageVehicleDialog extends LitElement {
       this._insuranceExpires = v?.insuranceExpires ?? "";
       this._primaryDriverId = v?.primaryDriverId ?? "";
       this._notes = v?.notes ?? "";
+      this._odometerEntityId = v?.odometerEntityId ?? "";
+      this._fuelLevelEntityId = v?.fuelLevelEntityId ?? "";
+      garageApi.listHaSensors().then((sensors) => (this._haSensors = sensors));
       this._photoPath = v?.photoPath ?? null;
       this._photoError = "";
     }
@@ -148,6 +154,8 @@ export class GarageVehicleDialog extends LitElement {
         color: this._color.trim(),
         tire_size: this._tireSize.trim(),
         notes: this._notes.trim(),
+        odometer_entity_id: this._odometerEntityId,
+        fuel_level_entity_id: this._fuelLevelEntityId,
       };
       if (this._tankCapacityGal) fields.tank_capacity_gal = Number(this._tankCapacityGal);
       if (this._oilCapacityQt) fields.oil_capacity_qt = Number(this._oilCapacityQt);
@@ -162,6 +170,25 @@ export class GarageVehicleDialog extends LitElement {
     } finally {
       this._saving = false;
     }
+  }
+
+  /** Sensors that look like the right kind (by unit), the linked one even if
+   * it doesn't, and every numeric sensor if nothing matches the unit. */
+  private _sensorOptions(units: string[], linked: string) {
+    const matching = this._haSensors.filter(
+      (s) => units.includes(s.unit.toLowerCase()) || s.entityId === linked
+    );
+    const options = matching.some((s) => s.entityId !== linked) ? matching : this._haSensors;
+    const known = options.some((s) => s.entityId === linked);
+    return html`
+      <option value="">Not linked</option>
+      ${linked && !known ? html`<option value=${linked}>${linked}</option>` : ""}
+      ${options.map(
+        (s) => html`<option value=${s.entityId}>
+          ${s.name} (${s.state === "unavailable" || s.state === "unknown" ? s.state : `${s.state} ${s.unit}`.trim()})
+        </option>`
+      )}
+    `;
   }
 
   private _close(): void {
@@ -373,6 +400,33 @@ export class GarageVehicleDialog extends LitElement {
         <div style="color: var(--secondary-text-color); font-size: 0.75rem; margin-top: -4px;">
           Tank/oil capacity from Decode VIN are AI estimates, not from an
           official spec database - double-check against your owner's manual.
+        </div>
+
+        <h3 class="form-section">Live sensors</h3>
+        <div style="color: var(--secondary-text-color); font-size: 0.75rem;">
+          Link Home Assistant sensors (e.g. a WiCAN OBD dongle's odometer and
+          fuel tank level) and Garage keeps Current Mileage and Fuel % up to
+          date on its own, about once a minute. Mileage only ever goes up.
+        </div>
+        <div class="row">
+          <div>
+            <label for="odometer-entity">Odometer sensor</label>
+            <select id="odometer-entity"
+              .value=${this._odometerEntityId}
+              @change=${(e: Event) => (this._odometerEntityId = (e.target as HTMLSelectElement).value)}
+            >
+              ${this._sensorOptions(["mi", "km"], this._odometerEntityId)}
+            </select>
+          </div>
+          <div>
+            <label for="fuel-level-entity">Fuel level sensor</label>
+            <select id="fuel-level-entity"
+              .value=${this._fuelLevelEntityId}
+              @change=${(e: Event) => (this._fuelLevelEntityId = (e.target as HTMLSelectElement).value)}
+            >
+              ${this._sensorOptions(["%"], this._fuelLevelEntityId)}
+            </select>
+          </div>
         </div>
 
         <h3 class="form-section">Ownership & reminders</h3>

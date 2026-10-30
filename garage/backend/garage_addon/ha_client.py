@@ -1,9 +1,10 @@
 """Calls into Home Assistant Core, through Supervisor's API proxy.
 
 The integration ran inside Home Assistant and used `hass` directly for the
-three things Garage needs from it: the Stash (`finance`) integration's
+things Garage needs from it: the Stash (`finance`) integration's
 services and category sensors, `notify.*` for driver reminders, and the HA
-user list for linking a driver to an account. The add-on reaches the same
+user list for linking a driver to an account. The add-on also reads the
+sensors a vehicle is linked to (odometer / fuel level - see obd.py). The add-on reaches the same
 things over Core's REST/websocket API (config.yaml's
 `homeassistant_api: true`), authenticated with the SUPERVISOR_TOKEN
 Supervisor injects.
@@ -57,6 +58,15 @@ class HomeAssistantClient:
 
     async def get_states(self) -> list[dict[str, Any]]:
         return await self._request("GET", "states")
+
+    async def get_state(self, entity_id: str) -> dict[str, Any] | None:
+        """None when the entity doesn't exist (404), rather than an error."""
+        try:
+            return await self._request("GET", f"states/{entity_id}")
+        except HomeAssistantError as err:
+            if "(404)" in str(err):
+                return None
+            raise
 
     async def call_service(
         self,
