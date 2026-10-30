@@ -209,6 +209,59 @@ def test_progression_snaps_impossible_historical_load_without_changing_history()
     assert data.to_dict() == original
 
 
+def _lighter_history(experience_level):
+    from gains_addon.models import Workout, WorkoutExercise
+
+    p, data = athlete({"dumbbells": [20, 20, 25, 25]})
+    p.experience_level = experience_level
+    data.workouts.append(
+        Workout(
+            id="w",
+            profile_id=p.id,
+            name="Previous",
+            status="completed",
+            completed_at="2026-01-01T00:00:00+00:00",
+            exercises=[
+                WorkoutExercise(
+                    exercise_id="dumbbell_curl",
+                    sets=[
+                        WorkoutSet(
+                            planned_reps=12, actual_reps=12, actual_weight=10, completed=True
+                        )
+                    ],
+                )
+            ],
+        )
+    )
+    return p, data
+
+
+def test_history_lighter_than_inventory_starts_at_lightest_load():
+    p, data = _lighter_history("beginner")
+    result, reasons = prescribe(
+        get_exercise("dumbbell_curl"),
+        {"sets": [{"reps": 10, "weight": None}]},
+        p,
+        data,
+        "hypertrophy",
+    )
+    assert result["sets"][0]["weight"] == 20
+    assert result["sets"][0]["reps"] == 8
+    assert "inventory_minimum_above_performance" in reasons
+
+
+def test_child_history_lighter_than_inventory_still_refuses():
+    p, data = _lighter_history("kids")
+    with pytest.raises(ValueError, match="No feasible load"):
+        prescribe(
+            get_exercise("dumbbell_curl"),
+            {"sets": [{"reps": 10, "weight": None}]},
+            p,
+            data,
+            "hypertrophy",
+        )
+
+
 def test_child_uses_own_verified_light_weights_not_adult_defaults():
     p, data = athlete({"dumbbells": [1, 1, 2, 2, 20, 20]})
     p.experience_level = "kids"

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.7
+
+- Building a program no longer fails with "No feasible load: inventory
+  minimum exceeds comparable performance" when an athlete's last logged
+  weight is lighter than anything the gym can load. The exercise starts at
+  the gym's lightest load at the low end of the rep range instead (kids'
+  profiles still refuse, as with their starting loads).
+
 ## 1.0.6
 
 - Replace exercise shows its list right away: Similar / All exercises /

@@ -130,12 +130,20 @@ def prescribe(
             )
         if not zero_external and ladder and load not in ladder:
             feasible = [v for v in ladder if v <= load]
-            if not feasible:
+            if feasible:
+                load = max(feasible)
+                reasons.append("inventory_adjusted")
+            elif profile.experience_level == "kids":
                 raise ValueError(
                     "No feasible load: inventory minimum exceeds comparable performance"
                 )
-            load = max(feasible)
-            reasons.append("inventory_adjusted")
+            else:
+                # Lighter than anything this gym can load (e.g. history from
+                # other equipment): start at the lightest step, low reps.
+                load = min(ladder)
+                if not assistance:
+                    reps = min(reps, low)
+                reasons.append("inventory_minimum_above_performance")
     else:
         if preserve_unknown_targets:
             return planned, ['manual_override_no_performance']
