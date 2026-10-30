@@ -119,6 +119,18 @@ def is_new_personal_record(
     return current_best is None or estimated_one_rep_max > current_best
 
 
+def timed_personal_record(
+    history: list[tuple[float, float]], seconds: float, weight: float
+) -> tuple[bool, float | None]:
+    """A timed hold has no 1RM, so it's a PR when no earlier (seconds,
+    weight) set matches or beats it on both: a longer hold at the same or
+    heavier weight, or more weight for at least as long. Returns whether
+    it's a record and the previous best hold at this weight or heavier."""
+    is_record = not any(s >= seconds and w >= weight for s, w in history)
+    previous = max((s for s, w in history if w >= weight), default=None)
+    return is_record, previous
+
+
 def linked_profile_summaries(
     profile: AthleteProfile, all_profiles: list[AthleteProfile]
 ) -> list[dict[str, str]]:

@@ -390,18 +390,45 @@ async def test_log_set_can_hit_pr_with_lighter_weight_and_more_reps(coordinator)
     ] == pytest.approx(second_pr)
 
 
-async def test_log_set_skips_pr_math_for_a_timed_hold(coordinator):
-    # "reps" on a timed exercise is actually seconds held -- estimate_one_
-    # rep_max(weight, seconds) would be nonsense, so no personal record
-    # should be recorded at all even when a weight is present (e.g. a
-    # weighted plank).
+async def test_timed_hold_prs_track_time_and_weight_not_1rm(coordinator):
+    # "reps" on a timed exercise is seconds held -- no estimated 1RM, but a
+    # longer hold or more weight for as long is still a personal record.
     await coordinator.async_ensure_profile("user-1", "Jordan")
     created = await coordinator.async_create_workout(
-        "user-1", "Core Day", _push_workout(exercise_id="plank", reps=60, weight=25.0)
+        "user-1",
+        "Core Day",
+        [{
+            "exercise_id": "plank",
+            "sets": [{"reps": 45, "weight": None} for _ in range(5)],
+        }],
     )
-    await coordinator.async_log_set("user-1", created.id, 0, 0, reps=60, weight=25.0)
-    profile = coordinator.get_profile_by_user_id("user-1")
-    assert "plank" not in profile.personal_records
+    sets = created.exercises[0].sets
+
+    async def log(index, seconds, weight=None):
+        await coordinator.async_log_set("user-1", created.id, 0, index, seconds, weight)
+        return sets[index]
+
+    first = await log(0, 45)
+    assert first.is_personal_record is True
+    assert first.personal_record_value == 45
+    assert first.previous_personal_record is None
+
+    longer = await log(1, 60)
+    assert longer.is_personal_record is True
+    assert longer.previous_personal_record == 45
+
+    assert (await log(2, 60)).is_personal_record is False
+
+    heavier = await log(3, 60, 10.0)
+    assert heavier.is_personal_record is True
+    assert heavier.previous_personal_record is None
+
+    assert (await log(4, 50, 5.0)).is_personal_record is False
+    assert "plank" not in coordinator.get_profile_by_user_id("user-1").personal_records
+
+    # Re-logging the same values keeps the badge; a shorter edit drops it.
+    assert (await log(1, 60)).is_personal_record is True
+    assert (await log(1, 30)).is_personal_record is False
 
 
 async def test_log_set_returns_none_for_out_of_range_indexes(coordinator):
