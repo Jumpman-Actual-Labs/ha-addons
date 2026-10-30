@@ -1,8 +1,8 @@
 import { LitElement, css, html, svg } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import type { Vehicle } from "../types";
-import { mileage, pct } from "../format";
 import { controlStyles } from "../styles";
+import "./vehicle-readings";
 
 export const vehicleSilhouette = () => svg`
   <svg viewBox="0 0 480 200" aria-hidden="true">
@@ -30,17 +30,17 @@ export class GarageVehicleCard extends LitElement {
     article.selectable { cursor: pointer; }
     article:focus-visible { outline: 2px solid var(--garage-accent); outline-offset: 3px; }
     article { border: 1px solid var(--garage-border); border-radius: 16px; overflow: hidden; background: var(--garage-surface); box-shadow: inset 0 1px 0 #ffffff06; }
-    .showroom { position: relative; height: 190px; overflow: hidden; background: radial-gradient(ellipse at 50% 90%, #f6a45b15, transparent 65%), var(--garage-inset); border-bottom: 1px solid var(--garage-border); }
+    .showroom { position: relative; height: 128px; overflow: hidden; background: radial-gradient(ellipse at 50% 90%, #f6a45b15, transparent 65%), var(--garage-inset); border-bottom: 1px solid var(--garage-border); }
     .showroom::before { content: ""; position: absolute; left: 10%; right: 10%; bottom: 24px; border-bottom: 1px solid #f6a45b26; }
     .showroom svg { position: absolute; width: 94%; height: 100%; left: 3%; color: #9ba6af; padding: 18px 12px 0; }
     .showroom img { width: 100%; height: 100%; object-fit: cover; }
     .showroom .status { position: absolute; left: 16px; top: 16px; }
-    .status { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #f6a45b33; background: #15181bdf; color: var(--garage-accent); border-radius: 6px; padding: 4px 8px; text-transform: uppercase; letter-spacing: .07em; font-size: .58rem; font-weight: 650; }
+    .status { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #f6a45b33; background: #15181bdf; color: var(--garage-accent); border-radius: 6px; padding: 4px 8px; text-transform: uppercase; letter-spacing: .07em; font-size: .7rem; font-weight: 650; }
     .status::before { content: ""; width: 4px; height: 4px; background: currentColor; border-radius: 50%; }
     .body { padding: 20px; }
     .identity { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .identity h3 { margin: 0 0 4px; font-size: 1.2rem; letter-spacing: -.035em; font-weight: 650; overflow-wrap: anywhere; }
-    .model { color: var(--garage-muted); font-size: .74rem; }
+    .model { color: var(--garage-muted); font-size: .78rem; }
     .health { width: 62px; height: 62px; position: relative; flex-shrink: 0; color: var(--garage-success); }
     .health.warn { color: var(--garage-warning); } .health.bad { color: var(--garage-danger); }
     .health svg { width: 100%; height: 100%; transform: rotate(-90deg); }
@@ -59,23 +59,18 @@ export class GarageVehicleCard extends LitElement {
     .health-tip li { display: flex; justify-content: space-between; gap: 12px; }
     .health-tip li strong { font-family: var(--garage-mono); font-weight: 500; color: var(--garage-danger); white-space: nowrap; }
     .health-tip .perfect { margin: 0; color: var(--garage-success); }
-    .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }
-    .metrics span { display: block; color: var(--garage-muted); font-size: .57rem; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 6px; }
-    .metrics strong { display: block; font-family: var(--garage-mono); font-size: .83rem; font-weight: 500; overflow-wrap: anywhere; }
-    .fuel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: .7rem; color: var(--garage-muted); }
-    .fuel-head span { display: flex; gap: 6px; align-items: center; }
-    .fuel-head strong { font-family: var(--garage-mono); color: var(--garage-text); font-weight: 500; }
-    progress { display: block; width: 100%; height: 5px; border: none; border-radius: 5px; overflow: hidden; appearance: none; accent-color: var(--garage-accent); background: var(--garage-raised); }
-    progress::-webkit-progress-bar { background: var(--garage-raised); } progress::-webkit-progress-value { background: var(--garage-accent); border-radius: 5px; }
-    progress::-moz-progress-bar { background: var(--garage-accent); }
+    garage-vehicle-readings { margin-top: 20px; }
     .alerts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
-    .alert { padding: 4px 7px; font-size: .62rem; border: 1px solid #edc27e30; border-radius: 5px; color: var(--garage-warning); background: #edc27e08; }
+    .alert { padding: 4px 7px; font-size: .75rem; border: 1px solid #edc27e30; border-radius: 5px; color: var(--garage-warning); background: #edc27e08; }
     footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 20px; border-top: 1px solid var(--garage-border); background: #15181b66; }
-    .service { color: var(--garage-muted); font-size: .68rem; flex: 1; min-width: 0; }
-    .service strong { display: block; color: var(--garage-text); font-size: .72rem; font-weight: 500; overflow-wrap: anywhere; }
-    .footer-actions { display: flex; gap: 4px; }
-    button.secondary { min-height: 38px; padding: 8px 12px; font-size: .73rem; }
-    @media (max-width: 600px) { .showroom { height: 180px; } .body { padding: 18px; } footer { padding: 12px 18px; } }
+    .service { color: var(--garage-muted); font-size: .75rem; flex: 1; min-width: 0; }
+    .service strong { display: block; color: var(--garage-text); font-size: .78rem; font-weight: 500; overflow-wrap: anywhere; }
+    .footer-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    button.secondary { min-height: 44px; padding: 8px 12px; font-size: .78rem; }
+    .view-vehicle { color: var(--garage-muted); font-size: .78rem; padding: 8px 0; border: 0; background: transparent; }
+    footer { flex-wrap: wrap; }
+    .service { flex-basis: 100%; }
+    @media (max-width: 600px) { .showroom { height: 120px; } .body { padding: 18px; } footer { padding: 12px 18px; } }
   `];
 
   private _emit(action: string): void {
@@ -86,11 +81,9 @@ export class GarageVehicleCard extends LitElement {
     const v = this.vehicle;
     if (!v) return html``;
     const score = Math.min(100, Math.max(0, v.healthScore));
-    const fuel = v.currentFuelPct === null ? null : Math.min(1, Math.max(0, v.currentFuelPct));
     const alerts = [
       ...(v.maintenanceDueCount > 0 ? [`${v.maintenanceDueCount} service due`] : []),
       ...(v.maintenanceDueSoonCount > 0 ? [`${v.maintenanceDueSoonCount} due soon`] : []),
-      ...(fuel !== null && fuel <= this.lowFuelThreshold ? ["Low fuel"] : []),
       ...(v.registrationExpires && new Date(v.registrationExpires) < new Date() ? ["Registration expired"] : []),
       ...(v.insuranceExpires && new Date(v.insuranceExpires) < new Date() ? ["Insurance expired"] : []),
     ];
@@ -117,18 +110,13 @@ export class GarageVehicleCard extends LitElement {
               </div>
             </div>
           </div>
-          <div class="metrics">
-            <div><span>Odometer</span><strong>${mileage(v.currentMileage)}</strong></div>
-            <div><span>Est. range</span><strong>${v.estimatedRangeMiles !== null ? mileage(v.estimatedRangeMiles) : "—"}</strong></div>
-            <div><span>Avg. MPG</span><strong>${v.averageMpg?.toFixed(1) ?? "—"}</strong></div>
-          </div>
-          <div class="fuel-head"><span><ha-icon aria-hidden="true" icon="mdi:gas-station-outline"></ha-icon>Fuel level${v.fuelLevelEntityId ? " · live" : ""}</span><strong>${pct(fuel)}</strong></div>
-          ${fuel !== null ? html`<progress aria-label="Fuel level" max="1" value=${fuel}></progress>` : html`<div class="model">No fuel reading recorded</div>`}
+          <garage-vehicle-readings .vehicle=${v} .lowFuelThreshold=${this.lowFuelThreshold}></garage-vehicle-readings>
           ${alerts.length ? html`<div class="alerts">${alerts.map(a => html`<span class="alert">${a}</span>`)}</div>` : ""}
         </div>
         <footer>
           <div class="service">Next service<strong>${v.nextMaintenanceDue?.name ?? "No service due"}</strong></div>
           <div class="footer-actions">
+            <button class="view-vehicle" @click=${() => this._emit("vehicle-select")}>View vehicle <span aria-hidden="true">&rarr;</span></button>
             ${this.manage ? html`
               <button class="icon" aria-label=${`Edit ${v.nickname}`} @click=${() => this._emit("vehicle-edit")}><ha-icon aria-hidden="true" icon="mdi:pencil-outline"></ha-icon></button>
               <button class="icon danger" aria-label=${`Delete ${v.nickname}`} @click=${() => this._emit("vehicle-delete")}><ha-icon aria-hidden="true" icon="mdi:trash-can-outline"></ha-icon></button>

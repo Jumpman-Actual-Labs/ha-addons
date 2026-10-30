@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.0
+
+- Redesigned the dashboard around vehicle readings, with prominent fuel,
+  odometer and estimated range displays. Spending and recent activity remain
+  available below the vehicle overview.
+- Vehicle cards and detail pages share a clearer readings display, including
+  low-fuel warnings, readable units and layouts for smaller screens.
+- Reading source labels distinguish linked sensors from saved readings. Garage
+  retains the last saved values when a sensor is unavailable; a configured
+  sensor link does not indicate a fresh reading.
+
 ## 1.2.0
 
 - Live sensors: link a vehicle to Home Assistant sensors (for example a

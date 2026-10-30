@@ -32,7 +32,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 ];
 
 const PAGE_DESCRIPTIONS: Record<Tab, string> = {
-  dashboard: "Your vehicles, running costs, and what needs attention.",
+  dashboard: "Fuel, mileage and the road ahead. Your vehicles come first.",
   vehicles: "Manage your vehicles and the people who drive them.",
   fuel: "Track fill-ups, fuel economy, and spending.",
   maintenance: "Keep service history organized and stay ahead of the next job.",
@@ -47,6 +47,7 @@ export class GaragePanel extends LitElement {
   @property({ type: Boolean }) narrow = false;
 
   @state() private _tab: Tab = "dashboard";
+  @state() private _selectedVehicleId = "";
 
   static styles = [themeStyles, css`
     :host { display: block; height: 100%; overflow: auto; background: var(--garage-bg); }
@@ -113,6 +114,7 @@ export class GaragePanel extends LitElement {
 
   private _selectTab(tab: Tab): void {
     this._tab = tab;
+    this._selectedVehicleId = "";
     this.scrollTo({ top: 0 });
   }
 
@@ -137,7 +139,10 @@ export class GaragePanel extends LitElement {
           </nav>
           <div class="fleet-summary"><strong>${state.vehicles.length} ${state.vehicles.length === 1 ? "vehicle" : "vehicles"} in your garage</strong>${state.drivers.length} ${state.drivers.length === 1 ? "driver" : "drivers"} · ${state.documents.length} documents</div>
         </aside>
-        <main @garage-navigate=${(event: CustomEvent<Tab>) => {
+        <main @garage-scroll-top=${() => this.scrollTo({ top: 0 })} @garage-open-vehicle=${(event: CustomEvent<string>) => {
+          this._selectTab("vehicles");
+          this._selectedVehicleId = event.detail;
+        }} @garage-navigate=${(event: CustomEvent<Tab>) => {
           if (TABS.some(tab => tab.id === event.detail)) this._selectTab(event.detail);
         }}>
           <div class="page-heading">
@@ -151,7 +156,7 @@ export class GaragePanel extends LitElement {
           ? html`<garage-dashboard-view .hass=${this.hass} .garageState=${state}></garage-dashboard-view>`
           : ""}
         ${this._tab === "vehicles"
-          ? html`<garage-vehicles-view .hass=${this.hass} .garageState=${state}></garage-vehicles-view>`
+          ? html`<garage-vehicles-view .hass=${this.hass} .garageState=${state} .selectedVehicleId=${this._selectedVehicleId}></garage-vehicles-view>`
           : ""}
         ${this._tab === "fuel"
           ? html`<garage-fuel-view .hass=${this.hass} .garageState=${state}></garage-fuel-view>`
