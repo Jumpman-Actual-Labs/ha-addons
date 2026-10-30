@@ -896,3 +896,13 @@ def test_estimate_exercise_count_defaults_when_unset():
     low, high = logic._estimate_exercise_count(None)
     assert low >= 3
     assert high > low
+
+
+def test_timed_personal_record_beats_on_time_or_weight():
+    history = [(60.0, 0.0), (30.0, 10.0)]
+    assert logic.timed_personal_record([], 45, 0) == (True, None)
+    assert logic.timed_personal_record(history, 75, 0) == (True, 60.0)
+    assert logic.timed_personal_record(history, 60, 0) == (False, 60.0)
+    assert logic.timed_personal_record(history, 30, 15) == (True, None)
+    assert logic.timed_personal_record(history, 45, 10) == (True, 30.0)
+    assert logic.timed_personal_record(history, 25, 5) == (False, 30.0)

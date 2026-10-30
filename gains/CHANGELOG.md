@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.8
+
+- Timed exercises (plank, holds) earn PRs: a longer hold at the same or
+  heavier weight, or more weight held at least as long. The PR badge shows
+  the hold and your previous best, and the workout recap shows extra time
+  as "+30s" instead of "+30 reps".
+
 ## 1.0.7
 
 - Building a program no longer fails with "No feasible load: inventory

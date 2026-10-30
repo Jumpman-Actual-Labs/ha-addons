@@ -2782,7 +2782,9 @@ export class GainsWorkoutsView extends LitElement {
         stats.prCount > 0 ? `${stats.prCount} new PR${stats.prCount === 1 ? "" : "s"}` : null,
         oneRmDelta != null && oneRmDelta > 0.05 ? `+${oneRmDelta.toFixed(1)} ${units} est. 1RM` : null,
         volumeDelta != null && volumeDelta > 0.5 ? `+${Math.round(volumeDelta).toLocaleString()} ${units} volume` : null,
-        repDelta != null && repDelta > 0 ? `+${repDelta} reps` : null,
+        repDelta != null && repDelta > 0
+          ? `+${repDelta}${isTimedExercise(exerciseId) ? "s" : " reps"}`
+          : null,
         !previous ? "First tracked session" : null,
       ].filter((value): value is string => value !== null);
       return { stats, previous, oneRmDelta, improvements };
@@ -2848,7 +2850,7 @@ export class GainsWorkoutsView extends LitElement {
               <ha-icon icon="mdi:arm-flex"></ha-icon>
               <div>
                 <strong>Personal record${prCount === 1 ? "" : "s"} unlocked</strong>
-                <span class="muted small">Gold markers below show where you raised your best estimated 1RM.</span>
+                <span class="muted small">Gold markers below show where you beat your best.</span>
               </div>
             </div>` : ""}
 
@@ -3494,7 +3496,10 @@ export class GainsWorkoutsView extends LitElement {
     const repsFieldLabel = isTimed ? "Seconds" : "Reps";
     const prValue = set.personalRecordValue;
     const previousPr = set.previousPersonalRecord;
-    const prMessage = set.isPersonalRecord && prValue != null
+    const prMessage = set.isPersonalRecord && prValue != null && isTimed
+      ? `Personal record \u00b7 ${prValue}s${set.actualWeight ? ` at ${set.actualWeight} ${units}` : ""} \u00b7 ${
+        previousPr != null ? `Previous best ${previousPr}s` : "No previous PR"}`
+      : set.isPersonalRecord && prValue != null
       ? previousPr != null
         ? `Personal record \u00b7 Estimated 1RM ${prValue.toFixed(1)} ${units} \u00b7 Previous PR ${previousPr.toFixed(1)} ${units}`
         : `Personal record \u00b7 Estimated 1RM ${prValue.toFixed(1)} ${units} \u00b7 No previous PR`

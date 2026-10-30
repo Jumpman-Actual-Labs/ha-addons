@@ -498,6 +498,7 @@ class GainsCoordinator(JointSessionMixin, TrainingCoordinatorMixin):
         prior_set_record_value = target_set.personal_record_value
         prior_set_previous_record = target_set.previous_personal_record
         prior_set_was_record = target_set.is_personal_record
+        prior_set_weight = target_set.actual_weight
 
         target_set.actual_reps = reps
         target_set.actual_weight = weight
@@ -550,6 +551,35 @@ class GainsCoordinator(JointSessionMixin, TrainingCoordinatorMixin):
                 target_set.personal_record_value = estimated
                 target_set.previous_personal_record = current_best
                 profile.personal_records[exercise.exercise_id] = estimated
+        if profile is not None and reps is not None and reps > 0 and is_timed:
+            # Kept out of personal_records (1RMs feed Strength Score and
+            # starting loads); compared against this athlete's logged holds.
+            if (
+                was_completed
+                and prior_set_was_record
+                and prior_set_record_value == reps
+                and (prior_set_weight or 0) == (weight or 0)
+            ):
+                target_set.is_personal_record = True
+                target_set.personal_record_value = reps
+                target_set.previous_personal_record = prior_set_previous_record
+            else:
+                history = [
+                    (float(s.actual_reps), float(s.actual_weight or 0))
+                    for w in self.data.workouts
+                    if w.profile_id == workout.profile_id
+                    for e in w.exercises
+                    if e.exercise_id == exercise.exercise_id
+                    for s in e.sets
+                    if s is not target_set and s.completed and s.actual_reps
+                ]
+                is_record, previous = logic.timed_personal_record(
+                    history, float(reps), float(weight or 0)
+                )
+                if is_record:
+                    target_set.is_personal_record = True
+                    target_set.personal_record_value = reps
+                    target_set.previous_personal_record = previous
 
         self._audit_workout(workout, ha_user_id, "log_set")
         await self._async_save()
