@@ -155,6 +155,9 @@ def _vehicle_entity(data: dict[str, Any], vehicle: Vehicle) -> Entity:
             "fuel_entries": [f.to_dict() for f in fuel_entries],
             "maintenance_records": [m.to_dict() for m in records],
             "documents": [d.to_dict() for d in documents],
+            # Panel only (not MQTT): what the last poll of the vehicle's
+            # linked sensors found - see obd.py.
+            "live_sensors": data.get("live_status", {}).get(vehicle.id, {}),
         },
     )
 

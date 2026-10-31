@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.1
+
+- Fuel level from a linked sensor now only counts while the vehicle is
+  driving (when an odometer sensor is linked too), smoothed over the trip's
+  last few readings. Parking on a slope, or fuel sloshing under braking, no
+  longer skews it. After a stop of 3+ minutes (like a fill-up) it starts
+  fresh.
+- Each reading now says what the linked sensor is doing: live, parked,
+  asleep, not found, or failing. A sensor that can't be read is logged as a
+  warning instead of only at debug level.
+
 ## 1.3.0
 
 - Redesigned the dashboard around vehicle readings, with prominent fuel,

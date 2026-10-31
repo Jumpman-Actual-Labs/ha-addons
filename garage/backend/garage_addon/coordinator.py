@@ -201,6 +201,9 @@ class GarageCoordinator:
         self.documents: list[Document] = []
         self.settings: dict[str, Any] = {}
         self.archive: dict[str, Any] = {}
+        # What obd.py's last poll read for each vehicle's linked sensors -
+        # in memory only, the panel shows it (states.py).
+        self.live_status: dict[str, dict[str, Any]] = {}
 
     # ----------------------------------------------------------- listeners
     # Stands in for DataUpdateCoordinator's push API from the integration
@@ -391,6 +394,7 @@ class GarageCoordinator:
             "documents": self.documents,
             "settings": self.settings,
             "vehicle_summaries": vehicle_summaries,
+            "live_status": self.live_status,
             "total_monthly_fuel_spend": round(
                 sum(s["monthly_fuel_cost"] for s in vehicle_summaries.values()), 2
             ),
@@ -718,6 +722,10 @@ class GarageCoordinator:
         if changed:
             await self._async_save()
         return changed
+
+    def set_live_status(self, live_status: dict[str, dict[str, Any]]) -> None:
+        self.live_status = live_status
+        self.async_set_updated_data(self._build_public_data())
 
     def async_refresh(self) -> None:
         """Recomputes the date-dependent summaries (due status, health score,

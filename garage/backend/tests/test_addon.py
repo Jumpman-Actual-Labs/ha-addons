@@ -6,7 +6,7 @@ pure helpers (lookups.py) and the HTTP API the panel calls (web.py)."""
 from __future__ import annotations
 
 import json
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from ipaddress import ip_address
 
 import aiohttp
@@ -522,33 +522,113 @@ class FakeStatesHa:
         return self.states.get(entity_id)
 
 
-async def test_live_readings_update_vehicle_and_never_roll_back_mileage(coordinator):
-    from garage_addon.obd import async_poll_once
-
+async def _linked_truck(coordinator):
     vehicle = await _add_vehicle(coordinator)
     await coordinator.async_edit_vehicle(
         vehicle.id,
         odometer_entity_id="sensor.wican_a6_odometer",
         fuel_level_entity_id="sensor.wican_2f_fueltanklevel",
     )
-    ha = FakeStatesHa(
-        {
-            "sensor.wican_a6_odometer": _sensor("112341.61", "mi"),
-            "sensor.wican_2f_fueltanklevel": _sensor("45.88", "%"),
-        }
-    )
-    await async_poll_once(coordinator, ha)
-    assert vehicle.current_mileage == 112342
-    assert vehicle.current_fuel_pct == 0.459
-    attrs = build_states(coordinator.data)[f"sensor.garage_vehicle_{vehicle.id}"]["attributes"]
-    assert attrs["current_mileage"] == 112342
-    assert attrs["odometer_entity_id"] == "sensor.wican_a6_odometer"
+    return vehicle
 
-    ha.states["sensor.wican_a6_odometer"] = _sensor("5", "mi")
-    ha.states["sensor.wican_2f_fueltanklevel"] = _sensor("unavailable", "%")
-    await async_poll_once(coordinator, ha)
+
+def _at(minute: int) -> datetime:
+    return datetime(2026, 10, 30, 12, 0, tzinfo=UTC) + timedelta(minutes=minute)
+
+
+async def test_live_readings_take_fuel_only_while_driving(coordinator):
+    from garage_addon.obd import LiveReadings
+
+    vehicle = await _linked_truck(coordinator)
+    states = {
+        "sensor.wican_a6_odometer": _sensor("112341.61", "mi"),
+        "sensor.wican_2f_fueltanklevel": _sensor("38", "%"),
+    }
+    readings = LiveReadings(coordinator, FakeStatesHa(states))
+
+    # Parked on the driveway: odometer applies, the tilted fuel reading doesn't.
+    await readings.poll_once(_at(0))
     assert vehicle.current_mileage == 112342
-    assert vehicle.current_fuel_pct == 0.459
+    assert vehicle.current_fuel_pct is None
+    live = build_states(coordinator.data)[f"sensor.garage_vehicle_{vehicle.id}"]["attributes"][
+        "live_sensors"
+    ]
+    assert live["odometer"]["status"] == "ok"
+    assert live["fuel"]["status"] == "parked"
+
+    # Driving: median of the trip's readings, so one slosh doesn't stick.
+    for minute, (odo, fuel) in enumerate(
+        [("112342.5", "46"), ("112343.4", "60"), ("112344.2", "45")], start=1
+    ):
+        states["sensor.wican_a6_odometer"] = _sensor(odo, "mi")
+        states["sensor.wican_2f_fueltanklevel"] = _sensor(fuel, "%")
+        await readings.poll_once(_at(minute))
+    assert vehicle.current_mileage == 112344
+    assert vehicle.current_fuel_pct == 0.46
+
+    # Parks nose-up: odometer stops, fuel dips - the driving value stays.
+    states["sensor.wican_2f_fueltanklevel"] = _sensor("30", "%")
+    await readings.poll_once(_at(4))
+    assert vehicle.current_fuel_pct == 0.46
+
+    # Asleep: unavailable, nothing changes, mileage never rolls back.
+    states["sensor.wican_a6_odometer"] = _sensor("unavailable", "mi")
+    states["sensor.wican_2f_fueltanklevel"] = _sensor("unavailable", "%")
+    await readings.poll_once(_at(5))
+    assert (vehicle.current_mileage, vehicle.current_fuel_pct) == (112344, 0.46)
+    assert coordinator.live_status[vehicle.id]["fuel"]["status"] == "unavailable"
+
+
+async def test_live_readings_restart_the_window_after_a_fill_up(coordinator):
+    from garage_addon.obd import LiveReadings
+
+    vehicle = await _linked_truck(coordinator)
+    states = {}
+    readings = LiveReadings(coordinator, FakeStatesHa(states))
+    # Three minutes of driving, a 6-minute stop at the pump, then driving on.
+    for minute, odo, fuel in [
+        (0, 1000.0, "20"), (1, 1000.5, "20"), (2, 1001.0, "21"), (3, 1001.5, "20"),
+        (9, 1002.0, "95"), (10, 1002.5, "96"),
+    ]:
+        states["sensor.wican_a6_odometer"] = _sensor(str(odo), "mi")
+        states["sensor.wican_2f_fueltanklevel"] = _sensor(fuel, "%")
+        await readings.poll_once(_at(minute))
+    assert vehicle.current_fuel_pct == 0.955
+
+
+async def test_live_readings_report_missing_and_failing_sensors(coordinator, caplog):
+    from garage_addon.ha_client import HomeAssistantError
+    from garage_addon.obd import LiveReadings
+
+    vehicle = await _linked_truck(coordinator)
+
+    class BrokenHa:
+        async def get_state(self, entity_id):
+            if "odometer" in entity_id:
+                raise HomeAssistantError("GET states/x failed (401): Unauthorized")
+            return None
+
+    readings = LiveReadings(coordinator, BrokenHa())
+    await readings.poll_once(_at(0))
+    await readings.poll_once(_at(1))
+    status = coordinator.live_status[vehicle.id]
+    assert status["odometer"]["status"].startswith("error")
+    assert status["fuel"]["status"] == "missing"
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 2  # once per sensor, not every poll
+
+
+async def test_fuel_without_odometer_link_is_smoothed_not_gated(coordinator):
+    from garage_addon.obd import LiveReadings
+
+    vehicle = await _add_vehicle(coordinator)
+    await coordinator.async_edit_vehicle(vehicle.id, fuel_level_entity_id="sensor.fuel")
+    states = {}
+    readings = LiveReadings(coordinator, FakeStatesHa(states))
+    for minute, fuel in enumerate(["50", "50", "30"]):
+        states["sensor.fuel"] = _sensor(fuel, "%")
+        await readings.poll_once(_at(minute))
+    assert vehicle.current_fuel_pct == 0.5
 
 
 async def test_edit_vehicle_service_accepts_sensor_links(client, coordinator):

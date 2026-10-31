@@ -172,6 +172,7 @@ export function parseGarageState(hass: HomeAssistant): GarageState {
       : [],
     odometerEntityId: String(e.attributes.odometer_entity_id ?? ""),
     fuelLevelEntityId: String(e.attributes.fuel_level_entity_id ?? ""),
+    liveSensors: (e.attributes.live_sensors as Vehicle["liveSensors"]) ?? {},
     registrationExpires: strOrNull(e.attributes.registration_expires),
     insuranceExpires: strOrNull(e.attributes.insurance_expires),
     healthScore: num(e.state),

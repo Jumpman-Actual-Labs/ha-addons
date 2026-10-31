@@ -37,6 +37,12 @@ edit the vehicle and pick its sensors under **Live sensors** - the odometer
 minute and keeps Current Mileage and Fuel % current. Mileage never goes
 backwards, and readings while the car is off (unavailable) are ignored.
 
+A tank's fuel gauge reads the slope the car is parked on, so with an
+odometer linked, fuel level only updates while you're driving (smoothed over
+the last few minutes). Under each reading Garage shows what the sensor is
+doing: live, parked, asleep, not found in Home Assistant, or failing (see
+the add-on log for why).
+
 ## Stash and reminders
 
 - **Stash sync** (Settings tab): when on and Stash is installed (the Stash

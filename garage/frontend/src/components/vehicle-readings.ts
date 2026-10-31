@@ -1,8 +1,24 @@
 import { LitElement, css, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
-import type { Vehicle } from "../types";
+import type { LiveSensorStatus, Vehicle } from "../types";
 import { pct } from "../format";
 import { controlStyles } from "../styles";
+
+/** The source line under a reading: where the value came from and, for a
+ * linked sensor, what the last poll found - so a link that isn't working
+ * says so instead of quietly showing the old saved value. */
+function sourceLine(entityId: string, live: LiveSensorStatus | undefined) {
+  if (!entityId) return { text: "Saved reading", cls: "" };
+  if (!live) return { text: "Sensor linked · waiting for first read", cls: "linked" };
+  const reading = live.state != null ? `${live.state}${live.unit ? ` ${live.unit}` : ""}` : "";
+  if (live.status === "ok") return { text: `Live · sensor reads ${reading}`, cls: "linked" };
+  if (live.status === "parked") {
+    return { text: `Parked (sensor reads ${reading}) · updates while driving`, cls: "linked" };
+  }
+  if (live.status === "unavailable") return { text: "Sensor asleep · showing last reading", cls: "" };
+  if (live.status === "missing") return { text: `${entityId} not found in Home Assistant`, cls: "problem" };
+  return { text: "Couldn't read the sensor · check the add-on log", cls: "problem" };
+}
 
 /** Saved vehicle values, including readings collected from linked HA sensors.
  * A configured sensor does not imply the retained value is currently fresh. */
@@ -25,6 +41,7 @@ export class GarageVehicleReadings extends LitElement {
     .unit { font-size: .8rem; letter-spacing: 0; color: var(--garage-muted); font-weight: 400; }
     .source { display: block; color: var(--garage-muted); font-size: .75rem; line-height: 1.5; }
     .source.linked { color: var(--garage-accent); }
+    .source.problem { color: var(--garage-warning); }
     progress { display: block; width: 100%; height: 10px; margin: 15px 0 0; border: none; border-radius: 5px; overflow: hidden; appearance: none; accent-color: var(--garage-accent); background: var(--garage-raised); }
     progress::-webkit-progress-bar { background: var(--garage-raised); }
     progress::-webkit-progress-value { background: var(--garage-accent); border-radius: 5px; }
@@ -48,18 +65,20 @@ export class GarageVehicleReadings extends LitElement {
       ? Math.min(1, Math.max(0, v.currentFuelPct)) : null;
     const low = fuel !== null && fuel <= this.lowFuelThreshold;
     const range = v.estimatedRangeMiles;
+    const fuelSource = sourceLine(v.fuelLevelEntityId, v.liveSensors?.fuel);
+    const odometerSource = sourceLine(v.odometerEntityId, v.liveSensors?.odometer);
     return html`
       <div class="readings">
         <div class="reading fuel ${low ? "low" : ""}">
           <div class="fuel-head"><div><div class="label"><ha-icon aria-hidden="true" icon="mdi:gas-station-outline"></ha-icon>Fuel level</div>
-            <span class="source ${v.fuelLevelEntityId ? "linked" : ""}">${v.fuelLevelEntityId ? "Sensor linked" : "Saved reading"}</span></div>
+            <span class="source ${fuelSource.cls}">${fuelSource.text}</span></div>
             <strong class="value">${pct(fuel)}</strong></div>
           ${fuel !== null ? html`<progress aria-label=${`${v.nickname} fuel level`} max="1" value=${fuel}></progress>` : html`<span class="missing">No fuel reading yet</span>`}
           ${low ? html`<span class="warning"><ha-icon aria-hidden="true" icon="mdi:alert-circle-outline"></ha-icon>Low fuel</span>` : ""}
         </div>
         <div class="reading odometer"><div class="label"><ha-icon aria-hidden="true" icon="mdi:counter"></ha-icon>Odometer</div>
           <strong class="value">${v.currentMileage.toLocaleString()} <span class="unit">mi</span></strong>
-          <span class="source ${v.odometerEntityId ? "linked" : ""}">${v.odometerEntityId ? "Sensor linked" : "Saved reading"}</span></div>
+          <span class="source ${odometerSource.cls}">${odometerSource.text}</span></div>
         <div class="reading range"><div class="label"><ha-icon aria-hidden="true" icon="mdi:map-marker-distance"></ha-icon>Estimated range</div>
           <strong class="value">${range !== null ? html`${range.toLocaleString()} <span class="unit">mi</span>` : "—"}</strong>
           <span class="source">${range !== null ? "Based on fuel & economy" : "Range unavailable"}</span></div>

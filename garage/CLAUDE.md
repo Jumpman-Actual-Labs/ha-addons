@@ -57,6 +57,11 @@ Add-on layers around them:
   OBD dongle's) every minute via `ha_client.get_state` and feeds
   `coordinator.async_apply_live_readings` (mileage only moves forward,
   `%` becomes a 0-1 fraction, km becomes miles, unavailable is skipped).
+  Fuel only counts while the raw odometer is moving (a tank float reads the
+  slope you parked on), median of the trip's last 5; a 3+ minute stop
+  starts a new trip. Each poll's outcome goes to `coordinator.live_status`,
+  which states.py exposes as the vehicle's `live_sensors` attribute (panel
+  only, not MQTT) and `vehicle-readings.ts` shows under each reading.
   `web.py`'s `api/ha_sensors` lists numeric sensors for the dialog's pickers.
 - `lookups.py` - fuel pump photo scan (OpenAI vision) and VIN decode
   (NHTSA vPIC + optional OpenAI tank/oil capacity guess). Key: add-on

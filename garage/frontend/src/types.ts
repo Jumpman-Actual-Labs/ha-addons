@@ -8,6 +8,15 @@ export type DocumentCategory = "registration" | "insurance" | "receipt" | "photo
 export type Drivetrain = "fwd" | "rwd" | "awd" | "4wd";
 export type WheelPosition = "front_left" | "front_right" | "rear_left" | "rear_right";
 
+/** What the backend's last poll of a linked HA sensor found (obd.py). */
+export interface LiveSensorStatus {
+  entity_id: string;
+  status: "ok" | "unavailable" | "missing" | "parked" | string;
+  state: string | null;
+  unit: string;
+  read_at: string;
+}
+
 export interface Vehicle {
   entityId: string;
   vehicleId: string;
@@ -34,6 +43,7 @@ export interface Vehicle {
   additionalDriverIds: string[];
   odometerEntityId: string;
   fuelLevelEntityId: string;
+  liveSensors: { odometer?: LiveSensorStatus; fuel?: LiveSensorStatus };
   registrationExpires: string | null;
   insuranceExpires: string | null;
   healthScore: number;
