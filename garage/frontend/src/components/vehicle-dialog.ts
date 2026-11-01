@@ -49,6 +49,9 @@ export class GarageVehicleDialog extends LitElement {
   @state() private _troubleCodesEntityId = "";
   @state() private _haSensors: HaSensorSummary[] = [];
   @state() private _haDevices: HaDeviceLinks[] = [];
+  /** The device (e.g. the WiCAN) the sensor pickers are narrowed to; "" for
+   * every Home Assistant sensor. */
+  @state() private _deviceId = "";
   @state() private _linkedDeviceNote = "";
   @state() private _saving = false;
   @state() private _photoPath: string | null = null;
@@ -94,7 +97,19 @@ export class GarageVehicleDialog extends LitElement {
       this._tireTargetPsi = v?.tireTargetPsi != null ? String(v.tireTargetPsi) : "";
       this._troubleCodesEntityId = v?.troubleCodesEntityId ?? "";
       garageApi.listHaSensors().then((sensors) => (this._haSensors = sensors));
-      garageApi.listHaDevices().then((devices) => (this._haDevices = devices));
+      this._deviceId = "";
+      garageApi.listHaDevices().then((devices) => {
+        this._haDevices = devices;
+        // Reopening: the device the vehicle's sensors already come from.
+        const linked = [
+          this._odometerEntityId,
+          this._fuelLevelEntityId,
+          this._gearEntityId,
+          ...Object.values(this._tireEntityIds),
+        ].filter(Boolean);
+        this._deviceId =
+          devices.find((d) => d.sensors.some((s) => linked.includes(s.entityId)))?.deviceId ?? "";
+      });
       this._linkedDeviceNote = "";
       this._photoPath = v?.photoPath ?? null;
       this._photoError = "";
@@ -105,6 +120,7 @@ export class GarageVehicleDialog extends LitElement {
     // whose option is new (a device just picked, the sensor list arriving)
     // shows blank - set it again now the options exist.
     const links: Record<string, string> = {
+      "vehicle-device": this._deviceId,
       "odometer-entity": this._odometerEntityId,
       "fuel-level-entity": this._fuelLevelEntityId,
       "gear-entity": this._gearEntityId,
@@ -211,19 +227,23 @@ export class GarageVehicleDialog extends LitElement {
     }
   }
 
-  /** Sensors that look like the right kind (by unit, or a word in the name
-   * for unitless ones like gear), the linked one even if it doesn't, and
-   * every candidate if nothing matches. Number-only links (odometer, fuel,
-   * tires) only offer numeric sensors. */
+  /** With a device picked, all of its sensors, the likely ones first.
+   * Without one, every Home Assistant sensor that looks like the right kind
+   * (by unit, or a word in the name for unitless ones like gear), or all of
+   * them if nothing matches. Either way the linked one is kept, and
+   * number-only links (odometer, fuel, tires) only offer numeric sensors. */
   private _sensorOptions(units: string[], linked: string, keywords: string[] = [], numeric = true) {
-    const pool = this._haSensors.filter((s) => !numeric || s.numeric);
-    const matching = pool.filter(
-      (s) =>
-        units.includes(s.unit.toLowerCase()) ||
-        keywords.some((k) => `${s.entityId} ${s.name}`.toLowerCase().includes(k)) ||
-        s.entityId === linked
-    );
-    const options = matching.some((s) => s.entityId !== linked) ? matching : pool;
+    const device = this._haDevices.find((d) => d.deviceId === this._deviceId);
+    const pool = (device ? device.sensors : this._haSensors).filter((s) => !numeric || s.numeric);
+    const likely = (s: HaSensorSummary) =>
+      units.includes(s.unit.toLowerCase()) ||
+      keywords.some((k) => `${s.entityId} ${s.name}`.toLowerCase().includes(k));
+    const matching = pool.filter((s) => likely(s) || s.entityId === linked);
+    const options = device
+      ? [...pool.filter(likely), ...pool.filter((s) => !likely(s))]
+      : matching.some((s) => s.entityId !== linked)
+        ? matching
+        : pool;
     const known = options.some((s) => s.entityId === linked);
     return html`
       <option value="" ?selected=${!linked}>Not linked</option>
@@ -239,9 +259,12 @@ export class GarageVehicleDialog extends LitElement {
     `;
   }
 
-  /** Fills every sensor link the device has a match for; links it has
-   * nothing for are left as they were. */
-  private _linkDevice(deviceId: string): void {
+  /** Narrows the pickers to the device and fills every link it has a match
+   * for by name; links it has nothing for are left as they were (trouble
+   * codes, say, can come from a sensor elsewhere). */
+  private _selectDevice(deviceId: string): void {
+    this._deviceId = deviceId;
+    this._linkedDeviceNote = "";
     const device = this._haDevices.find((d) => d.deviceId === deviceId);
     if (!device) return;
     const { links } = device;
@@ -258,8 +281,8 @@ export class GarageVehicleDialog extends LitElement {
       !links.trouble_codes_entity_id && "trouble codes",
     ].filter(Boolean);
     this._linkedDeviceNote =
-      `Linked ${device.linkCount} sensor${device.linkCount === 1 ? "" : "s"} from ${device.name}.` +
-      (missing.length ? ` Not found on it: ${missing.join(", ")} - pick those below if they're elsewhere.` : "");
+      `Picked ${device.linkCount} sensor${device.linkCount === 1 ? "" : "s"} by name - check them below.` +
+      (missing.length ? ` Not found on ${device.name}: ${missing.join(", ")}.` : "");
   }
 
   private _close(): void {
@@ -480,20 +503,21 @@ export class GarageVehicleDialog extends LitElement {
           date on its own, about once a minute. Mileage only ever goes up.
         </div>
         ${this._haDevices.length
-          ? html`<label for="link-device">Link a device</label>
-              <select id="link-device"
-                @change=${(e: Event) => {
-                  this._linkDevice((e.target as HTMLSelectElement).value);
-                  (e.target as HTMLSelectElement).value = "";
-                }}
+          ? html`<label for="vehicle-device">Vehicle device</label>
+              <select id="vehicle-device"
+                @change=${(e: Event) => this._selectDevice((e.target as HTMLSelectElement).value)}
               >
-                <option value="" selected>Choose a device to fill in its sensors…</option>
+                <option value="" ?selected=${!this._deviceId}>All Home Assistant sensors</option>
                 ${this._haDevices.map(
-                  (d) => html`<option value=${d.deviceId}>
-                    ${d.name}${d.model ? ` (${d.model})` : ""} · ${d.linkCount} sensor${d.linkCount === 1 ? "" : "s"}
+                  (d) => html`<option value=${d.deviceId} ?selected=${d.deviceId === this._deviceId}>
+                    ${d.name}${d.model ? ` (${d.model})` : ""}
                   </option>`
                 )}
               </select>
+              <div style="color: var(--secondary-text-color); font-size: 0.75rem;">
+                Pick the OBD dongle (e.g. your WiCAN) and the sensors below only list
+                its sensors, with the ones Garage recognizes by name already chosen.
+              </div>
               ${this._linkedDeviceNote
                 ? html`<div style="color: var(--secondary-text-color); font-size: 0.75rem;">${this._linkedDeviceNote}</div>`
                 : ""}`

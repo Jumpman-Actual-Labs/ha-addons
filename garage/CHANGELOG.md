@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.2
+
+- **Vehicle device** replaces Link a device as the first choice under Live
+  sensors: pick the OBD dongle (e.g. your WiCAN) and every sensor picker
+  below lists only that device's sensors, with the ones Garage recognizes
+  by name already chosen. "All Home Assistant sensors" is still there for a
+  sensor that lives elsewhere, and reopening the vehicle picks the device
+  back up from its linked sensors.
+- The device list now shows up on bigger Home Assistant installs: reading
+  the entity list no longer fails past 4 MB. If Home Assistant's device list
+  still can't be read, sensors are grouped by their names (e.g. everything
+  starting `sensor.wican_94a990dc061d_`).
+
 ## 1.4.1
 
 - **Link a device** in Edit Vehicle: pick an OBD dongle (e.g. your WiCAN)

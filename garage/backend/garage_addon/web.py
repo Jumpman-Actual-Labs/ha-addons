@@ -348,8 +348,8 @@ async def ha_sensors(request: web.Request) -> web.Response:
 
 
 def device_links(states: list[dict], devices: list[dict], entities: list[dict]) -> list[dict]:
-    """Devices with at least one sensor Garage can link, most links first,
-    each with its suggested links."""
+    """Every device with sensors - its sensors (for the dialog to narrow its
+    pickers to) and the links it suggests - most suggested links first."""
     device_of = {e.get("entity_id"): e.get("device_id") for e in entities if e.get("device_id")}
     by_device: dict[str, list[dict]] = {}
     for sensor in _sensor_list(states):
@@ -364,32 +364,58 @@ def device_links(states: list[dict], devices: list[dict], entities: list[dict]) 
         links = suggest_sensor_links(sensors)
         count = sum(1 for k, v in links.items() if v and k != "tire_entity_ids")
         count += len(links["tire_entity_ids"])
-        if count:
-            result.append(
-                {
-                    "device_id": device["id"],
-                    "name": device.get("name_by_user") or device.get("name") or device["id"],
-                    "manufacturer": device.get("manufacturer") or "",
-                    "model": device.get("model") or "",
-                    "links": links,
-                    "link_count": count,
-                }
-            )
+        result.append(
+            {
+                "device_id": device["id"],
+                "name": device.get("name_by_user") or device.get("name") or device["id"],
+                "manufacturer": device.get("manufacturer") or "",
+                "model": device.get("model") or "",
+                "sensors": sensors,
+                "links": links,
+                "link_count": count,
+            }
+        )
     result.sort(key=lambda d: (-d["link_count"], d["name"].lower()))
     return result
 
 
+def _devices_by_name(states: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Stand-in registries when the real ones can't be read: sensors grouped
+    by the first two words of their entity id (`sensor.wican_94a990dc061d_gear`
+    -> `wican_94a990dc061d`), which is how integrations name a device's
+    entities."""
+    devices: dict[str, dict] = {}
+    entities = []
+    for state in states:
+        entity_id = str(state.get("entity_id", ""))
+        words = entity_id.removeprefix("sensor.").split("_")
+        if not entity_id.startswith("sensor.") or len(words) < 3:
+            continue
+        key = "_".join(words[:2])
+        devices.setdefault(key, {"id": f"name:{key}", "name": key})
+        entities.append({"entity_id": entity_id, "device_id": f"name:{key}"})
+    return list(devices.values()), entities
+
+
 async def ha_devices(request: web.Request) -> web.Response:
-    """Best-effort like ha_users - [] without Home Assistant."""
+    """Best-effort like ha_users - [] without Home Assistant. Falls back to
+    grouping sensors by name if the registries can't be read."""
     ha = request.app[HA_KEY]
     if not isinstance(ha, HomeAssistantClient):
         return web.json_response([])
     try:
         states = await ha.get_states()
+    except HomeAssistantError:
+        _LOGGER.warning("Couldn't list Home Assistant sensors", exc_info=True)
+        return web.json_response([])
+    try:
         devices, entities = await ha.list_devices_and_entities()
     except HomeAssistantError:
-        _LOGGER.warning("Couldn't list Home Assistant devices", exc_info=True)
-        return web.json_response([])
+        _LOGGER.warning(
+            "Couldn't read Home Assistant's device registry - grouping sensors by name",
+            exc_info=True,
+        )
+        devices, entities = _devices_by_name(states)
     return web.json_response(device_links(states, devices, entities))
 
 

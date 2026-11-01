@@ -79,8 +79,8 @@ Add-on layers around them:
   `web.py`'s `api/ha_sensors` lists sensors (`numeric` flagged) for the
   dialog's pickers; `api/ha_devices` groups them by HA device (registries
   over the websocket, `ha_client.list_devices_and_entities`) with
-  `logic.suggest_sensor_links` name-matching, for the dialog's "Link a
-  device".
+  `logic.suggest_sensor_links` name-matching, for the dialog's "Vehicle
+  device" (narrows the pickers to that device's sensors and pre-picks).
 - `lookups.py` - fuel pump photo scan (OpenAI vision) and VIN decode
   (NHTSA vPIC + optional OpenAI tank/oil capacity guess). Key: add-on
   option, then secrets.yaml (where the integration read it).

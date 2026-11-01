@@ -915,9 +915,15 @@ def test_device_links_groups_sensors_by_device():
         {"entity_id": "sensor.phone_battery", "device_id": "d2"},
         {"entity_id": "sensor.unlinked_odometer", "device_id": None},
     ]
-    (truck,) = device_links(states, devices, entities)
+    truck, phone = device_links(states, devices, entities)
     assert truck["name"] == "Truck WiCAN"
     assert truck["link_count"] == 2
+    assert [x["entity_id"] for x in truck["sensors"]] == [
+        "sensor.wican_a6_odometer",
+        "sensor.wican_batt_voltage",
+        "sensor.wican_gear",
+    ]
+    assert (phone["name"], phone["link_count"]) == ("Phone", 0)
     assert truck["links"]["odometer_entity_id"] == "sensor.wican_a6_odometer"
     assert truck["links"]["gear_entity_id"] == "sensor.wican_gear"
 
@@ -926,3 +932,18 @@ async def test_ha_devices_empty_without_home_assistant(client):
     resp = await client.get("/api/ha_devices")
     assert resp.status == 200
     assert await resp.json() == []
+
+
+def test_devices_by_name_groups_a_wicans_sensors():
+    from garage_addon.web import _devices_by_name, device_links
+
+    states = [
+        {"entity_id": "sensor.wican_94a990dc061d_a6_odometer", "state": "1",
+         "attributes": {"unit_of_measurement": "mi"}},
+        {"entity_id": "sensor.wican_94a990dc061d_fl_tire", "state": "37",
+         "attributes": {"unit_of_measurement": "psi"}},
+        {"entity_id": "sensor.sun", "state": "1", "attributes": {}},
+    ]
+    (wican,) = [d for d in device_links(states, *_devices_by_name(states)) if d["link_count"]]
+    assert wican["name"] == "wican_94a990dc061d"
+    assert wican["links"]["tire_entity_ids"] == {"fl": "sensor.wican_94a990dc061d_fl_tire"}

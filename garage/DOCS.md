@@ -31,8 +31,9 @@ Published via MQTT discovery under a **Garage** device:
 ## Live odometer and fuel level (OBD)
 
 If your car has an OBD-II dongle in Home Assistant (a WiCAN, for example),
-edit the vehicle and, under **Live sensors**, choose the dongle in **Link a
-device** to fill in all its sensors at once (or pick them one by one) - the odometer
+edit the vehicle and, under **Live sensors**, choose the dongle as the
+**Vehicle device**: the pickers below then list only its sensors, with the
+ones Garage recognizes already chosen (or pick them one by one) - the odometer
 (e.g. `sensor.wican_<id>_local_a6_odometer`) and the fuel tank level (e.g.
 `sensor.wican_<id>_local_2f_fueltanklevel`). Garage reads them about once a
 minute and keeps Current Mileage and Fuel % current. Mileage never goes

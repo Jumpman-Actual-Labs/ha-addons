@@ -90,7 +90,11 @@ class HomeAssistantClient:
         url = f"{self._base_url}/websocket".replace("http", "ws", 1)
         results = []
         try:
-            async with self._session.ws_connect(url, timeout=_TIMEOUT.total) as ws:
+            # No message size cap: the entity registry of a big install runs
+            # past aiohttp's 4 MB default.
+            async with self._session.ws_connect(
+                url, timeout=_TIMEOUT.total, max_msg_size=0
+            ) as ws:
                 await ws.receive_json()  # auth_required
                 await ws.send_json({"type": "auth", "access_token": self._token})
                 auth = await ws.receive_json()
