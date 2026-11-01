@@ -59,6 +59,7 @@ export interface HaSensorSummary {
   name: string;
   state: string;
   unit: string;
+  numeric: boolean;
 }
 
 const DOMAIN = "garage";
@@ -107,6 +108,7 @@ function parseFuelEntry(raw: Record<string, unknown>): FuelEntry {
     gallonsAdded: numOrNull(raw.gallons_added),
     pricePerGallon: numOrNull(raw.price_per_gallon),
     mpg: numOrNull(raw.mpg),
+    missedFillBefore: Boolean(raw.missed_fill_before),
   };
 }
 
@@ -172,7 +174,21 @@ export function parseGarageState(hass: HomeAssistant): GarageState {
       : [],
     odometerEntityId: String(e.attributes.odometer_entity_id ?? ""),
     fuelLevelEntityId: String(e.attributes.fuel_level_entity_id ?? ""),
+    gearEntityId: String(e.attributes.gear_entity_id ?? ""),
+    tireEntityIds: (e.attributes.tire_entity_ids as Vehicle["tireEntityIds"]) ?? {},
+    tireTargetPsi: numOrNull(e.attributes.tire_target_psi),
+    troubleCodesEntityId: String(e.attributes.trouble_codes_entity_id ?? ""),
     liveSensors: (e.attributes.live_sensors as Vehicle["liveSensors"]) ?? {},
+    tirePressures: (e.attributes.tire_pressures as Vehicle["tirePressures"]) ?? {},
+    tireAlerts: Array.isArray(e.attributes.tire_alerts)
+      ? (e.attributes.tire_alerts as Vehicle["tireAlerts"])
+      : [],
+    troubleCodes: Array.isArray(e.attributes.trouble_codes)
+      ? (e.attributes.trouble_codes as string[])
+      : [],
+    checkEngineLight:
+      e.attributes.check_engine_light == null ? null : Boolean(e.attributes.check_engine_light),
+    pendingFillUp: (e.attributes.pending_fill_up as Vehicle["pendingFillUp"]) ?? null,
     registrationExpires: strOrNull(e.attributes.registration_expires),
     insuranceExpires: strOrNull(e.attributes.insurance_expires),
     healthScore: num(e.state),
@@ -305,8 +321,9 @@ export const garageApi = {
     }>;
     return users.filter((u) => !u.system_generated).map((u) => ({ id: u.id, name: u.name }));
   },
-  // Numeric sensor.* entities for linking a vehicle's odometer / fuel level
-  // (e.g. a WiCAN OBD dongle's); [] when HA is unreachable.
+  // sensor.* entities for linking a vehicle's odometer / fuel level / gear /
+  // tires / trouble codes (e.g. a WiCAN OBD dongle's); [] when HA is
+  // unreachable. `numeric` ones are what a number-only link can use.
   async listHaSensors(): Promise<HaSensorSummary[]> {
     const response = await fetch("api/ha_sensors");
     if (!response.ok) return [];
@@ -315,8 +332,15 @@ export const garageApi = {
       name: string;
       state: string;
       unit: string;
+      numeric?: boolean;
     }>;
-    return sensors.map((s) => ({ entityId: s.entity_id, name: s.name, state: s.state, unit: s.unit }));
+    return sensors.map((s) => ({
+      entityId: s.entity_id,
+      name: s.name,
+      state: s.state,
+      unit: s.unit,
+      numeric: s.numeric ?? true,
+    }));
   },
   logFuel(hass: HomeAssistant, fields: Record<string, unknown>) {
     return callGarageService(hass, "log_fuel", fields);
@@ -326,6 +350,12 @@ export const garageApi = {
   },
   deleteFuelEntry(hass: HomeAssistant, entryId: string) {
     return callGarageService(hass, "delete_fuel_entry", { entry_id: entryId });
+  },
+  dismissDetectedFill(hass: HomeAssistant, vehicleId: string, fillId: string) {
+    return callGarageService(hass, "dismiss_detected_fill", {
+      vehicle_id: vehicleId,
+      fill_id: fillId,
+    });
   },
   addMaintenanceTemplate(hass: HomeAssistant, fields: Record<string, unknown>) {
     return callGarageService(hass, "add_maintenance_template", fields);

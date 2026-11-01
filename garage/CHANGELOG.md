@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.4.0
+
+- Average MPG no longer goes wild when fill-ups aren't logged. With a fuel
+  level and odometer sensor linked, Garage follows each tank from fill-up
+  to fill-up on the sensor and averages the last 5 tanks' miles over the
+  gallons actually burned, whether or not anyone logged them.
+- A logged full tank gets no MPG when the sensor saw an unlogged fill-up
+  since the last one (its miles would span two tanks).
+- Without sensor tanks yet, logged fill-ups over 80 MPG are left out of
+  the average.
+- New "I missed logging the fill-up before this one" checkbox on Add Fuel.
+  That entry gets no MPG. A full tank whose miles since the last one run
+  past about 1.3 tanks (at the vehicle's own average) gets none either.
+- Fill-ups nobody logged: when the fuel sensor sees one, the vehicle's
+  primary driver gets a notification and the vehicle shows a "Fill-up
+  detected" prompt. **Log it** opens Add Fuel filled in (date, odometer,
+  estimated gallons); **Dismiss** clears it. A fill-up logged at the pump
+  isn't prompted.
+- Gear sensor link. Fuel only counts in a drive gear, shifting into Park
+  ends a trip, and a fuel jump only counts as a fill-up across a stop
+  (Park, or a few minutes stopped) - never mid-trip, where it's slosh.
+- Tire pressure: link a sensor per tire and set the target pressure.
+  Garage shows all four, and alerts on a low tire, uneven pressures, or one
+  tire losing pressure faster than the others over a week (slow leak).
+  Each alert notifies the primary driver once, is in the 8am reminders,
+  and lowers the health score.
+- Trouble codes: link a sensor whose state lists the active codes (or "All
+  clear"). Codes show on the vehicle, are in the 8am reminders, and lower
+  the health score (more with the check engine light on).
+- The sensor pickers in Edit Vehicle now show the linked sensor instead of
+  "Not linked" when the sensor list loads after the form opens.
+
 ## 1.3.1
 
 - Fuel level from a linked sensor now only counts while the vehicle is

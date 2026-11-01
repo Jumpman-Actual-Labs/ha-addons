@@ -43,6 +43,39 @@ the last few minutes). Under each reading Garage shows what the sensor is
 doing: live, parked, asleep, not found in Home Assistant, or failing (see
 the add-on log for why).
 
+With both sensors linked, Garage also spots fill-ups on the fuel sensor (a
+jump of 15% or more) and measures each tank's MPG from the miles driven and
+the fuel actually burned. Average MPG and estimated range use the last 5 of
+those tanks, so a fill-up you forgot to log doesn't throw them off. Set the
+vehicle's tank capacity for this to work. Until a tank has been measured,
+the average comes from logged fill-ups, leaving out any over 80 MPG.
+
+When the sensor sees a fill-up nobody logged, the vehicle's primary driver
+gets a notification (set their notify target under Drivers) and the vehicle
+shows **Fill-up detected**: **Log it** opens Add Fuel with the date,
+odometer and estimated gallons filled in, **Dismiss** clears it. If you
+forgot to log a fill-up, tick **I missed logging the fill-up before this
+one** on the next one so its MPG is skipped.
+
+### Gear, tires and trouble codes
+
+- **Gear sensor**: a numeric gear code (the Ram's 13 = Park, 11 = Reverse,
+  0 = Neutral, 1-10 = the gear) or a letter (P/R/N/D). Fuel only counts in a
+  drive gear, and Park ends a trip, so even a quick fill-up is caught and
+  fuel sloshing mid-trip never looks like one.
+- **Tire sensors**: one per tire (psi, kPa or bar), plus the target
+  pressure from the door jamb sticker. Garage alerts when a tire is 4 psi
+  under the target (under 30 psi without one), when the four are 4+ psi
+  apart, and when one tire has lost 2+ psi more than the others over a
+  week - a slow leak. It keeps one reading a day for that.
+- **Trouble codes sensor**: any sensor whose state lists the active codes
+  (e.g. `P0420 P0171`, or `All clear`), with an optional
+  `check_engine_light` attribute.
+
+Tire and trouble-code problems show on the vehicle, are part of the 8am
+reminders, and lower the health score. A new tire alert also notifies the
+primary driver straight away.
+
 ## Stash and reminders
 
 - **Stash sync** (Settings tab): when on and Stash is installed (the Stash

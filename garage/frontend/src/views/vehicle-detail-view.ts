@@ -1,18 +1,21 @@
 import { LitElement, css, html } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { customElement, property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "../ha-api";
-import type { GarageState, Vehicle } from "../types";
+import { garageApi } from "../ha-api";
+import type { DetectedFillUp, GarageState, Vehicle } from "../types";
 import { shortDate } from "../format";
 import { glassCardStyle, pageStyles } from "../styles";
 import "./maintenance-view";
 import "./documents-view";
 import "../components/vehicle-readings";
+import "../components/fuel-dialog";
 
 @customElement("garage-vehicle-detail-view")
 export class GarageVehicleDetailView extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @property({ attribute: false }) garageState!: GarageState;
   @property({ attribute: false }) vehicle!: Vehicle;
+  @state() private _detectedFill: DetectedFillUp | null = null;
 
   static styles = [glassCardStyle, pageStyles, css`
     .layout { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr); gap: 24px; align-items: start; }
@@ -58,13 +61,19 @@ export class GarageVehicleDetailView extends LitElement {
         <button class="link" @click=${() => this.dispatchEvent(new CustomEvent("vehicle-edit", { detail: v }))}>Edit Vehicle</button></div>
       <div class="section-head"><div><h2>${v.nickname}</h2><p>${v.year} ${v.make} ${v.model}</p></div></div>
       <ha-card class="readings-panel"><h2>Vehicle readings</h2>
-        <garage-vehicle-readings wide .vehicle=${v} .lowFuelThreshold=${s.settings.lowFuelThreshold}></garage-vehicle-readings>
-        <p class="reading-note">${v.odometerEntityId || v.fuelLevelEntityId
+        <garage-vehicle-readings wide .vehicle=${v} .lowFuelThreshold=${s.settings.lowFuelThreshold}
+          @fill-log=${() => (this._detectedFill = v.pendingFillUp)}
+          @fill-dismiss=${() => v.pendingFillUp && garageApi.dismissDetectedFill(this.hass, v.vehicleId, v.pendingFillUp.id)}
+        ></garage-vehicle-readings>
+        <p class="reading-note">${v.odometerEntityId || v.fuelLevelEntityId || v.gearEntityId
           ? "Linked sensors are checked about once a minute. Last saved readings remain when a sensor is unavailable."
           : "Link fuel and odometer sensors in Edit vehicle to collect readings automatically."}</p>
         ${v.odometerEntityId || v.fuelLevelEntityId ? html`<details><summary>Reading sources</summary><dl>
           ${v.odometerEntityId ? html`<div><dt>Odometer sensor</dt><dd>${v.odometerEntityId}</dd></div>` : ""}
           ${v.fuelLevelEntityId ? html`<div><dt>Fuel level sensor</dt><dd>${v.fuelLevelEntityId}</dd></div>` : ""}
+          ${v.gearEntityId ? html`<div><dt>Gear sensor</dt><dd>${v.gearEntityId}</dd></div>` : ""}
+          ${v.troubleCodesEntityId ? html`<div><dt>Trouble codes sensor</dt><dd>${v.troubleCodesEntityId}</dd></div>` : ""}
+          ${Object.entries(v.tireEntityIds).map(([position, entityId]) => html`<div><dt>Tire (${position.toUpperCase()})</dt><dd>${entityId}</dd></div>`)}
         </dl></details>` : ""}
       </ha-card>
       <div class="layout">
@@ -72,6 +81,7 @@ export class GarageVehicleDetailView extends LitElement {
           <dl>${fields.map(([label, value]) => html`<div><dt>${label}</dt><dd>${value || "—"}</dd></div>`)}</dl></ha-card>
         <section aria-label="Maintenance information and history"><garage-maintenance-view .hass=${this.hass} .garageState=${scoped}></garage-maintenance-view></section>
       </div>
+      <garage-fuel-dialog .hass=${this.hass} .open=${this._detectedFill !== null} .vehicles=${s.vehicles} .vehicleId=${v.vehicleId} .detectedFill=${this._detectedFill} @fuel-dialog-closed=${() => (this._detectedFill = null)}></garage-fuel-dialog>
       <section class="documents" aria-label="Vehicle documents"><garage-documents-view .hass=${this.hass} .garageState=${scoped} .vehicleId=${v.vehicleId}></garage-documents-view></section>
     `;
   }

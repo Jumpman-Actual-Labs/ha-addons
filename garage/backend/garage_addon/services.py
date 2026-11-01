@@ -38,6 +38,17 @@ SERVICE_COMPLETE_MAINTENANCE = "complete_maintenance"
 SERVICE_DELETE_MAINTENANCE_RECORD = "delete_maintenance_record"
 SERVICE_DELETE_DOCUMENT = "delete_document"
 SERVICE_UPDATE_SETTINGS = "update_settings"
+SERVICE_DISMISS_DETECTED_FILL = "dismiss_detected_fill"
+
+# Not in the integration: the gear / tire / trouble-code sensor links.
+_LINKED_SENSORS = {
+    vol.Optional("gear_entity_id"): cv.string,
+    vol.Optional("tire_entity_ids"): vol.Schema(
+        {vol.Optional(position): cv.string for position in ("fl", "fr", "rl", "rr")}
+    ),
+    vol.Optional("tire_target_psi"): vol.Any(vol.Coerce(float), None),
+    vol.Optional("trouble_codes_entity_id"): cv.string,
+}
 
 SCHEMAS = {
     SERVICE_ADD_VEHICLE: vol.Schema(
@@ -66,6 +77,7 @@ SCHEMAS = {
             vol.Optional("additional_driver_ids"): [cv.string],
             vol.Optional("odometer_entity_id"): cv.string,
             vol.Optional("fuel_level_entity_id"): cv.string,
+            **_LINKED_SENSORS,
         }
     ),
     SERVICE_EDIT_VEHICLE: vol.Schema(
@@ -95,6 +107,7 @@ SCHEMAS = {
             vol.Optional("additional_driver_ids"): [cv.string],
             vol.Optional("odometer_entity_id"): cv.string,
             vol.Optional("fuel_level_entity_id"): cv.string,
+            **_LINKED_SENSORS,
         }
     ),
     SERVICE_DELETE_VEHICLE: vol.Schema({vol.Required("vehicle_id"): cv.string}),
@@ -127,7 +140,12 @@ SCHEMAS = {
             vol.Optional("notes", default=""): cv.string,
             vol.Optional("price_per_gallon"): vol.Coerce(float),
             vol.Optional("gallons_added"): vol.Coerce(float),
+            vol.Optional("missed_fill_before", default=False): cv.boolean,
+            vol.Optional("detected_fill_id"): cv.string,
         }
+    ),
+    SERVICE_DISMISS_DETECTED_FILL: vol.Schema(
+        {vol.Required("vehicle_id"): cv.string, vol.Required("fill_id"): cv.string}
     ),
     SERVICE_EDIT_FUEL_ENTRY: vol.Schema(
         {
@@ -237,6 +255,9 @@ def build_handlers(coordinator: GarageCoordinator, config: AddonConfig) -> dict[
         entry_id = data.pop("entry_id")
         await coordinator.async_edit_fuel_entry(entry_id, **data)
 
+    async def handle_dismiss_detected_fill(data: dict[str, Any]) -> None:
+        await coordinator.async_dismiss_detected_fill(data["vehicle_id"], data["fill_id"])
+
     async def handle_delete_fuel_entry(data: dict[str, Any]) -> None:
         await coordinator.async_delete_fuel_entry(data["entry_id"])
 
@@ -272,6 +293,7 @@ def build_handlers(coordinator: GarageCoordinator, config: AddonConfig) -> dict[
         SERVICE_LOG_FUEL: handle_log_fuel,
         SERVICE_EDIT_FUEL_ENTRY: handle_edit_fuel_entry,
         SERVICE_DELETE_FUEL_ENTRY: handle_delete_fuel_entry,
+        SERVICE_DISMISS_DETECTED_FILL: handle_dismiss_detected_fill,
         SERVICE_ADD_MAINTENANCE_TEMPLATE: handle_add_maintenance_template,
         SERVICE_DELETE_MAINTENANCE_TEMPLATE: handle_delete_maintenance_template,
         SERVICE_COMPLETE_MAINTENANCE: handle_complete_maintenance,

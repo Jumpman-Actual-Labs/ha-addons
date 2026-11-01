@@ -11,11 +11,19 @@ from garage_addon.logic import (
     compute_mpg,
     estimate_fuel_pct_after_partial_fill,
     estimated_range_miles,
+    exceeds_tank_range,
     health_score_deductions,
     maintenance_due_status,
+    match_detected_fill,
+    parse_trouble_codes,
+    pending_fill_up,
+    record_tire_history,
     spend_in_period,
+    tire_alerts,
     total_fuel_cost,
     total_maintenance_cost,
+    track_sensor_tank,
+    unlogged_fill_between,
 )
 from garage_addon.models import (
     FuelEntry,
@@ -93,6 +101,67 @@ def test_average_mpg_and_price():
     priced = [make_fuel_entry(price_per_gallon=3.0), make_fuel_entry(price_per_gallon=4.0)]
     assert average_price_per_gallon(priced) == 3.5
     assert average_mpg([]) is None
+
+
+def test_average_mpg_drops_fill_ups_that_span_an_unlogged_one():
+    entries = [make_fuel_entry(mpg=18.0), make_fuel_entry(mpg=174.7)]
+    assert average_mpg(entries) == 18.0
+
+
+def test_average_mpg_prefers_sensor_tanks_weighted_by_miles():
+    entries = [make_fuel_entry(mpg=40.0)]
+    tanks = [
+        {"miles": 300, "gallons": 15, "mpg": 20.0},
+        {"miles": 100, "gallons": 10, "mpg": 10.0},
+        {"miles": 20, "gallons": None, "mpg": None},
+    ]
+    assert average_mpg(entries, tanks) == 16.0
+    assert average_mpg(entries, [{"miles": 20, "gallons": None, "mpg": None}]) == 40.0
+
+
+def test_track_sensor_tank_closes_a_tank_on_a_fill_up():
+    tanks: list[dict] = []
+    tracking = track_sensor_tank(None, tanks, 1000.0, 0.90, 26, "2026-11-01")
+    tracking = track_sensor_tank(tracking, tanks, 1150.0, 0.60, 26, "2026-11-01")
+    tracking = track_sensor_tank(tracking, tanks, 1234.0, 0.40, 26, "2026-11-02")
+    assert tanks == []
+    tracking = track_sensor_tank(tracking, tanks, 1236.0, 0.95, 26, "2026-11-02")
+    assert len(tanks) == 1
+    tank = tanks[0]
+    assert tank["id"]
+    assert {k: tank[k] for k in ("date", "fill_odometer", "miles", "gallons", "mpg")} == {
+        "date": "2026-11-02",
+        "fill_odometer": 1234.0,
+        "miles": 234.0,
+        "gallons": 13.0,
+        "mpg": 18.0,
+    }
+    assert (tank["fuel_pct_before"], tank["fuel_pct_after"], tank["gallons_added"]) == (
+        0.40,
+        0.95,
+        14.3,
+    )
+    assert not tank["logged"] and not tank["dismissed"]
+    assert tracking["start_odometer"] == 1236.0
+    assert tracking["start_fuel_pct"] == 0.95
+
+
+def test_track_sensor_tank_ignores_small_rises_and_small_tanks():
+    tanks: list[dict] = []
+    tracking = track_sensor_tank(None, tanks, 1000.0, 0.50, 26, "2026-11-01")
+    tracking = track_sensor_tank(tracking, tanks, 1010.0, 0.58, 26, "2026-11-01")
+    assert tanks == []  # a slosh or a slope, not a fill-up
+    # A top-off after barely any driving: the fill-up counts, the mpg doesn't.
+    track_sensor_tank(tracking, tanks, 1020.0, 0.95, 26, "2026-11-01")
+    assert tanks[0]["fill_odometer"] == 1010.0
+    assert tanks[0]["mpg"] is None
+
+
+def test_unlogged_fill_between():
+    tanks = [{"fill_odometer": 1234.0}]
+    assert unlogged_fill_between(tanks, 1000, 1500)
+    assert not unlogged_fill_between(tanks, 1000, 1240)  # that logged fill-up itself
+    assert not unlogged_fill_between([], 1000, 1500)
 
 
 def test_total_fuel_and_maintenance_cost():
@@ -248,3 +317,101 @@ def test_compute_health_score_clamped_to_zero():
         today=date(2026, 1, 1), low_fuel_threshold=0.2,
     )
     assert score == 0
+
+
+def test_track_sensor_tank_only_fills_across_a_stop():
+    tanks: list[dict] = []
+    tracking = track_sensor_tank(None, tanks, 1000.0, 0.40, 26, "2026-11-01")
+    # A slosh spike mid-trip looks like a fill-up, but there was no stop.
+    same = track_sensor_tank(tracking, tanks, 1005.0, 0.70, 26, "2026-11-01", after_stop=False)
+    assert tanks == [] and same == tracking
+    track_sensor_tank(tracking, tanks, 1006.0, 0.95, 26, "2026-11-01", after_stop=True)
+    assert len(tanks) == 1
+
+
+def test_match_and_pending_detected_fills():
+    tanks = [
+        {"id": "a", "fill_odometer": 1000.0, "logged": True, "dismissed": False},
+        {"id": "b", "fill_odometer": 1400.0, "logged": False, "dismissed": False},
+        {"fill_odometer": 900.0},  # from before fill-ups had ids
+    ]
+    assert match_detected_fill(tanks, 1395)["id"] == "b"  # logged at the pump
+    assert match_detected_fill(tanks, 1460)["id"] == "b"  # logged at home later
+    assert match_detected_fill(tanks, 1500) is None
+    assert match_detected_fill(tanks, 1000) is None  # already logged
+    assert pending_fill_up(tanks)["id"] == "b"
+    tanks[1]["dismissed"] = True
+    assert pending_fill_up(tanks) is None
+
+
+def test_exceeds_tank_range():
+    assert exceeds_tank_range(700, 26, 18)  # 26 gal x 18 mpg = 468 mi a tank
+    assert not exceeds_tank_range(500, 26, 18)
+    assert not exceeds_tank_range(5000, None, 18)
+    assert not exceeds_tank_range(5000, 26, None)
+
+
+def test_tire_alerts_low_and_uneven():
+    today = date(2026, 11, 1)
+    fine = {"fl": 37, "fr": 37, "rl": 35, "rr": 36}
+    assert tire_alerts(fine, 36, [], today) == []
+    alerts = tire_alerts({**fine, "rl": 30}, 36, [], today)
+    assert [a["key"] for a in alerts] == ["low_rl", "uneven"]
+    assert alerts[0]["message"] == "Rear left tire is low (30 psi)"
+    # Without a target on the vehicle, low means under 30 psi.
+    assert [a["key"] for a in tire_alerts({**fine, "fl": 29}, None, [], today)] == [
+        "low_fl",
+        "uneven",
+    ]
+
+
+def test_tire_alerts_slow_leak_against_the_other_tires():
+    today = date(2026, 11, 10)
+    history = [{"date": "2026-11-01", "fl": 37, "fr": 37, "rl": 36, "rr": 36}]
+    # Everything dropped 3 psi on a cold morning - no leak, all together.
+    cold = {"fl": 34, "fr": 34, "rl": 33, "rr": 33}
+    assert tire_alerts(cold, None, history, today) == []
+    # Front right fell 3 psi further than the rest.
+    leaking = {"fl": 37, "fr": 34, "rl": 36, "rr": 36}
+    assert [a["key"] for a in tire_alerts(leaking, None, history, today)] == ["leak_fr"]
+    # Too recent a reading to compare against.
+    assert tire_alerts(leaking, None, history, date(2026, 11, 4)) == []
+
+
+def test_record_tire_history_keeps_one_full_set_a_day():
+    history: list[dict] = []
+    full = {"fl": 37, "fr": 37, "rl": 35, "rr": 36}
+    assert record_tire_history(history, "2026-11-01", full)
+    assert not record_tire_history(history, "2026-11-01", {**full, "fl": 40})
+    assert not record_tire_history(history, "2026-11-02", {"fl": 37})
+    assert history == [{"date": "2026-11-01", **full}]
+
+
+def test_parse_trouble_codes():
+    sensor = {"state": "P0420 P0171", "attributes": {"check_engine_light": "1"}}
+    assert parse_trouble_codes(sensor) == (["P0420", "P0171"], True)
+    assert parse_trouble_codes({"state": "All clear", "attributes": {"mil": "off"}}) == (
+        [],
+        False,
+    )
+    assert parse_trouble_codes({"state": "p0420, P0420"}) == (["P0420"], None)
+    assert parse_trouble_codes({"state": "unavailable"}) is None
+    assert parse_trouble_codes(None) is None
+
+
+def test_health_score_counts_tires_and_trouble_codes():
+    today = date(2026, 11, 1)
+    vehicle = make_vehicle(
+        tire_pressures={"fl": 37, "fr": 37, "rl": 30, "rr": 36},
+        tire_target_psi=36,
+        trouble_codes=["P0420"],
+        check_engine_light=True,
+    )
+    deductions = health_score_deductions(
+        vehicle=vehicle, maintenance_statuses=[], today=today, low_fuel_threshold=0.2
+    )
+    assert [(d["reason"], d["points"]) for d in deductions] == [
+        ("Rear left tire is low (30 psi)", 10),
+        ("Tire pressures are uneven (30-37 psi)", 5),
+        ("Check engine light: P0420", 25),
+    ]

@@ -59,7 +59,21 @@ Add-on layers around them:
   `%` becomes a 0-1 fraction, km becomes miles, unavailable is skipped).
   Fuel only counts while the raw odometer is moving (a tank float reads the
   slope you parked on), median of the trip's last 5; a 3+ minute stop
-  starts a new trip. Each poll's outcome goes to `coordinator.live_status`,
+  starts a new trip. Once a trip has 3 readings, the median also feeds
+  `logic.track_sensor_tank` (state on `Vehicle.tank_tracking`), which
+  closes a tank on a 15%+ rise into `Vehicle.sensor_tanks`; `average_mpg`
+  prefers those, and a logged fill-up with an unlogged sensor fill-up
+  since the last full tank gets no mpg. A linked gear sensor
+  (`parse_gear`) gates fuel to drive gears and ends the trip on Park; a fill
+  only counts `after_stop` (Park or a NEW_TRIP_SECONDS gap). Each closed
+  tank has an id: `_async_detected_fill` marks it logged if a fill-up was
+  logged next to it, else notifies the primary driver and states.py exposes
+  it as `pending_fill_up` until logged (`detected_fill_id` / odometer match
+  in `async_add_fuel_entry`) or dismissed (`dismiss_detected_fill`). Tire
+  sensors (`tire_entity_ids`, psi via `parse_psi`) and a trouble-code
+  sensor (`logic.parse_trouble_codes`) are read on the same poll;
+  `logic.tire_alerts` / the codes feed health deductions, the 8am
+  reminders, and (tires, once per alert key) a notification. Each poll's outcome goes to `coordinator.live_status`,
   which states.py exposes as the vehicle's `live_sensors` attribute (panel
   only, not MQTT) and `vehicle-readings.ts` shows under each reading.
   `web.py`'s `api/ha_sensors` lists numeric sensors for the dialog's pickers.

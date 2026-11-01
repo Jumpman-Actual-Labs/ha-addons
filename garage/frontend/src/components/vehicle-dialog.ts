@@ -2,9 +2,16 @@ import { LitElement, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { HaSensorSummary, HomeAssistant } from "../ha-api";
 import { garageApi } from "../ha-api";
-import type { Driver, Vehicle } from "../types";
+import type { Driver, TirePosition, Vehicle } from "../types";
 import { formStyles } from "../styles";
 import "./garage-dialog";
+
+const TIRES: Array<[TirePosition, string]> = [
+  ["fl", "Front left"],
+  ["fr", "Front right"],
+  ["rl", "Rear left"],
+  ["rr", "Rear right"],
+];
 
 @customElement("garage-vehicle-dialog")
 export class GarageVehicleDialog extends LitElement {
@@ -36,6 +43,10 @@ export class GarageVehicleDialog extends LitElement {
   @state() private _notes = "";
   @state() private _odometerEntityId = "";
   @state() private _fuelLevelEntityId = "";
+  @state() private _gearEntityId = "";
+  @state() private _tireEntityIds: Partial<Record<TirePosition, string>> = {};
+  @state() private _tireTargetPsi = "";
+  @state() private _troubleCodesEntityId = "";
   @state() private _haSensors: HaSensorSummary[] = [];
   @state() private _saving = false;
   @state() private _photoPath: string | null = null;
@@ -76,6 +87,10 @@ export class GarageVehicleDialog extends LitElement {
       this._notes = v?.notes ?? "";
       this._odometerEntityId = v?.odometerEntityId ?? "";
       this._fuelLevelEntityId = v?.fuelLevelEntityId ?? "";
+      this._gearEntityId = v?.gearEntityId ?? "";
+      this._tireEntityIds = { ...(v?.tireEntityIds ?? {}) };
+      this._tireTargetPsi = v?.tireTargetPsi != null ? String(v.tireTargetPsi) : "";
+      this._troubleCodesEntityId = v?.troubleCodesEntityId ?? "";
       garageApi.listHaSensors().then((sensors) => (this._haSensors = sensors));
       this._photoPath = v?.photoPath ?? null;
       this._photoError = "";
@@ -156,6 +171,12 @@ export class GarageVehicleDialog extends LitElement {
         notes: this._notes.trim(),
         odometer_entity_id: this._odometerEntityId,
         fuel_level_entity_id: this._fuelLevelEntityId,
+        gear_entity_id: this._gearEntityId,
+        tire_entity_ids: Object.fromEntries(
+          Object.entries(this._tireEntityIds).filter(([, entityId]) => entityId)
+        ),
+        tire_target_psi: this._tireTargetPsi ? Number(this._tireTargetPsi) : null,
+        trouble_codes_entity_id: this._troubleCodesEntityId,
       };
       if (this._tankCapacityGal) fields.tank_capacity_gal = Number(this._tankCapacityGal);
       if (this._oilCapacityQt) fields.oil_capacity_qt = Number(this._oilCapacityQt);
@@ -172,19 +193,28 @@ export class GarageVehicleDialog extends LitElement {
     }
   }
 
-  /** Sensors that look like the right kind (by unit), the linked one even if
-   * it doesn't, and every numeric sensor if nothing matches the unit. */
-  private _sensorOptions(units: string[], linked: string) {
-    const matching = this._haSensors.filter(
-      (s) => units.includes(s.unit.toLowerCase()) || s.entityId === linked
+  /** Sensors that look like the right kind (by unit, or a word in the name
+   * for unitless ones like gear), the linked one even if it doesn't, and
+   * every candidate if nothing matches. Number-only links (odometer, fuel,
+   * tires) only offer numeric sensors. */
+  private _sensorOptions(units: string[], linked: string, keywords: string[] = [], numeric = true) {
+    const pool = this._haSensors.filter((s) => !numeric || s.numeric);
+    const matching = pool.filter(
+      (s) =>
+        units.includes(s.unit.toLowerCase()) ||
+        keywords.some((k) => `${s.entityId} ${s.name}`.toLowerCase().includes(k)) ||
+        s.entityId === linked
     );
-    const options = matching.some((s) => s.entityId !== linked) ? matching : this._haSensors;
+    const options = matching.some((s) => s.entityId !== linked) ? matching : pool;
     const known = options.some((s) => s.entityId === linked);
     return html`
-      <option value="">Not linked</option>
-      ${linked && !known ? html`<option value=${linked}>${linked}</option>` : ""}
+      <option value="" ?selected=${!linked}>Not linked</option>
+      ${linked && !known ? html`<option value=${linked} selected>${linked}</option>` : ""}
       ${options.map(
-        (s) => html`<option value=${s.entityId}>
+        // `selected` on the option, not just the select's .value: the
+        // sensor list arrives after the select first renders, and .value
+        // set before its option exists falls back to "Not linked".
+        (s) => html`<option value=${s.entityId} ?selected=${s.entityId === linked}>
           ${s.name} (${s.state === "unavailable" || s.state === "unknown" ? s.state : `${s.state} ${s.unit}`.trim()})
         </option>`
       )}
@@ -428,6 +458,52 @@ export class GarageVehicleDialog extends LitElement {
             </select>
           </div>
         </div>
+        <div class="row">
+          <div>
+            <label for="gear-entity">Gear sensor</label>
+            <select id="gear-entity"
+              .value=${this._gearEntityId}
+              @change=${(e: Event) => (this._gearEntityId = (e.target as HTMLSelectElement).value)}
+            >
+              ${this._sensorOptions([], this._gearEntityId, ["gear"], false)}
+            </select>
+          </div>
+          <div>
+            <label for="trouble-codes-entity">Trouble codes sensor</label>
+            <select id="trouble-codes-entity"
+              .value=${this._troubleCodesEntityId}
+              @change=${(e: Event) => (this._troubleCodesEntityId = (e.target as HTMLSelectElement).value)}
+            >
+              ${this._sensorOptions([], this._troubleCodesEntityId, ["trouble", "dtc", "code"], false)}
+            </select>
+          </div>
+        </div>
+        <div style="color: var(--secondary-text-color); font-size: 0.75rem;">
+          With a gear sensor, fuel only counts in a drive gear and shifting into
+          Park ends a trip, so fill-ups are caught even on a quick stop. A
+          trouble codes sensor's state lists the active codes (or "All clear").
+        </div>
+        <div class="row">
+          ${TIRES.map(
+            ([position, label]) => html`<div>
+              <label for=${`tire-${position}`}>${label} tire</label>
+              <select id=${`tire-${position}`}
+                .value=${this._tireEntityIds[position] ?? ""}
+                @change=${(e: Event) =>
+                  (this._tireEntityIds = {
+                    ...this._tireEntityIds,
+                    [position]: (e.target as HTMLSelectElement).value,
+                  })}
+              >
+                ${this._sensorOptions(["psi", "kpa", "bar"], this._tireEntityIds[position] ?? "")}
+              </select>
+            </div>`
+          )}
+        </div>
+        <label for="tire-target">Target tire pressure (psi)</label>
+        <input id="tire-target" type="number" min="0" step="1" placeholder="From the door jamb sticker"
+          .value=${this._tireTargetPsi}
+          @input=${(e: InputEvent) => (this._tireTargetPsi = (e.target as HTMLInputElement).value)} />
 
         <h3 class="form-section">Ownership & reminders</h3>
         <label for="title-number">Title Number</label>

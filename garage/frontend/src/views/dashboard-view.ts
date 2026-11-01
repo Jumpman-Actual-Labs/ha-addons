@@ -1,7 +1,8 @@
 import { LitElement, css, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "../ha-api";
-import type { GarageState, Vehicle } from "../types";
+import { garageApi } from "../ha-api";
+import type { DetectedFillUp, GarageState, Vehicle } from "../types";
 import { money, shortDate } from "../format";
 import { glassCardStyle, pageStyles } from "../styles";
 import "../components/vehicle-card";
@@ -13,6 +14,7 @@ export class GarageDashboardView extends LitElement {
   @property({ attribute: false }) garageState!: GarageState;
   @state() private _fuelDialogOpen = false;
   @state() private _fuelVehicleId = "";
+  @state() private _detectedFill: DetectedFillUp | null = null;
 
   static styles = [glassCardStyle, pageStyles, css`
     .workspace { display: grid; grid-template-columns: minmax(0, 2.6fr) minmax(260px, 1fr); gap: 22px; align-items: start; }
@@ -61,8 +63,8 @@ export class GarageDashboardView extends LitElement {
     this.dispatchEvent(new CustomEvent("garage-navigate", { detail: tab, bubbles: true, composed: true }));
   }
 
-  private _openFuelDialog(vehicleId: string): void {
-    this._fuelVehicleId = vehicleId; this._fuelDialogOpen = true;
+  private _openFuelDialog(vehicleId: string, detectedFill: DetectedFillUp | null = null): void {
+    this._fuelVehicleId = vehicleId; this._detectedFill = detectedFill; this._fuelDialogOpen = true;
   }
 
   render() {
@@ -71,8 +73,9 @@ export class GarageDashboardView extends LitElement {
     const needsAttention = s.vehicles.filter(v => v.maintenanceDueCount > 0 || v.maintenanceDueSoonCount > 0 ||
       (v.currentFuelPct !== null && v.currentFuelPct <= s.settings.lowFuelThreshold) ||
       (v.registrationExpires && new Date(v.registrationExpires) < new Date()) ||
-      (v.insuranceExpires && new Date(v.insuranceExpires) < new Date()));
-    const linked = active.filter(v => v.odometerEntityId || v.fuelLevelEntityId).length;
+      (v.insuranceExpires && new Date(v.insuranceExpires) < new Date()) ||
+      v.tireAlerts.length > 0 || v.troubleCodes.length > 0 || v.pendingFillUp !== null);
+    const linked = active.filter(v => v.odometerEntityId || v.fuelLevelEntityId || v.gearEntityId).length;
     const total = s.totalMonthlyFuelSpend + s.totalMonthlyMaintenanceSpend;
     const name = (id: string) => s.vehicles.find(v => v.vehicleId === id)?.nickname ?? "Unknown vehicle";
     const activity = [
@@ -83,7 +86,7 @@ export class GarageDashboardView extends LitElement {
       <div class="workspace">
         <section class="fleet">
           <div class="section-head"><div><div class="fleet-heading"><h2>Vehicle readings</h2>${linked ? html`<span class="pill">${linked} ${linked === 1 ? "vehicle" : "vehicles"} with linked sensors</span>` : ""}</div><p>Fuel, mileage and estimated range across your active vehicles.</p></div><button class="secondary" @click=${() => this._navigate("vehicles")}>Manage vehicles<ha-icon aria-hidden="true" icon="mdi:arrow-top-right"></ha-icon></button></div>
-          ${active.length ? html`<div class="vehicle-grid">${active.slice(0, 4).map(v => html`<garage-vehicle-card .vehicle=${v} .lowFuelThreshold=${s.settings.lowFuelThreshold} @vehicle-select=${(e: CustomEvent<Vehicle>) => this.dispatchEvent(new CustomEvent("garage-open-vehicle", { detail: e.detail.vehicleId, bubbles: true, composed: true }))} @vehicle-fuel=${(e: CustomEvent<Vehicle>) => this._openFuelDialog(e.detail.vehicleId)}></garage-vehicle-card>`)}</div>
+          ${active.length ? html`<div class="vehicle-grid">${active.slice(0, 4).map(v => html`<garage-vehicle-card .vehicle=${v} .lowFuelThreshold=${s.settings.lowFuelThreshold} @vehicle-select=${(e: CustomEvent<Vehicle>) => this.dispatchEvent(new CustomEvent("garage-open-vehicle", { detail: e.detail.vehicleId, bubbles: true, composed: true }))} @vehicle-fuel=${(e: CustomEvent<Vehicle>) => this._openFuelDialog(e.detail.vehicleId)} @fill-log=${(e: CustomEvent<Vehicle>) => this._openFuelDialog(e.detail.vehicleId, e.detail.pendingFillUp)} @fill-dismiss=${(e: CustomEvent<Vehicle>) => e.detail.pendingFillUp && garageApi.dismissDetectedFill(this.hass, e.detail.vehicleId, e.detail.pendingFillUp.id)}></garage-vehicle-card>`)}</div>
             ${active.length > 4 ? html`<button class="ghost" @click=${() => this._navigate("vehicles")}>View all ${active.length} active vehicles →</button>` : ""}
             <p class="sensor-note"><ha-icon aria-hidden="true" icon="mdi:information-outline"></ha-icon><span>${linked
               ? "Linked sensors are checked about once a minute. Last saved readings remain when a sensor is unavailable."
@@ -99,6 +102,9 @@ export class GarageDashboardView extends LitElement {
               ${v.currentFuelPct !== null && v.currentFuelPct <= s.settings.lowFuelThreshold ? html`<span>Low fuel &middot; ${Math.round((v.currentFuelPct ?? 0) * 100)}% remaining</span>` : ""}
               ${v.registrationExpires && new Date(v.registrationExpires) < new Date() ? html`<span>Registration expired</span>` : ""}
               ${v.insuranceExpires && new Date(v.insuranceExpires) < new Date() ? html`<span>Insurance expired</span>` : ""}
+              ${v.troubleCodes.length ? html`<span>${v.checkEngineLight ? "Check engine light" : "Trouble codes"} &middot; ${v.troubleCodes.join(", ")}</span>` : ""}
+              ${v.tireAlerts.map(a => html`<span>${a.message}</span>`)}
+              ${v.pendingFillUp ? html`<span>Fill-up detected &middot; not logged yet</span>` : ""}
             </div>`) : html`<div class="clear"><ha-icon aria-hidden="true" icon="mdi:check-circle-outline"></ha-icon><strong>${s.vehicles.length ? "No alerts from your recorded data." : "Ready when you are."}</strong><p>${s.vehicles.length ? "Keep readings and service records up to date." : "Add a vehicle to start tracking reminders."}</p></div>`}
             <button class="ghost" @click=${() => this._navigate("maintenance")}>Open maintenance →</button>
           </ha-card>
@@ -119,7 +125,7 @@ export class GarageDashboardView extends LitElement {
             <button class="ghost" @click=${() => this._navigate("fuel")}>View fuel history →</button>
           </ha-card>
       </div>
-      <garage-fuel-dialog .hass=${this.hass} .open=${this._fuelDialogOpen} .vehicles=${s.vehicles} .vehicleId=${this._fuelVehicleId} @fuel-dialog-closed=${() => (this._fuelDialogOpen = false)}></garage-fuel-dialog>
+      <garage-fuel-dialog .hass=${this.hass} .open=${this._fuelDialogOpen} .vehicles=${s.vehicles} .vehicleId=${this._fuelVehicleId} .detectedFill=${this._detectedFill} @fuel-dialog-closed=${() => (this._fuelDialogOpen = false)}></garage-fuel-dialog>
     `;
   }
 }

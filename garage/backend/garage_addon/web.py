@@ -10,8 +10,9 @@ Serves the panel itself plus everything it used to get from Home Assistant:
   from where files land.
 - `api/ha_users` - Home Assistant's user list for linking a driver to an
   account (the panel used to ask HA's websocket for it directly).
-- `api/ha_sensors` - Home Assistant's numeric sensors, for linking a
-  vehicle's odometer / fuel level to an OBD dongle's (see obd.py).
+- `api/ha_sensors` - Home Assistant's sensors, for linking a vehicle's
+  odometer / fuel level / gear / tires / trouble codes to an OBD dongle's
+  (see obd.py). `numeric` marks the ones a number-only link can use.
 - `uploads/...` - uploaded documents and vehicle photos (was
   `/local/garage_documents/` and `/local/garage_vehicles/`).
 
@@ -299,9 +300,10 @@ async def ha_users(request: web.Request) -> web.Response:
 
 
 async def ha_sensors(request: web.Request) -> web.Response:
-    """Best-effort like ha_users - [] without Home Assistant. Only `sensor.*`
-    entities whose state is a number or currently unavailable (an OBD
-    dongle asleep with the car off still needs to be linkable)."""
+    """Best-effort like ha_users - [] without Home Assistant. Every `sensor.*`
+    entity; `numeric` when its state is a number or currently unavailable
+    (an OBD dongle asleep with the car off still needs to be linkable) -
+    text ones are for gear letters and trouble codes."""
     ha = request.app[HA_KEY]
     if not isinstance(ha, HomeAssistantClient):
         return web.json_response([])
@@ -316,11 +318,12 @@ async def ha_sensors(request: web.Request) -> web.Response:
         if not entity_id.startswith("sensor."):
             continue
         value = state.get("state")
+        numeric = True
         if value not in ("unavailable", "unknown"):
             try:
                 float(value)
             except (TypeError, ValueError):
-                continue
+                numeric = False
         attributes = state.get("attributes") or {}
         sensors.append(
             {
@@ -328,6 +331,7 @@ async def ha_sensors(request: web.Request) -> web.Response:
                 "name": attributes.get("friendly_name") or entity_id,
                 "state": value,
                 "unit": attributes.get("unit_of_measurement") or "",
+                "numeric": numeric,
             }
         )
     sensors.sort(key=lambda s: s["entity_id"])

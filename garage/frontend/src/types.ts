@@ -7,6 +7,7 @@ export type MaintenancePerformedBy = "diy" | "shop";
 export type DocumentCategory = "registration" | "insurance" | "receipt" | "photo" | "other";
 export type Drivetrain = "fwd" | "rwd" | "awd" | "4wd";
 export type WheelPosition = "front_left" | "front_right" | "rear_left" | "rear_right";
+export type TirePosition = "fl" | "fr" | "rl" | "rr";
 
 /** What the backend's last poll of a linked HA sensor found (obd.py). */
 export interface LiveSensorStatus {
@@ -43,7 +44,16 @@ export interface Vehicle {
   additionalDriverIds: string[];
   odometerEntityId: string;
   fuelLevelEntityId: string;
-  liveSensors: { odometer?: LiveSensorStatus; fuel?: LiveSensorStatus };
+  gearEntityId: string;
+  tireEntityIds: Partial<Record<TirePosition, string>>;
+  tireTargetPsi: number | null;
+  troubleCodesEntityId: string;
+  liveSensors: Partial<Record<string, LiveSensorStatus>>;
+  tirePressures: Partial<Record<TirePosition, number>>;
+  tireAlerts: TireAlert[];
+  troubleCodes: string[];
+  checkEngineLight: boolean | null;
+  pendingFillUp: DetectedFillUp | null;
   registrationExpires: string | null;
   insuranceExpires: string | null;
   healthScore: number;
@@ -94,6 +104,23 @@ export interface FuelEntry {
   gallonsAdded: number | null;
   pricePerGallon: number | null;
   mpg: number | null;
+  missedFillBefore: boolean;
+}
+
+export interface TireAlert {
+  key: string;
+  kind: "low" | "uneven" | "leak";
+  message: string;
+}
+
+/** A fill-up the fuel sensor saw that nobody has logged or dismissed. */
+export interface DetectedFillUp {
+  id: string;
+  date: string;
+  fill_odometer: number;
+  gallons_added: number | null;
+  fuel_pct_before: number;
+  fuel_pct_after: number;
 }
 
 export interface MaintenanceTemplate {

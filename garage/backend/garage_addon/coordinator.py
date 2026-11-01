@@ -14,11 +14,18 @@ from .logic import (
     compute_health_score,
     estimate_fuel_pct_after_partial_fill,
     estimated_range_miles,
+    exceeds_tank_range,
     health_score_deductions,
     maintenance_due_status,
+    match_detected_fill,
+    pending_fill_up,
+    record_tire_history,
     spend_in_period,
+    tire_alerts,
     total_fuel_cost,
     total_maintenance_cost,
+    track_sensor_tank,
+    unlogged_fill_between,
 )
 from .models import (
     Document,
@@ -343,7 +350,7 @@ class GarageCoordinator:
         entries = self.fuel_entries_for_vehicle(vehicle.id)
         records = self.maintenance_records_for_vehicle(vehicle.id)
         statuses = self.maintenance_statuses_for_vehicle(vehicle, today)
-        avg_mpg = average_mpg(entries)
+        avg_mpg = average_mpg(entries, vehicle.sensor_tanks)
         due_items = [s for s in statuses if s["due"]]
         due_soon_items = [s for s in statuses if s["due_soon"] and not s["due"]]
         health_args = dict(
@@ -371,6 +378,10 @@ class GarageCoordinator:
             ),
             "health_score": health_score,
             "health_deductions": health_deductions,
+            "tire_alerts": tire_alerts(
+                vehicle.tire_pressures, vehicle.tire_target_psi, vehicle.tire_history, today
+            ),
+            "pending_fill_up": pending_fill_up(vehicle.sensor_tanks),
             "next_maintenance_due": (
                 due_items[0] if due_items else (due_soon_items[0] if due_soon_items else None)
             ),
@@ -487,7 +498,12 @@ class GarageCoordinator:
         notes: str = "",
         price_per_gallon: float | None = None,
         gallons_added: float | None = None,
+        missed_fill_before: bool = False,
+        detected_fill_id: str | None = None,
     ) -> FuelEntry:
+        """`detected_fill_id` is the sensor-seen fill-up this logs, when the
+        panel's "Log it" prompt opened the form; otherwise it's matched by
+        odometer (logic.match_detected_fill)."""
         vehicle = self._get_vehicle(vehicle_id)
         prior_full_tank = next(
             (
@@ -500,6 +516,18 @@ class GarageCoordinator:
         derived = compute_fuel_entry_derived(
             amount_dollars, odometer, price_per_gallon, gallons_added, prior_full_tank
         )
+        if prior_full_tank is not None and (
+            missed_fill_before
+            # The fuel sensor saw a fill-up nobody logged since the last full
+            # tank, so these miles span more than the gallons just added.
+            or unlogged_fill_between(vehicle.sensor_tanks, prior_full_tank.odometer, odometer)
+            or exceeds_tank_range(
+                odometer - prior_full_tank.odometer,
+                vehicle.tank_capacity_gal,
+                average_mpg(self.fuel_entries_for_vehicle(vehicle_id), vehicle.sensor_tanks),
+            )
+        ):
+            derived["mpg"] = None
         entry = FuelEntry(
             id=new_id(),
             vehicle_id=vehicle_id,
@@ -511,9 +539,16 @@ class GarageCoordinator:
             payment_method=payment_method,
             full_tank=full_tank,
             notes=notes,
+            missed_fill_before=missed_fill_before,
             **derived,
         )
         self.fuel_entries.append(entry)
+        detected = next(
+            (t for t in vehicle.sensor_tanks if t.get("id") == detected_fill_id),
+            None,
+        ) if detected_fill_id else match_detected_fill(vehicle.sensor_tanks, odometer)
+        if detected is not None:
+            detected["logged"] = True
         if odometer > vehicle.current_mileage:
             vehicle.current_mileage = odometer
         if full_tank:
@@ -574,6 +609,15 @@ class GarageCoordinator:
             )
         await self._async_save()
         return entry
+
+    async def async_dismiss_detected_fill(self, vehicle_id: str, fill_id: str) -> None:
+        """"Not a fill-up" / "don't log it" for a sensor-seen fill-up."""
+        vehicle = self._get_vehicle(vehicle_id)
+        tank = next((t for t in vehicle.sensor_tanks if t.get("id") == fill_id), None)
+        if tank is None:
+            raise ValueError(f"Unknown fill_id {fill_id}")
+        tank["dismissed"] = True
+        await self._async_save()
 
     async def async_delete_fuel_entry(self, entry_id: str) -> None:
         entry = self._get_fuel_entry(entry_id)
@@ -703,11 +747,24 @@ class GarageCoordinator:
         return self.settings
 
     async def async_apply_live_readings(
-        self, vehicle_id: str, odometer: int | None, fuel_pct: float | None
+        self,
+        vehicle_id: str,
+        odometer: int | None,
+        fuel_pct: float | None,
+        tank_reading: tuple[float, float, bool] | None = None,
+        *,
+        tires: dict[str, float] | None = None,
+        trouble: tuple[list[str], bool | None] | None = None,
     ) -> bool:
         """Readings from the vehicle's linked HA sensors (obd.py). Odometer
         only ever moves forward, like a logged fill-up or service; only
-        saves when something changed. Returns whether it did."""
+        saves when something changed. Returns whether it did.
+
+        `tank_reading` is (raw odometer, settled fuel fraction, whether the
+        vehicle stopped since the last one) for following tanks on the sensor
+        (logic.track_sensor_tank). A fill-up it finds that nobody logged, and
+        a tire alert that wasn't there before, notify the primary driver.
+        `tires` is psi by position, `trouble` (codes, check engine light)."""
         try:
             vehicle = self._get_vehicle(vehicle_id)
         except ValueError:
@@ -719,9 +776,95 @@ class GarageCoordinator:
         if fuel_pct is not None and fuel_pct != vehicle.current_fuel_pct:
             vehicle.current_fuel_pct = fuel_pct
             changed = True
+        if tank_reading is not None:
+            tanks_before = len(vehicle.sensor_tanks)
+            tracking = track_sensor_tank(
+                vehicle.tank_tracking,
+                vehicle.sensor_tanks,
+                tank_reading[0],
+                tank_reading[1],
+                vehicle.tank_capacity_gal,
+                date.today().isoformat(),
+                after_stop=tank_reading[2],
+            )
+            if tracking != vehicle.tank_tracking:
+                vehicle.tank_tracking = tracking
+                changed = True
+            if len(vehicle.sensor_tanks) > tanks_before:
+                await self._async_detected_fill(vehicle, vehicle.sensor_tanks[-1])
+        if tires:
+            changed |= await self._async_apply_tires(vehicle, tires)
+        if trouble is not None:
+            codes, light = trouble
+            if codes != vehicle.trouble_codes or light != vehicle.check_engine_light:
+                vehicle.trouble_codes, vehicle.check_engine_light = codes, light
+                changed = True
         if changed:
             await self._async_save()
         return changed
+
+    async def _async_detected_fill(self, vehicle: Vehicle, tank: dict) -> None:
+        """A fill-up the fuel sensor just saw: already logged (at the pump,
+        before driving off) if a fill-up was logged next to it, otherwise ask
+        the driver to log it. Not when the tank is too little to be sure."""
+        logged = next(
+            (
+                e
+                for e in self.fuel_entries_for_vehicle(vehicle.id)
+                if e.date >= tank["date"]
+                and abs(e.odometer - tank["fill_odometer"]) <= 10
+            ),
+            None,
+        )
+        if logged is not None:
+            tank["logged"] = True
+            return
+        gallons = tank.get("gallons_added")
+        amount = f"about {gallons:g} gallons" if gallons else "a fill-up"
+        await self._async_notify_driver(
+            vehicle,
+            f"{vehicle.nickname}: log your fill-up?",
+            f"Looks like {vehicle.nickname} got {amount} around "
+            f"{round(tank['fill_odometer']):,} mi. Log it in Garage to keep MPG and "
+            "spending right.",
+        )
+
+    async def _async_apply_tires(self, vehicle: Vehicle, tires: dict[str, float]) -> bool:
+        changed = False
+        if tires != vehicle.tire_pressures:
+            vehicle.tire_pressures = dict(tires)
+            changed = True
+        today = date.today()
+        changed |= record_tire_history(vehicle.tire_history, today.isoformat(), tires)
+        alerts = tire_alerts(
+            vehicle.tire_pressures, vehicle.tire_target_psi, vehicle.tire_history, today
+        )
+        keys = [a["key"] for a in alerts]
+        for alert in alerts:
+            if alert["key"] not in vehicle.tire_alerts_notified:
+                await self._async_notify_driver(
+                    vehicle, f"{vehicle.nickname}: tire pressure", alert["message"]
+                )
+        if keys != vehicle.tire_alerts_notified:
+            # Resolved alerts drop off, so they notify again if they come back.
+            vehicle.tire_alerts_notified = keys
+            changed = True
+        return changed
+
+    async def _async_notify_driver(self, vehicle: Vehicle, title: str, message: str) -> None:
+        """Best-effort notify.* to the vehicle's primary driver, like the
+        daily reminders - never blocks applying a reading."""
+        driver = next((d for d in self.drivers if d.id == vehicle.primary_driver_id), None)
+        if self.ha is None or driver is None or not driver.notify_target:
+            return
+        try:
+            await self.ha.call_service(
+                "notify",
+                driver.notify_target.removeprefix("notify."),
+                {"title": title, "message": message},
+            )
+        except HomeAssistantError:
+            _LOGGER.warning("Failed to notify driver %s via %s", driver.id, driver.notify_target)
 
     def set_live_status(self, live_status: dict[str, dict[str, Any]]) -> None:
         self.live_status = live_status
@@ -737,7 +880,8 @@ class GarageCoordinator:
 
     def compute_reminders(self, today: date) -> list[dict[str, Any]]:
         """Return notification-worthy events across all vehicles: overdue/due-soon
-        maintenance, low fuel, and expired/expiring registration & insurance.
+        maintenance, tire alerts, trouble codes, low fuel, and expired/expiring
+        registration & insurance.
         Called by the daily background job in __init__.py; kept side-effect-free
         here so it's easy to unit test the trigger logic separately from the
         notify.* dispatch.
@@ -756,6 +900,28 @@ class GarageCoordinator:
                             "message": f"{vehicle.nickname}: {status['name']} is due.",
                         }
                     )
+            for alert in tire_alerts(
+                vehicle.tire_pressures, vehicle.tire_target_psi, vehicle.tire_history, today
+            ):
+                reminders.append(
+                    {
+                        "vehicle_id": vehicle.id,
+                        "kind": f"tire_{alert['kind']}",
+                        "message": f"{vehicle.nickname}: {alert['message']}.",
+                    }
+                )
+            if vehicle.trouble_codes:
+                light = " (check engine light on)" if vehicle.check_engine_light else ""
+                reminders.append(
+                    {
+                        "vehicle_id": vehicle.id,
+                        "kind": "trouble_codes",
+                        "message": (
+                            f"{vehicle.nickname} has trouble codes"
+                            f"{light}: {', '.join(vehicle.trouble_codes)}."
+                        ),
+                    }
+                )
             low_fuel = (
                 vehicle.current_fuel_pct is not None
                 and vehicle.current_fuel_pct <= low_fuel_threshold

@@ -38,6 +38,22 @@ class Vehicle:
     # current_mileage / current_fuel_pct live - see obd.py.
     odometer_entity_id: str = ""
     fuel_level_entity_id: str = ""
+    # Gear (Park ends a trip - see obd.py), the four tire pressure sensors
+    # keyed fl/fr/rl/rr, and a trouble-code sensor.
+    gear_entity_id: str = ""
+    tire_entity_ids: dict[str, str] = field(default_factory=dict)
+    tire_target_psi: float | None = None
+    trouble_codes_entity_id: str = ""
+    # The fuel sensor's view of fill-ups - see logic.track_sensor_tank.
+    tank_tracking: dict = field(default_factory=dict)
+    sensor_tanks: list[dict] = field(default_factory=list)
+    # Latest tire pressures (psi, keyed like tire_entity_ids), one reading a
+    # day for slow-leak trends, and which tire alerts were already sent.
+    tire_pressures: dict[str, float] = field(default_factory=dict)
+    tire_history: list[dict] = field(default_factory=list)
+    tire_alerts_notified: list[str] = field(default_factory=list)
+    trouble_codes: list[str] = field(default_factory=list)
+    check_engine_light: bool | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -67,6 +83,17 @@ class Vehicle:
             "additional_driver_ids": list(self.additional_driver_ids),
             "odometer_entity_id": self.odometer_entity_id,
             "fuel_level_entity_id": self.fuel_level_entity_id,
+            "gear_entity_id": self.gear_entity_id,
+            "tire_entity_ids": dict(self.tire_entity_ids),
+            "tire_target_psi": self.tire_target_psi,
+            "trouble_codes_entity_id": self.trouble_codes_entity_id,
+            "tank_tracking": dict(self.tank_tracking),
+            "sensor_tanks": [dict(t) for t in self.sensor_tanks],
+            "tire_pressures": dict(self.tire_pressures),
+            "tire_history": [dict(h) for h in self.tire_history],
+            "tire_alerts_notified": list(self.tire_alerts_notified),
+            "trouble_codes": list(self.trouble_codes),
+            "check_engine_light": self.check_engine_light,
         }
 
     @staticmethod
@@ -98,6 +125,17 @@ class Vehicle:
             additional_driver_ids=list(data.get("additional_driver_ids", [])),
             odometer_entity_id=data.get("odometer_entity_id", ""),
             fuel_level_entity_id=data.get("fuel_level_entity_id", ""),
+            gear_entity_id=data.get("gear_entity_id", ""),
+            tire_entity_ids=dict(data.get("tire_entity_ids") or {}),
+            tire_target_psi=data.get("tire_target_psi"),
+            trouble_codes_entity_id=data.get("trouble_codes_entity_id", ""),
+            tank_tracking=dict(data.get("tank_tracking") or {}),
+            sensor_tanks=[dict(t) for t in data.get("sensor_tanks") or []],
+            tire_pressures=dict(data.get("tire_pressures") or {}),
+            tire_history=[dict(h) for h in data.get("tire_history") or []],
+            tire_alerts_notified=list(data.get("tire_alerts_notified") or []),
+            trouble_codes=list(data.get("trouble_codes") or []),
+            check_engine_light=data.get("check_engine_light"),
         )
 
 
@@ -143,6 +181,9 @@ class FuelEntry:
     price_per_gallon: float | None = None
     mpg: float | None = None
     finance_expense_id: str | None = None
+    # "I missed logging the fill-up before this one" - its miles span more
+    # than the gallons added, so it gets no mpg.
+    missed_fill_before: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -161,6 +202,7 @@ class FuelEntry:
             "price_per_gallon": self.price_per_gallon,
             "mpg": self.mpg,
             "finance_expense_id": self.finance_expense_id,
+            "missed_fill_before": self.missed_fill_before,
         }
 
     @staticmethod
@@ -181,6 +223,7 @@ class FuelEntry:
             finance_expense_id=data.get("finance_expense_id"),
             price_per_gallon=data.get("price_per_gallon"),
             mpg=data.get("mpg"),
+            missed_fill_before=bool(data.get("missed_fill_before", False)),
         )
 
 

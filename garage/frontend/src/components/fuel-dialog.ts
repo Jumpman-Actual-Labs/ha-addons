@@ -2,7 +2,7 @@ import { LitElement, css, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "../ha-api";
 import { garageApi } from "../ha-api";
-import type { FuelEntry, Vehicle } from "../types";
+import type { DetectedFillUp, FuelEntry, Vehicle } from "../types";
 import { formStyles } from "../styles";
 import "./garage-dialog";
 
@@ -17,6 +17,9 @@ export class GarageFuelDialog extends LitElement {
   @property({ attribute: false }) vehicles: Vehicle[] = [];
   @property({ type: String }) vehicleId = "";
   @property({ attribute: false }) entry: FuelEntry | null = null;
+  /** A fill-up the fuel sensor saw - the "Log it" prompt opens the form
+   * filled in from it, and the entry is tied back to it. */
+  @property({ attribute: false }) detectedFill: DetectedFillUp | null = null;
 
   @state() private _vehicleId = "";
   @state() private _date = todayIso();
@@ -26,6 +29,7 @@ export class GarageFuelDialog extends LitElement {
   @state() private _station = "";
   @state() private _paymentMethod = "credit_card";
   @state() private _fullTank = true;
+  @state() private _missedFillBefore = false;
   @state() private _pricePerGallon = "";
   @state() private _gallons = "";
   @state() private _notes = "";
@@ -111,6 +115,14 @@ export class GarageFuelDialog extends LitElement {
       this._pricePerGallon = e?.pricePerGallon != null ? String(e.pricePerGallon) : "";
       this._gallons = e?.gallonsAdded != null ? String(e.gallonsAdded) : "";
       this._notes = e?.notes ?? "";
+      this._missedFillBefore = false;
+      const fill = e ? null : this.detectedFill;
+      if (fill) {
+        this._date = fill.date;
+        this._odometer = String(Math.round(fill.fill_odometer));
+        if (fill.gallons_added != null) this._gallons = String(fill.gallons_added);
+        this._fullTank = fill.fuel_pct_after >= 0.9;
+      }
     }
     this._lastOpen = this.open;
     this._lastEntryId = entryId;
@@ -144,7 +156,12 @@ export class GarageFuelDialog extends LitElement {
       if (this.entry) {
         await garageApi.editFuelEntry(this.hass, this.entry.id, fields);
       } else {
-        await garageApi.logFuel(this.hass, { vehicle_id: this._vehicleId, ...fields });
+        await garageApi.logFuel(this.hass, {
+          vehicle_id: this._vehicleId,
+          ...fields,
+          missed_fill_before: this._missedFillBefore,
+          ...(this.detectedFill ? { detected_fill_id: this.detectedFill.id } : {}),
+        });
       }
       this._close();
     } finally {
@@ -307,6 +324,18 @@ export class GarageFuelDialog extends LitElement {
           />
           Full tank
         </label>
+        ${this.entry
+          ? ""
+          : html`<label>
+              <input
+                type="checkbox"
+                style="width:auto;"
+                .checked=${this._missedFillBefore}
+                @change=${(e: Event) =>
+                  (this._missedFillBefore = (e.target as HTMLInputElement).checked)}
+              />
+              I missed logging the fill-up before this one
+            </label>`}
 
         <label for="notes">Notes</label>
         <input id="notes"

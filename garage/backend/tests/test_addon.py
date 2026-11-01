@@ -596,6 +596,248 @@ async def test_live_readings_restart_the_window_after_a_fill_up(coordinator):
     assert vehicle.current_fuel_pct == 0.955
 
 
+async def test_live_readings_measure_mpg_per_tank_across_unlogged_fill_ups(coordinator):
+    from garage_addon.obd import LiveReadings
+
+    vehicle = await _linked_truck(coordinator)
+    await coordinator.async_edit_vehicle(vehicle.id, tank_capacity_gal=26.0)
+    states = {}
+    readings = LiveReadings(coordinator, FakeStatesHa(states))
+    minute = 0
+
+    async def drive(odo: float, fuel: float, polls: int) -> tuple[float, float]:
+        # 5 miles a minute at 18 mpg on a 26-gallon tank.
+        nonlocal minute
+        for _ in range(polls):
+            states["sensor.wican_a6_odometer"] = _sensor(f"{odo:.2f}", "mi")
+            states["sensor.wican_2f_fueltanklevel"] = _sensor(f"{fuel * 100:.2f}", "%")
+            await readings.poll_once(_at(minute))
+            minute += 1
+            odo += 5
+            fuel -= 5 / 18 / 26
+        minute += 10  # parked at the pump long enough to start a new trip
+        return odo, fuel
+
+    odo, _ = await drive(1000.0, 0.90, 48)  # nobody logs this fill-up...
+    odo, _ = await drive(odo, 0.95, 48)
+    assert len(vehicle.sensor_tanks) == 1
+    assert vehicle.sensor_tanks[0]["mpg"] == pytest.approx(18, rel=0.05)
+
+    # ...so the next logged full tank spans two tanks' miles: no mpg for it.
+    entry = await coordinator.async_add_fuel_entry(
+        vehicle.id, "2026-10-30", 1000, 70.0, gallons_added=20.0
+    )
+    entry = await coordinator.async_add_fuel_entry(
+        vehicle.id, "2026-10-31", round(odo), 70.0, gallons_added=20.0
+    )
+    assert entry.mpg is None
+    summary = build_states(coordinator.data)[f"sensor.garage_vehicle_{vehicle.id}"]
+    assert summary["attributes"]["average_mpg"] == pytest.approx(18, rel=0.05)
+
+
+async def _truck_with_driver(coordinator, **links):
+    vehicle = await _linked_truck(coordinator)
+    driver = await coordinator.async_add_driver("Jordan", notify_target="notify.mobile_app_phone")
+    await coordinator.async_edit_vehicle(
+        vehicle.id, tank_capacity_gal=26.0, primary_driver_id=driver.id, **links
+    )
+    coordinator.ha = FakeHa()
+    return vehicle
+
+
+def test_parse_gear_codes_and_letters():
+    from garage_addon.obd import parse_gear
+
+    assert [parse_gear(_sensor(v)) for v in ("13", "11", "0", "1", "8")] == [
+        "park",
+        "reverse",
+        "neutral",
+        "drive",
+        "drive",
+    ]
+    assert [parse_gear(_sensor(v)) for v in ("P", "R", "N", "D", "S")] == [
+        "park",
+        "reverse",
+        "neutral",
+        "drive",
+        "drive",
+    ]
+    assert parse_gear(_sensor("unavailable")) is None
+    assert parse_gear(_sensor("12")) is None
+
+
+async def test_gear_park_ends_the_trip_so_a_quick_fill_up_counts(coordinator):
+    from garage_addon.obd import LiveReadings
+
+    vehicle = await _truck_with_driver(coordinator, gear_entity_id="sensor.wican_gear")
+    states = {}
+    readings = LiveReadings(coordinator, FakeStatesHa(states))
+
+    async def poll(minute, odo, fuel, gear):
+        states["sensor.wican_a6_odometer"] = _sensor(str(odo), "mi")
+        states["sensor.wican_2f_fueltanklevel"] = _sensor(str(fuel), "%")
+        states["sensor.wican_gear"] = _sensor(gear)
+        await readings.poll_once(_at(minute))
+
+    for minute in range(5):  # driving to the pump
+        await poll(minute, 1000 + minute, 40 - minute * 0.2, "4")
+    # In Park at the pump - only a minute, too short to end a trip by time.
+    await poll(5, 1004, 96, "13")
+    assert coordinator.live_status[vehicle.id]["fuel"]["status"] == "parked"
+    for minute in range(6, 10):  # driving off
+        await poll(minute, 1000 + minute, 95, "3")
+
+    assert len(vehicle.sensor_tanks) == 1
+    fill = vehicle.sensor_tanks[0]
+    assert fill["gallons_added"] == pytest.approx(14.6, abs=0.5)
+    ((domain, service, data),) = coordinator.ha.calls
+    assert (domain, service) == ("notify", "mobile_app_phone")
+    assert "log your fill-up" in data["title"]
+    attributes = build_states(coordinator.data)[f"sensor.garage_vehicle_{vehicle.id}"][
+        "attributes"
+    ]
+    assert attributes["pending_fill_up"]["id"] == fill["id"]
+
+    # Logging it from the prompt clears it.
+    await coordinator.async_add_fuel_entry(
+        vehicle.id, "2026-10-30", 1004, 60.0, gallons_added=14.5, detected_fill_id=fill["id"]
+    )
+    attributes = build_states(coordinator.data)[f"sensor.garage_vehicle_{vehicle.id}"][
+        "attributes"
+    ]
+    assert attributes["pending_fill_up"] is None
+
+
+async def test_slosh_mid_trip_is_not_a_fill_up(coordinator):
+    from garage_addon.obd import LiveReadings
+
+    vehicle = await _truck_with_driver(coordinator, gear_entity_id="sensor.wican_gear")
+    states = {}
+    readings = LiveReadings(coordinator, FakeStatesHa(states))
+    fuel = [40, 40, 40, 40, 70, 70, 70, 70]  # a long hard-braking spike, still in Drive
+    for minute, level in enumerate(fuel):
+        states["sensor.wican_a6_odometer"] = _sensor(str(1000 + minute), "mi")
+        states["sensor.wican_2f_fueltanklevel"] = _sensor(str(level), "%")
+        states["sensor.wican_gear"] = _sensor("5")
+        await readings.poll_once(_at(minute))
+    assert vehicle.sensor_tanks == []
+    assert coordinator.ha.calls == []
+
+
+async def test_a_fill_up_logged_at_the_pump_isnt_prompted(coordinator):
+    from garage_addon.obd import LiveReadings
+
+    vehicle = await _truck_with_driver(coordinator, gear_entity_id="sensor.wican_gear")
+    states = {}
+    readings = LiveReadings(coordinator, FakeStatesHa(states))
+    for minute in range(4):
+        states["sensor.wican_a6_odometer"] = _sensor(str(1000 + minute), "mi")
+        states["sensor.wican_2f_fueltanklevel"] = _sensor("40", "%")
+        states["sensor.wican_gear"] = _sensor("4")
+        await readings.poll_once(_at(minute))
+    states["sensor.wican_gear"] = _sensor("13")
+    await readings.poll_once(_at(4))
+    await coordinator.async_add_fuel_entry(
+        vehicle.id, date.today().isoformat(), 1003, 60.0, gallons_added=14.5
+    )
+    for minute in range(5, 9):
+        states["sensor.wican_a6_odometer"] = _sensor(str(1000 + minute), "mi")
+        states["sensor.wican_2f_fueltanklevel"] = _sensor("95", "%")
+        states["sensor.wican_gear"] = _sensor("2")
+        await readings.poll_once(_at(minute))
+    assert len(vehicle.sensor_tanks) == 1
+    assert vehicle.sensor_tanks[0]["logged"]
+    assert coordinator.ha.calls == []
+
+
+async def test_dismissing_a_detected_fill_up(coordinator, config):
+    from garage_addon.services import async_call_service
+
+    vehicle = await _add_vehicle(coordinator)
+    vehicle.sensor_tanks.append(
+        {"id": "f1", "fill_odometer": 1500.0, "logged": False, "dismissed": False}
+    )
+    handlers = build_handlers(coordinator, config)
+    await async_call_service(
+        handlers, "dismiss_detected_fill", {"vehicle_id": vehicle.id, "fill_id": "f1"}
+    )
+    assert vehicle.sensor_tanks[0]["dismissed"]
+
+
+async def test_missed_fill_up_entry_gets_no_mpg(coordinator, config):
+    from garage_addon.services import async_call_service
+
+    vehicle = await _add_vehicle(coordinator)
+    handlers = build_handlers(coordinator, config)
+    base = {"vehicle_id": vehicle.id, "amount_dollars": 60.0, "gallons_added": 15.0}
+    await async_call_service(handlers, "log_fuel", {**base, "date": "2026-10-01", "odometer": 1000})
+    await async_call_service(
+        handlers,
+        "log_fuel",
+        {**base, "date": "2026-10-10", "odometer": 1300, "missed_fill_before": True},
+    )
+    entry = coordinator.fuel_entries_for_vehicle(vehicle.id)[-1]
+    assert entry.missed_fill_before and entry.mpg is None
+
+
+async def test_tire_readings_alert_once_per_problem(coordinator):
+    from garage_addon.obd import LiveReadings
+
+    tires = {p: f"sensor.wican_tire_{p}" for p in ("fl", "fr", "rl", "rr")}
+    vehicle = await _truck_with_driver(coordinator, tire_entity_ids=tires, tire_target_psi=36)
+    states = {}
+    readings = LiveReadings(coordinator, FakeStatesHa(states))
+
+    async def poll(minute, rl):
+        for position, psi in {"fl": 37, "fr": 37, "rl": rl, "rr": 36}.items():
+            states[tires[position]] = _sensor(str(psi), "psi")
+        await readings.poll_once(_at(minute))
+
+    await poll(0, 35)
+    assert vehicle.tire_pressures == {"fl": 37, "fr": 37, "rl": 35, "rr": 36}
+    assert coordinator.ha.calls == []
+    await poll(1, 30)
+    await poll(2, 30)  # still low - not notified again
+    messages = [c[2]["message"] for c in coordinator.ha.calls]
+    assert messages == ["Rear left tire is low (30 psi)", "Tire pressures are uneven (30-37 psi)"]
+    attributes = build_states(coordinator.data)[f"sensor.garage_vehicle_{vehicle.id}"][
+        "attributes"
+    ]
+    assert [a["key"] for a in attributes["tire_alerts"]] == ["low_rl", "uneven"]
+    assert attributes["health_score"] == 85
+    await poll(3, 36)  # aired up
+    assert vehicle.tire_alerts_notified == []
+    assert len(vehicle.tire_history) == 1  # one cold reading a day
+
+
+async def test_trouble_code_sensor_feeds_health_and_reminders(coordinator):
+    from garage_addon.obd import LiveReadings
+
+    vehicle = await _truck_with_driver(
+        coordinator, trouble_codes_entity_id="sensor.truck_trouble_codes"
+    )
+    states = {
+        "sensor.truck_trouble_codes": {
+            "state": "P0420",
+            "attributes": {"check_engine_light": "1"},
+        }
+    }
+    readings = LiveReadings(coordinator, FakeStatesHa(states))
+    await readings.poll_once(_at(0))
+    assert (vehicle.trouble_codes, vehicle.check_engine_light) == (["P0420"], True)
+    assert coordinator.live_status[vehicle.id]["trouble_codes"]["status"] == "ok"
+    reminders = coordinator.compute_reminders(date.today())
+    assert any(r["kind"] == "trouble_codes" and "P0420" in r["message"] for r in reminders)
+    attributes = build_states(coordinator.data)[f"sensor.garage_vehicle_{vehicle.id}"][
+        "attributes"
+    ]
+    assert "Check engine light: P0420" in [d["reason"] for d in attributes["health_deductions"]]
+
+    states["sensor.truck_trouble_codes"] = {"state": "All clear", "attributes": {}}
+    await readings.poll_once(_at(1))
+    assert vehicle.trouble_codes == []
+
+
 async def test_live_readings_report_missing_and_failing_sensors(coordinator, caplog):
     from garage_addon.ha_client import HomeAssistantError
     from garage_addon.obd import LiveReadings

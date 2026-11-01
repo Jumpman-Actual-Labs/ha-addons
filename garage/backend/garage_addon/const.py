@@ -102,6 +102,10 @@ HEALTH_SCORE_START = 100
 HEALTH_SCORE_DEDUCT_OVERDUE_MAINTENANCE = 15
 HEALTH_SCORE_DEDUCT_MAINTENANCE_DUE_SOON = 5
 HEALTH_SCORE_DEDUCT_LOW_FUEL = 5
+HEALTH_SCORE_DEDUCT_LOW_TIRE = 10
+HEALTH_SCORE_DEDUCT_TIRE_WARNING = 5  # uneven pressures, slow leak
+HEALTH_SCORE_DEDUCT_CHECK_ENGINE = 25  # trouble codes with the light on
+HEALTH_SCORE_DEDUCT_TROUBLE_CODES = 10  # stored/pending codes, light off
 
 # Paperwork, not mechanical condition: these maintenance items still show up
 # as due/overdue notifications but never count against the health score.
