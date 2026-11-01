@@ -19,6 +19,7 @@ from garage_addon.logic import (
     pending_fill_up,
     record_tire_history,
     spend_in_period,
+    suggest_sensor_links,
     tire_alerts,
     total_fuel_cost,
     total_maintenance_cost,
@@ -415,3 +416,50 @@ def test_health_score_counts_tires_and_trouble_codes():
         ("Tire pressures are uneven (30-37 psi)", 5),
         ("Check engine light: P0420", 25),
     ]
+
+
+def _wican(key: str, unit: str = "") -> dict:
+    slug = key.lower().replace(" ", "_").replace("-", "_")
+    return {"entity_id": f"sensor.wican_94a990dc061d_{slug}", "name": f"WiCAN {key}", "unit": unit}
+
+
+def test_suggest_sensor_links_from_a_wican():
+    sensors = [
+        _wican("A6-Odometer", "mi"),
+        _wican("2F-FuelTankLevel", "%"),
+        _wican("FUEL_GAL", "gal"),
+        _wican("Gear"),
+        _wican("GEAR_TARGET"),
+        _wican("FL Tire", "psi"),
+        _wican("FR Tire", "psi"),
+        _wican("RR Tire", "psi"),
+        _wican("RL Tire", "psi"),
+        _wican("TRAN_F_TEMP", "°F"),
+        _wican("batt_voltage", "V"),
+    ]
+    links = suggest_sensor_links(sensors)
+    w = "sensor.wican_94a990dc061d_"
+    assert links == {
+        "odometer_entity_id": w + "a6_odometer",
+        "fuel_level_entity_id": w + "2f_fueltanklevel",
+        "gear_entity_id": w + "gear",
+        "tire_entity_ids": {
+            "fl": w + "fl_tire",
+            "fr": w + "fr_tire",
+            "rl": w + "rl_tire",
+            "rr": w + "rr_tire",
+        },
+        "trouble_codes_entity_id": "",
+    }
+
+
+def test_suggest_sensor_links_spelled_out_tires_and_codes():
+    sensors = [
+        {"entity_id": "sensor.car_tire_pressure_front_left", "name": "Tire pressure front left"},
+        {"entity_id": "sensor.car_tire_temperature_front_left", "name": "Tire temp front left"},
+        {"entity_id": "sensor.truck_trouble_codes", "name": "Truck trouble codes"},
+    ]
+    links = suggest_sensor_links(sensors)
+    assert links["tire_entity_ids"] == {"fl": "sensor.car_tire_pressure_front_left"}
+    assert links["trouble_codes_entity_id"] == "sensor.truck_trouble_codes"
+    assert links["odometer_entity_id"] == ""

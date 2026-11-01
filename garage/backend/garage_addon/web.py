@@ -13,6 +13,9 @@ Serves the panel itself plus everything it used to get from Home Assistant:
 - `api/ha_sensors` - Home Assistant's sensors, for linking a vehicle's
   odometer / fuel level / gear / tires / trouble codes to an OBD dongle's
   (see obd.py). `numeric` marks the ones a number-only link can use.
+- `api/ha_devices` - Home Assistant devices with sensors Garage can link,
+  each with the links it suggests (logic.suggest_sensor_links), so picking
+  the dongle fills them all in.
 - `uploads/...` - uploaded documents and vehicle photos (was
   `/local/garage_documents/` and `/local/garage_vehicles/`).
 
@@ -43,6 +46,7 @@ from aiohttp import web
 from .config import AddonConfig
 from .coordinator import GarageCoordinator
 from .ha_client import HomeAssistantClient, HomeAssistantError
+from .logic import suggest_sensor_links
 from .lookups import LookupFailed, analyze_fuel_photo, decode_vin, get_openai_api_key
 from .services import Handler, ServiceError, async_call_service
 from .states import build_states
@@ -299,19 +303,11 @@ async def ha_users(request: web.Request) -> web.Response:
     )
 
 
-async def ha_sensors(request: web.Request) -> web.Response:
-    """Best-effort like ha_users - [] without Home Assistant. Every `sensor.*`
-    entity; `numeric` when its state is a number or currently unavailable
-    (an OBD dongle asleep with the car off still needs to be linkable) -
-    text ones are for gear letters and trouble codes."""
-    ha = request.app[HA_KEY]
-    if not isinstance(ha, HomeAssistantClient):
-        return web.json_response([])
-    try:
-        states = await ha.get_states()
-    except HomeAssistantError:
-        _LOGGER.warning("Couldn't list Home Assistant sensors", exc_info=True)
-        return web.json_response([])
+def _sensor_list(states: list[dict]) -> list[dict]:
+    """Every `sensor.*` entity; `numeric` when its state is a number or
+    currently unavailable (an OBD dongle asleep with the car off still
+    needs to be linkable) - text ones are for gear letters and trouble
+    codes."""
     sensors = []
     for state in states:
         entity_id = str(state.get("entity_id", ""))
@@ -335,7 +331,66 @@ async def ha_sensors(request: web.Request) -> web.Response:
             }
         )
     sensors.sort(key=lambda s: s["entity_id"])
-    return web.json_response(sensors)
+    return sensors
+
+
+async def ha_sensors(request: web.Request) -> web.Response:
+    """Best-effort like ha_users - [] without Home Assistant."""
+    ha = request.app[HA_KEY]
+    if not isinstance(ha, HomeAssistantClient):
+        return web.json_response([])
+    try:
+        states = await ha.get_states()
+    except HomeAssistantError:
+        _LOGGER.warning("Couldn't list Home Assistant sensors", exc_info=True)
+        return web.json_response([])
+    return web.json_response(_sensor_list(states))
+
+
+def device_links(states: list[dict], devices: list[dict], entities: list[dict]) -> list[dict]:
+    """Devices with at least one sensor Garage can link, most links first,
+    each with its suggested links."""
+    device_of = {e.get("entity_id"): e.get("device_id") for e in entities if e.get("device_id")}
+    by_device: dict[str, list[dict]] = {}
+    for sensor in _sensor_list(states):
+        device_id = device_of.get(sensor["entity_id"])
+        if device_id:
+            by_device.setdefault(device_id, []).append(sensor)
+    result = []
+    for device in devices:
+        sensors = by_device.get(device.get("id"))
+        if not sensors:
+            continue
+        links = suggest_sensor_links(sensors)
+        count = sum(1 for k, v in links.items() if v and k != "tire_entity_ids")
+        count += len(links["tire_entity_ids"])
+        if count:
+            result.append(
+                {
+                    "device_id": device["id"],
+                    "name": device.get("name_by_user") or device.get("name") or device["id"],
+                    "manufacturer": device.get("manufacturer") or "",
+                    "model": device.get("model") or "",
+                    "links": links,
+                    "link_count": count,
+                }
+            )
+    result.sort(key=lambda d: (-d["link_count"], d["name"].lower()))
+    return result
+
+
+async def ha_devices(request: web.Request) -> web.Response:
+    """Best-effort like ha_users - [] without Home Assistant."""
+    ha = request.app[HA_KEY]
+    if not isinstance(ha, HomeAssistantClient):
+        return web.json_response([])
+    try:
+        states = await ha.get_states()
+        devices, entities = await ha.list_devices_and_entities()
+    except HomeAssistantError:
+        _LOGGER.warning("Couldn't list Home Assistant devices", exc_info=True)
+        return web.json_response([])
+    return web.json_response(device_links(states, devices, entities))
 
 
 # ---------------------------------------------------------------- uploads
@@ -497,6 +552,7 @@ def create_app(
     app.router.add_post("/api/services/{service}", call_service)
     app.router.add_get("/api/ha_users", ha_users)
     app.router.add_get("/api/ha_sensors", ha_sensors)
+    app.router.add_get("/api/ha_devices", ha_devices)
     app.router.add_post("/api/upload", upload_document)
     app.router.add_post("/api/vehicle_photo", upload_vehicle_photo)
     app.router.add_post("/api/analyze_fuel_photo", analyze_fuel_photo_view)

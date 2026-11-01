@@ -76,7 +76,11 @@ Add-on layers around them:
   reminders, and (tires, once per alert key) a notification. Each poll's outcome goes to `coordinator.live_status`,
   which states.py exposes as the vehicle's `live_sensors` attribute (panel
   only, not MQTT) and `vehicle-readings.ts` shows under each reading.
-  `web.py`'s `api/ha_sensors` lists numeric sensors for the dialog's pickers.
+  `web.py`'s `api/ha_sensors` lists sensors (`numeric` flagged) for the
+  dialog's pickers; `api/ha_devices` groups them by HA device (registries
+  over the websocket, `ha_client.list_devices_and_entities`) with
+  `logic.suggest_sensor_links` name-matching, for the dialog's "Link a
+  device".
 - `lookups.py` - fuel pump photo scan (OpenAI vision) and VIN decode
   (NHTSA vPIC + optional OpenAI tank/oil capacity guess). Key: add-on
   option, then secrets.yaml (where the integration read it).

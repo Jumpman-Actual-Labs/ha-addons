@@ -54,6 +54,23 @@ export interface HaUserSummary {
   name: string;
 }
 
+/** A Home Assistant device (e.g. a WiCAN) and the vehicle sensor links
+ * Garage suggests from its sensors' names. */
+export interface HaDeviceLinks {
+  deviceId: string;
+  name: string;
+  manufacturer: string;
+  model: string;
+  linkCount: number;
+  links: {
+    odometer_entity_id: string;
+    fuel_level_entity_id: string;
+    gear_entity_id: string;
+    tire_entity_ids: Partial<Record<"fl" | "fr" | "rl" | "rr", string>>;
+    trouble_codes_entity_id: string;
+  };
+}
+
 export interface HaSensorSummary {
   entityId: string;
   name: string;
@@ -340,6 +357,28 @@ export const garageApi = {
       state: s.state,
       unit: s.unit,
       numeric: s.numeric ?? true,
+    }));
+  },
+  // Devices whose sensors can fill a vehicle's links in one go; [] when HA
+  // is unreachable.
+  async listHaDevices(): Promise<HaDeviceLinks[]> {
+    const response = await fetch("api/ha_devices");
+    if (!response.ok) return [];
+    const devices = (await response.json()) as Array<{
+      device_id: string;
+      name: string;
+      manufacturer: string;
+      model: string;
+      link_count: number;
+      links: HaDeviceLinks["links"];
+    }>;
+    return devices.map((d) => ({
+      deviceId: d.device_id,
+      name: d.name,
+      manufacturer: d.manufacturer,
+      model: d.model,
+      linkCount: d.link_count,
+      links: d.links,
     }));
   },
   logFuel(hass: HomeAssistant, fields: Record<string, unknown>) {

@@ -84,9 +84,11 @@ class HomeAssistantClient:
             return body.get("service_response")
         return None
 
-    async def list_users(self) -> list[dict[str, Any]]:
-        """`config/auth/list` only exists on the websocket API."""
+    async def _ws_commands(self, *command_types: str) -> list[Any]:
+        """Runs websocket-only commands (no REST equivalent) over one
+        connection, returning each one's result in order."""
         url = f"{self._base_url}/websocket".replace("http", "ws", 1)
+        results = []
         try:
             async with self._session.ws_connect(url, timeout=_TIMEOUT.total) as ws:
                 await ws.receive_json()  # auth_required
@@ -94,10 +96,25 @@ class HomeAssistantClient:
                 auth = await ws.receive_json()
                 if auth.get("type") != "auth_ok":
                     raise HomeAssistantError("Home Assistant rejected the add-on's token")
-                await ws.send_json({"id": 1, "type": "config/auth/list"})
-                result = await ws.receive_json()
+                for message_id, command_type in enumerate(command_types, start=1):
+                    await ws.send_json({"id": message_id, "type": command_type})
+                    result = await ws.receive_json()
+                    if not result.get("success"):
+                        raise HomeAssistantError(f"{command_type} failed: {result.get('error')}")
+                    results.append(result.get("result") or [])
         except (TimeoutError, aiohttp.ClientError, ValueError, TypeError) as err:
-            raise HomeAssistantError(f"Listing users failed: {err}") from err
-        if not result.get("success"):
-            raise HomeAssistantError(f"Listing users failed: {result.get('error')}")
-        return result.get("result") or []
+            raise HomeAssistantError(f"{', '.join(command_types)} failed: {err}") from err
+        return results
+
+    async def list_users(self) -> list[dict[str, Any]]:
+        """`config/auth/list` only exists on the websocket API."""
+        (users,) = await self._ws_commands("config/auth/list")
+        return users
+
+    async def list_devices_and_entities(self) -> tuple[list[dict], list[dict]]:
+        """The device and entity registries - which device each sensor
+        belongs to, for linking a whole OBD dongle at once."""
+        devices, entities = await self._ws_commands(
+            "config/device_registry/list", "config/entity_registry/list"
+        )
+        return devices, entities

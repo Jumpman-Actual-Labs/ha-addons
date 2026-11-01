@@ -1,6 +1,6 @@
 import { LitElement, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import type { HaSensorSummary, HomeAssistant } from "../ha-api";
+import type { HaDeviceLinks, HaSensorSummary, HomeAssistant } from "../ha-api";
 import { garageApi } from "../ha-api";
 import type { Driver, TirePosition, Vehicle } from "../types";
 import { formStyles } from "../styles";
@@ -48,6 +48,8 @@ export class GarageVehicleDialog extends LitElement {
   @state() private _tireTargetPsi = "";
   @state() private _troubleCodesEntityId = "";
   @state() private _haSensors: HaSensorSummary[] = [];
+  @state() private _haDevices: HaDeviceLinks[] = [];
+  @state() private _linkedDeviceNote = "";
   @state() private _saving = false;
   @state() private _photoPath: string | null = null;
   @state() private _photoUploading = false;
@@ -92,11 +94,27 @@ export class GarageVehicleDialog extends LitElement {
       this._tireTargetPsi = v?.tireTargetPsi != null ? String(v.tireTargetPsi) : "";
       this._troubleCodesEntityId = v?.troubleCodesEntityId ?? "";
       garageApi.listHaSensors().then((sensors) => (this._haSensors = sensors));
+      garageApi.listHaDevices().then((devices) => (this._haDevices = devices));
+      this._linkedDeviceNote = "";
       this._photoPath = v?.photoPath ?? null;
       this._photoError = "";
     }
     this._lastOpen = this.open;
     this._lastVehicleId = vehicleId;
+    // Lit sets a select's .value before rendering its options, so a link
+    // whose option is new (a device just picked, the sensor list arriving)
+    // shows blank - set it again now the options exist.
+    const links: Record<string, string> = {
+      "odometer-entity": this._odometerEntityId,
+      "fuel-level-entity": this._fuelLevelEntityId,
+      "gear-entity": this._gearEntityId,
+      "trouble-codes-entity": this._troubleCodesEntityId,
+      ...Object.fromEntries(TIRES.map(([p]) => [`tire-${p}`, this._tireEntityIds[p] ?? ""])),
+    };
+    for (const [id, value] of Object.entries(links)) {
+      const select = this.renderRoot.querySelector<HTMLSelectElement>(`#${id}`);
+      if (select && select.value !== value) select.value = value;
+    }
   }
 
   private async _decodeVin(): Promise<void> {
@@ -219,6 +237,29 @@ export class GarageVehicleDialog extends LitElement {
         </option>`
       )}
     `;
+  }
+
+  /** Fills every sensor link the device has a match for; links it has
+   * nothing for are left as they were. */
+  private _linkDevice(deviceId: string): void {
+    const device = this._haDevices.find((d) => d.deviceId === deviceId);
+    if (!device) return;
+    const { links } = device;
+    if (links.odometer_entity_id) this._odometerEntityId = links.odometer_entity_id;
+    if (links.fuel_level_entity_id) this._fuelLevelEntityId = links.fuel_level_entity_id;
+    if (links.gear_entity_id) this._gearEntityId = links.gear_entity_id;
+    if (links.trouble_codes_entity_id) this._troubleCodesEntityId = links.trouble_codes_entity_id;
+    this._tireEntityIds = { ...this._tireEntityIds, ...links.tire_entity_ids };
+    const missing = [
+      !links.odometer_entity_id && "odometer",
+      !links.fuel_level_entity_id && "fuel level",
+      !links.gear_entity_id && "gear",
+      Object.keys(links.tire_entity_ids).length < 4 && "tires",
+      !links.trouble_codes_entity_id && "trouble codes",
+    ].filter(Boolean);
+    this._linkedDeviceNote =
+      `Linked ${device.linkCount} sensor${device.linkCount === 1 ? "" : "s"} from ${device.name}.` +
+      (missing.length ? ` Not found on it: ${missing.join(", ")} - pick those below if they're elsewhere.` : "");
   }
 
   private _close(): void {
@@ -438,6 +479,25 @@ export class GarageVehicleDialog extends LitElement {
           fuel tank level) and Garage keeps Current Mileage and Fuel % up to
           date on its own, about once a minute. Mileage only ever goes up.
         </div>
+        ${this._haDevices.length
+          ? html`<label for="link-device">Link a device</label>
+              <select id="link-device"
+                @change=${(e: Event) => {
+                  this._linkDevice((e.target as HTMLSelectElement).value);
+                  (e.target as HTMLSelectElement).value = "";
+                }}
+              >
+                <option value="" selected>Choose a device to fill in its sensors…</option>
+                ${this._haDevices.map(
+                  (d) => html`<option value=${d.deviceId}>
+                    ${d.name}${d.model ? ` (${d.model})` : ""} · ${d.linkCount} sensor${d.linkCount === 1 ? "" : "s"}
+                  </option>`
+                )}
+              </select>
+              ${this._linkedDeviceNote
+                ? html`<div style="color: var(--secondary-text-color); font-size: 0.75rem;">${this._linkedDeviceNote}</div>`
+                : ""}`
+          : ""}
         <div class="row">
           <div>
             <label for="odometer-entity">Odometer sensor</label>

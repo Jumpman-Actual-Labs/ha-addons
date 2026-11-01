@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.1
+
+- **Link a device** in Edit Vehicle: pick an OBD dongle (e.g. your WiCAN)
+  and Garage fills in its odometer, fuel level, gear, tire and trouble-code
+  sensors by their names, and says which it couldn't find. Every link can
+  still be changed by hand.
+- Sensor pickers in Edit Vehicle no longer show blank right after a link
+  is filled in.
+
 ## 1.4.0
 
 - Average MPG no longer goes wild when fill-ups aren't logged. With a fuel

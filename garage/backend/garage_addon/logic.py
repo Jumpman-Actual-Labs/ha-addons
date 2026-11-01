@@ -496,3 +496,62 @@ def compute_health_score(
     )
     score = HEALTH_SCORE_START - sum(d["points"] for d in deductions)
     return max(0, min(100, score))
+
+
+# --------------------------------------------------------- linking a device
+
+_POSITION_WORDS = {
+    "fl": ({"fl"}, ("front", "left")),
+    "fr": ({"fr"}, ("front", "right")),
+    "rl": ({"rl"}, ("rear", "left")),
+    "rr": ({"rr"}, ("rear", "right")),
+}
+
+
+def _words(sensor: dict) -> set[str]:
+    text = f"{sensor.get('entity_id', '')} {sensor.get('name', '')}".lower()
+    return set(re.sub(r"[^a-z0-9]+", " ", text).split())
+
+
+def _first(sensors: list[dict], test, units: tuple[str, ...] = ()) -> str:
+    """The first sensor passing `test`, preferring one in `units`."""
+    matches = [s for s in sensors if test(_words(s))]
+    matches.sort(key=lambda s: str(s.get("unit", "")).lower() not in units)
+    return matches[0]["entity_id"] if matches else ""
+
+
+def suggest_sensor_links(sensors: list[dict]) -> dict:
+    """Which of a device's sensors (entity_id, name, unit) fill which of a
+    vehicle's sensor links, by their names - a WiCAN's `A6-Odometer`,
+    `2F-FuelTankLevel`, and custom PIDs named like `Gear`, `FL Tire`,
+    `Trouble Codes`. Empty strings where nothing fits."""
+
+    def tire_at(position: str):
+        short, (end, side) = _POSITION_WORDS[position]
+
+        def test(words: set[str]) -> bool:
+            tire = words & {"tire", "tires", "tyre", "tyres", "tpms", "tp"}
+            at = words & short or {end, side} <= words
+            return bool(tire and at) and "temp" not in words and "id" not in words
+
+        return test
+
+    tires = {p: _first(sensors, tire_at(p), ("psi", "kpa", "bar")) for p in TIRE_POSITIONS}
+    return {
+        "odometer_entity_id": _first(
+            sensors, lambda w: bool(w & {"odometer", "odo"}), ("mi", "km")
+        ),
+        "fuel_level_entity_id": _first(
+            sensors,
+            lambda w: "fueltanklevel" in w
+            or ("fuel" in w and bool(w & {"level", "tank"}) and not w & {"rate", "gal", "l"}),
+            ("%",),
+        ),
+        "gear_entity_id": _first(
+            sensors, lambda w: "gear" in w and not w & {"target", "cmd", "desired", "commanded"}
+        ),
+        "tire_entity_ids": {p: e for p, e in tires.items() if e},
+        "trouble_codes_entity_id": _first(
+            sensors, lambda w: bool(w & {"trouble", "dtc", "dtcs"}) or {"check", "engine"} <= w
+        ),
+    }

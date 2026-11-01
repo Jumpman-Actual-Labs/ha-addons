@@ -890,3 +890,39 @@ async def test_edit_vehicle_service_accepts_sensor_links(client, coordinator):
 async def test_ha_sensors_empty_without_home_assistant(client):
     resp = await client.get("/api/ha_sensors")
     assert await resp.json() == []
+
+
+def test_device_links_groups_sensors_by_device():
+    from garage_addon.web import device_links
+
+    states = [
+        {"entity_id": "sensor.wican_a6_odometer", "state": "112381.2",
+         "attributes": {"unit_of_measurement": "mi", "friendly_name": "WiCAN A6-Odometer"}},
+        {"entity_id": "sensor.wican_gear", "state": "13", "attributes": {}},
+        {"entity_id": "sensor.wican_batt_voltage", "state": "14", "attributes": {}},
+        {"entity_id": "sensor.phone_battery", "state": "80", "attributes": {}},
+        {"entity_id": "sensor.unlinked_odometer", "state": "5", "attributes": {}},
+    ]
+    devices = [
+        {"id": "d1", "name": "wican_94a990dc061d", "name_by_user": "Truck WiCAN",
+         "manufacturer": "MeatPi", "model": "WiCAN-Pro"},
+        {"id": "d2", "name": "Phone"},
+    ]
+    entities = [
+        {"entity_id": "sensor.wican_a6_odometer", "device_id": "d1"},
+        {"entity_id": "sensor.wican_gear", "device_id": "d1"},
+        {"entity_id": "sensor.wican_batt_voltage", "device_id": "d1"},
+        {"entity_id": "sensor.phone_battery", "device_id": "d2"},
+        {"entity_id": "sensor.unlinked_odometer", "device_id": None},
+    ]
+    (truck,) = device_links(states, devices, entities)
+    assert truck["name"] == "Truck WiCAN"
+    assert truck["link_count"] == 2
+    assert truck["links"]["odometer_entity_id"] == "sensor.wican_a6_odometer"
+    assert truck["links"]["gear_entity_id"] == "sensor.wican_gear"
+
+
+async def test_ha_devices_empty_without_home_assistant(client):
+    resp = await client.get("/api/ha_devices")
+    assert resp.status == 200
+    assert await resp.json() == []
