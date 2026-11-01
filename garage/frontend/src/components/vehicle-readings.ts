@@ -4,21 +4,34 @@ import type { LiveSensorStatus, TirePosition, Vehicle } from "../types";
 import { pct } from "../format";
 import { controlStyles } from "../styles";
 
+interface Source {
+  text: string;
+  /** "live" for a value the linked sensor is reporting right now (shown in
+   * the accent color), "problem" for a link that isn't working, "" for a
+   * saved, last-known or calculated value (shown off-white). */
+  cls: "live" | "problem" | "";
+}
+
 /** The source line under a reading: where the value came from and, for a
  * linked sensor, what the last poll found - so a link that isn't working
  * says so instead of quietly showing the old saved value. */
-function sourceLine(entityId: string, live: LiveSensorStatus | undefined) {
+function sourceLine(entityId: string, live: LiveSensorStatus | undefined): Source {
   if (!entityId) return { text: "Saved reading", cls: "" };
-  if (!live) return { text: "Sensor linked · waiting for first read", cls: "linked" };
-  const reading = live.state != null ? `${live.state}${live.unit ? ` ${live.unit}` : ""}` : "";
-  if (live.status === "ok") return { text: `Live · sensor reads ${reading}`, cls: "linked" };
-  if (live.status === "parked") {
-    return { text: `Parked (sensor reads ${reading}) · updates while driving`, cls: "linked" };
-  }
-  if (live.status === "unavailable") return { text: "Sensor asleep · showing last reading", cls: "" };
-  if (live.status === "missing") return { text: `${entityId} not found in Home Assistant`, cls: "problem" };
+  if (!live) return { text: "Waiting for the sensor's first reading", cls: "" };
+  if (live.status === "ok") return { text: "Live", cls: "live" };
+  if (live.status === "parked") return { text: "Last driving reading · updates on the road", cls: "" };
+  if (live.status === "unavailable") return { text: "Sensor asleep · last reading", cls: "" };
+  if (live.status === "missing") return { text: "Sensor not found in Home Assistant", cls: "problem" };
   return { text: "Couldn't read the sensor · check the add-on log", cls: "problem" };
 }
+
+/** One source line for a group of sensors (the tires): live if any is. */
+function groupSource(sources: Source[]): Source {
+  if (!sources.length) return { text: "Saved readings", cls: "" };
+  return sources.find((s) => s.cls === "live") ?? sources.find((s) => s.cls === "problem") ?? sources[0];
+}
+
+const psi = (value: number) => `${Math.round(value * 10) / 10}`;
 
 const TIRES: Array<[TirePosition, string]> = [
   ["fl", "Front left"],
@@ -46,11 +59,14 @@ export class GarageVehicleReadings extends LitElement {
     .label { display: flex; align-items: center; gap: 7px; color: var(--garage-muted); font-size: .75rem; }
     .label ha-icon { --mdc-icon-size: 17px; }
     .fuel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .fuel-head .value { margin: 0; color: var(--garage-accent); font-size: 2.25rem; }
-    .value { display: block; font-size: clamp(1.45rem, 2.2vw, 1.9rem); font-weight: 600; line-height: 1.2; letter-spacing: -.06em; font-variant-numeric: tabular-nums; margin: 9px 0 7px; overflow-wrap: anywhere; }
+    .fuel-head .value { margin: 0; font-size: 2.25rem; }
+    .value { display: block; color: var(--garage-text); font-size: clamp(1.45rem, 2.2vw, 1.9rem); font-weight: 600; line-height: 1.2; letter-spacing: -.06em; font-variant-numeric: tabular-nums; margin: 9px 0 7px; overflow-wrap: anywhere; }
+    /* Live sensor data in the accent color; saved, last-known and calculated
+       values stay off-white - the reading itself says where it came from. */
+    .value.live, .tires strong.live { color: var(--garage-accent); }
     .unit { font-size: .8rem; letter-spacing: 0; color: var(--garage-muted); font-weight: 400; }
     .source { display: block; color: var(--garage-muted); font-size: .75rem; line-height: 1.5; }
-    .source.linked { color: var(--garage-accent); }
+    .source.live { color: var(--garage-accent); }
     .source.problem { color: var(--garage-warning); }
     progress { display: block; width: 100%; height: 10px; margin: 15px 0 0; border: none; border-radius: 5px; overflow: hidden; appearance: none; accent-color: var(--garage-accent); background: var(--garage-raised); }
     progress::-webkit-progress-bar { background: var(--garage-raised); }
@@ -74,6 +90,7 @@ export class GarageVehicleReadings extends LitElement {
     .tires { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; margin-top: 10px; font-size: .78rem; }
     .tires span { display: flex; justify-content: space-between; color: var(--garage-muted); }
     .tires strong { color: var(--garage-text); font-variant-numeric: tabular-nums; font-weight: 550; }
+    .extra .source { margin-top: 8px; }
     .tires .bad strong { color: var(--garage-warning); }
     .alerts { margin: 10px 0 0; padding: 0; list-style: none; font-size: .74rem; color: var(--garage-warning); line-height: 1.6; }
     .codes { margin-top: 10px; font-size: .85rem; font-family: var(--garage-mono); overflow-wrap: anywhere; }
@@ -96,6 +113,13 @@ export class GarageVehicleReadings extends LitElement {
     const range = v.estimatedRangeMiles;
     const fuelSource = sourceLine(v.fuelLevelEntityId, v.liveSensors?.fuel);
     const odometerSource = sourceLine(v.odometerEntityId, v.liveSensors?.odometer);
+    const tireSources = Object.fromEntries(
+      TIRES.map(([p]) => [p, sourceLine(v.tireEntityIds[p] ?? "", v.liveSensors?.[`tire_${p}`])])
+    );
+    const tireSource = groupSource(
+      TIRES.filter(([p]) => v.tireEntityIds[p]).map(([p]) => tireSources[p])
+    );
+    const codesSource = sourceLine(v.troubleCodesEntityId, v.liveSensors?.trouble_codes);
     const fill = v.pendingFillUp;
     const lowTires = new Set(v.tireAlerts.filter((a) => a.kind !== "uneven").map((a) => a.key.slice(-2)));
     const hasTires = Object.keys(v.tireEntityIds).length > 0;
@@ -112,21 +136,25 @@ export class GarageVehicleReadings extends LitElement {
         <div class="reading fuel ${low ? "low" : ""}">
           <div class="fuel-head"><div><div class="label"><ha-icon aria-hidden="true" icon="mdi:gas-station-outline"></ha-icon>Fuel level</div>
             <span class="source ${fuelSource.cls}">${fuelSource.text}</span></div>
-            <strong class="value">${pct(fuel)}</strong></div>
+            <strong class="value ${fuelSource.cls}">${pct(fuel)}</strong></div>
           ${fuel !== null ? html`<progress aria-label=${`${v.nickname} fuel level`} max="1" value=${fuel}></progress>` : html`<span class="missing">No fuel reading yet</span>`}
           ${low ? html`<span class="warning"><ha-icon aria-hidden="true" icon="mdi:alert-circle-outline"></ha-icon>Low fuel</span>` : ""}
         </div>
         <div class="reading odometer"><div class="label"><ha-icon aria-hidden="true" icon="mdi:counter"></ha-icon>Odometer</div>
-          <strong class="value">${v.currentMileage.toLocaleString()} <span class="unit">mi</span></strong>
+          <strong class="value ${odometerSource.cls}">${v.currentMileage.toLocaleString()} <span class="unit">mi</span></strong>
           <span class="source ${odometerSource.cls}">${odometerSource.text}</span></div>
         <div class="reading range"><div class="label"><ha-icon aria-hidden="true" icon="mdi:map-marker-distance"></ha-icon>Estimated range</div>
-          <strong class="value">${range !== null ? html`${range.toLocaleString()} <span class="unit">mi</span>` : "—"}</strong>
-          <span class="source">${range !== null ? "Based on fuel & economy" : "Range unavailable"}</span></div>
+          <strong class="value">${range !== null ? html`${Math.round(range).toLocaleString()} <span class="unit">mi</span>` : "—"}</strong>
+          <span class="source">${range !== null ? "Estimated from fuel & economy" : "Range unavailable"}</span></div>
       </div>
       ${hasTires || v.troubleCodesEntityId ? html`<div class="extras">
         ${hasTires ? html`<div class="extra">
           <div class="label"><ha-icon aria-hidden="true" icon="mdi:tire"></ha-icon>Tire pressure${v.tireTargetPsi ? ` · target ${v.tireTargetPsi} psi` : ""}</div>
-          <div class="tires">${TIRES.map(([position, label]) => html`<span class=${lowTires.has(position) ? "bad" : ""}>${label}<strong>${v.tirePressures[position] != null ? `${v.tirePressures[position]} psi` : "—"}</strong></span>`)}</div>
+          <div class="tires">${TIRES.map(([position, label]) => {
+            const value = v.tirePressures[position];
+            return html`<span class=${lowTires.has(position) ? "bad" : ""}>${label}<strong class=${tireSources[position].cls}>${value != null ? `${psi(value)} psi` : "—"}</strong></span>`;
+          })}</div>
+          <span class="source ${tireSource.cls}">${tireSource.text}</span>
           ${v.tireAlerts.length ? html`<ul class="alerts">${v.tireAlerts.map((a) => html`<li>${a.message}</li>`)}</ul>` : ""}
         </div>` : ""}
         ${v.troubleCodesEntityId ? html`<div class="extra">
@@ -135,6 +163,7 @@ export class GarageVehicleReadings extends LitElement {
             ? html`<div class="codes ${v.checkEngineLight ? "light" : ""}">${v.troubleCodes.join("  ")}</div>
                 <span class="source">${v.checkEngineLight ? "Check engine light is on" : "Stored or pending · light off"}</span>`
             : html`<div class="codes clear">All clear</div>`}
+          <span class="source ${codesSource.cls}">${codesSource.text}</span>
         </div>` : ""}
       </div>` : ""}
       <div class="economy"><span>Average economy</span><strong>${v.averageMpg !== null ? `${v.averageMpg.toFixed(1)} MPG` : "Not enough fuel history"}</strong></div>

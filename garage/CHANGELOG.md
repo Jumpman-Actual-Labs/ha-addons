@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.4
+
+- Readings say where they came from at a glance: a value a linked sensor is
+  reporting right now is in the accent color and labeled **Live**; saved,
+  last-known (parked, sensor asleep) and calculated values are off-white.
+  Applies to fuel, odometer, range, tires and trouble codes.
+- The line under a reading no longer repeats the sensor's raw value (no more
+  `112342.426479361 mi`), and estimated range is whole miles.
+
 ## 1.4.3
 
 - Tire pressures no longer jump to 255 psi when the truck shuts off (the
