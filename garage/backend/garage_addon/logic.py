@@ -255,12 +255,31 @@ TIRE_UNEVEN_PSI = 4
 TIRE_LEAK_PSI = 2
 TIRE_LEAK_DAYS = 7
 TIRE_HISTORY_DAYS = 30
+# Above this no tire is really inflated - it's a sensor's "no reading"
+# (a TPMS module reports 0xFF = 255 once the truck shuts off).
+TIRE_MAX_PSI = 100
+
+
+def plausible_psi(value) -> bool:
+    return isinstance(value, int | float) and 0 < value <= TIRE_MAX_PSI
+
+
+def clean_tire_readings(vehicle: Vehicle) -> bool:
+    """Drops saved pressures and history days holding a "no reading" value
+    (saved before those were filtered out). Returns whether it dropped any."""
+    pressures = {p: v for p, v in vehicle.tire_pressures.items() if plausible_psi(v)}
+    history = [
+        h for h in vehicle.tire_history if all(plausible_psi(h.get(p)) for p in TIRE_POSITIONS)
+    ]
+    changed = pressures != vehicle.tire_pressures or history != vehicle.tire_history
+    vehicle.tire_pressures, vehicle.tire_history = pressures, history
+    return changed
 
 
 def record_tire_history(history: list[dict], date_str: str, pressures: dict) -> bool:
     """Keep the day's first full set of readings (cold tires, before driving
     warms them) for slow-leak trends. Returns whether it added one."""
-    if any(p not in pressures for p in TIRE_POSITIONS):
+    if not all(plausible_psi(pressures.get(p)) for p in TIRE_POSITIONS):
         return False
     if history and history[-1]["date"] == date_str:
         return False
@@ -280,6 +299,7 @@ def tire_alerts(
     """Low tires, uneven pressures and slow leaks, as {key, kind, message}.
     `key` stays the same while the problem lasts, so it's notified once."""
     alerts: list[dict] = []
+    pressures = {p: v for p, v in pressures.items() if plausible_psi(v)}
     low_below = target_psi - TIRE_LOW_MARGIN_PSI if target_psi else TIRE_LOW_DEFAULT_PSI
     for position in TIRE_POSITIONS:
         psi = pressures.get(position)

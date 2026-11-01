@@ -947,3 +947,43 @@ def test_devices_by_name_groups_a_wicans_sensors():
     (wican,) = [d for d in device_links(states, *_devices_by_name(states)) if d["link_count"]]
     assert wican["name"] == "wican_94a990dc061d"
     assert wican["links"]["tire_entity_ids"] == {"fl": "sensor.wican_94a990dc061d_fl_tire"}
+
+
+async def test_tires_reading_255_with_the_truck_off_keep_the_last_pressure(coordinator):
+    from garage_addon.obd import LiveReadings, parse_psi
+
+    assert parse_psi(_sensor("255", "psi")) is None
+    assert parse_psi(_sensor("0", "psi")) is None
+    assert parse_psi(_sensor("240", "kPa")) == 34.8
+
+    tires = {p: f"sensor.wican_tire_{p}" for p in ("fl", "fr", "rl", "rr")}
+    vehicle = await _truck_with_driver(coordinator, tire_entity_ids=tires, tire_target_psi=35)
+    states = {}
+    readings = LiveReadings(coordinator, FakeStatesHa(states))
+    for position, psi in {"fl": 34, "fr": 34, "rl": 33, "rr": 36}.items():
+        states[tires[position]] = _sensor(str(psi), "psi")
+    await readings.poll_once(_at(0))
+    for position in tires:
+        states[tires[position]] = _sensor("255", "psi")
+    await readings.poll_once(_at(1))
+    assert vehicle.tire_pressures == {"fl": 34, "fr": 34, "rl": 33, "rr": 36}
+    assert coordinator.ha.calls == []  # no "uneven" alert from 255s
+
+
+async def test_saved_255_tire_readings_are_cleaned_up_on_load(config):
+    store = GarageStore(config.store_path)
+    coord = GarageCoordinator(store)
+    await coord.async_load()
+    vehicle = await _add_vehicle(coord)
+    vehicle.tire_pressures = {"fl": 255, "fr": 34, "rl": 255, "rr": 255}
+    vehicle.tire_history = [
+        {"date": "2026-11-01", "fl": 255, "fr": 255, "rl": 255, "rr": 255},
+        {"date": "2026-11-02", "fl": 34, "fr": 34, "rl": 33, "rr": 36},
+    ]
+    await coord._async_save()
+
+    reloaded = GarageCoordinator(store)
+    await reloaded.async_load()
+    (v,) = reloaded.vehicles
+    assert v.tire_pressures == {"fr": 34}
+    assert [h["date"] for h in v.tire_history] == ["2026-11-02"]

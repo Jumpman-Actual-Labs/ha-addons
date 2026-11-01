@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.3
+
+- Tire pressures no longer jump to 255 psi when the truck shuts off (the
+  tire module's "no reading" value): anything over 100 psi, or 0, is
+  ignored and the last good pressure stays. Saved 255s are cleaned up, so
+  they no longer set off the uneven-pressure alert or skew slow-leak trends.
+- A tire that misses one reading keeps its last pressure instead of
+  disappearing.
+
 ## 1.4.2
 
 - **Vehicle device** replaces Link a device as the first choice under Live

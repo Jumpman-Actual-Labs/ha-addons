@@ -10,6 +10,7 @@ from .ha_client import HomeAssistantClient, HomeAssistantError
 from .logic import (
     average_mpg,
     average_price_per_gallon,
+    clean_tire_readings,
     compute_fuel_entry_derived,
     compute_health_score,
     estimate_fuel_pct_after_partial_fill,
@@ -256,10 +257,12 @@ class GarageCoordinator:
         )
         self.archive = raw.get("archive", {})
 
-        added_defaults = self._reconcile_default_maintenance_templates()
+        needs_save = self._reconcile_default_maintenance_templates()
+        for vehicle in self.vehicles:
+            needs_save |= clean_tire_readings(vehicle)
 
         self.async_set_updated_data(self._build_public_data())
-        if added_defaults:
+        if needs_save:
             await self._async_save()
 
     def _reconcile_default_maintenance_templates(self) -> bool:
@@ -830,9 +833,11 @@ class GarageCoordinator:
         )
 
     async def _async_apply_tires(self, vehicle: Vehicle, tires: dict[str, float]) -> bool:
-        changed = False
-        if tires != vehicle.tire_pressures:
-            vehicle.tire_pressures = dict(tires)
+        changed = clean_tire_readings(vehicle)
+        # A tire that didn't read this time keeps its last good pressure.
+        pressures = {**vehicle.tire_pressures, **tires}
+        if pressures != vehicle.tire_pressures:
+            vehicle.tire_pressures = pressures
             changed = True
         today = date.today()
         changed |= record_tire_history(vehicle.tire_history, today.isoformat(), tires)

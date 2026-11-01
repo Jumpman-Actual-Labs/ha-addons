@@ -46,7 +46,7 @@ from typing import Any
 
 from .coordinator import GarageCoordinator
 from .ha_client import HomeAssistantClient, HomeAssistantError
-from .logic import TIRE_POSITIONS, parse_trouble_codes
+from .logic import TIRE_POSITIONS, parse_trouble_codes, plausible_psi
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -135,12 +135,14 @@ def parse_gear(state: dict[str, Any] | None) -> str | None:
 
 
 def parse_psi(state: dict[str, Any] | None) -> float | None:
-    """A tire pressure in psi; kPa and bar sensors are converted."""
+    """A tire pressure in psi; kPa and bar sensors are converted. None for a
+    "no reading" value (a TPMS module's 255 with the truck off)."""
     reading = _number(state)
-    if reading is None or reading[0] == 0:
+    if reading is None:
         return None
     value, unit = reading
-    return round(value * _PSI_PER.get(unit, 1), 1)
+    psi = round(value * _PSI_PER.get(unit, 1), 1)
+    return psi if plausible_psi(psi) else None
 
 
 @dataclass
