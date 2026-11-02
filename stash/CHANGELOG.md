@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.4
+
+- Bills > Outstanding now shows only what's owed this pay period (overdue
+  bills plus anything due before the next period starts). Later bills, like
+  next month's rent, moved to a new Upcoming filter. The Outstanding total
+  shows the period's last day. Without pay schedules it uses the month.
+
 ## 1.0.3
 
 - Panel now visible to non-admin users. Added Allowed users option to restrict access to specific accounts.

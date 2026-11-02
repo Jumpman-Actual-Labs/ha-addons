@@ -10,7 +10,8 @@ import type {
   Frequency,
 } from "../types";
 import { money } from "../format";
-import { compareBills, groupBillSeries, lastPaymentDate, isOverdue, outstandingInSeries, remainingForBill, seriesPayTo, type BillSeries, type BillSortKey, type SortDirection } from "../bill-selectors";
+import { outstandingThisPeriod } from "../pay-period";
+import { compareBills, groupBillSeries, lastPaymentDate, localDate, isOverdue, outstandingInSeries, remainingForBill, seriesPayTo, type BillSeries, type BillSortKey, type SortDirection } from "../bill-selectors";
 import { glassCardStyle, bankingStyle } from "../styles";
 import { paletteColor } from "../colors";
 import "../components/finance-dialog";
@@ -715,16 +716,23 @@ export class FinanceBillsView extends LitElement {
     const totalBudget = categories.reduce((sum, c) => sum + c.total, 0);
     const knownCategoryIds = new Set(categories.map((c) => c.categoryId));
     const currentMonth = today().slice(0, 7);
+    // Outstanding = still owed and due before this pay period ends; anything
+    // later is Upcoming, so next month's bills don't crowd the list.
+    const owed = outstandingThisPeriod(this.financeState, localDate());
+    const owedIds = new Set(owed.bills.map(b => b.billId));
+    const periodLastDay = new Date(owed.end + "T12:00:00");
+    periodLastDay.setDate(periodLastDay.getDate() - 1);
+    const periodThrough = periodLastDay.toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const visibleBills = this.financeState.bills.filter(b => {
       const match = `${b.name} ${b.payTo}`.toLowerCase().includes(this._search.toLowerCase());
       return match && (this._filter === "all" ||
-        (this._filter === "outstanding" && b.status !== "paid") ||
+        (this._filter === "outstanding" && owedIds.has(b.billId)) ||
+        (this._filter === "upcoming" && b.status !== "paid" && !owedIds.has(b.billId)) ||
         (this._filter === "overdue" && isOverdue(b)) ||
         (this._filter === "deferred" && b.status === "deferred") ||
         (this._filter === "paid" && b.status === "paid"));
     }).sort((a, b) => compareBills(a, b, this._sort, this._sortDirection));
-    const unpaid = this.financeState.bills.filter(b => b.status !== "paid");
-    const late = unpaid.filter(b => isOverdue(b));
+    const late = this.financeState.bills.filter(b => isOverdue(b));
     // Budgets: one row per bill, not per occurrence - an overdue occurrence
     // and the next one due show as a single row (the overdue one).
     const monthSeries = groupBillSeries(this.financeState.bills, currentMonth)
@@ -754,14 +762,14 @@ export class FinanceBillsView extends LitElement {
 
       ${this.section === "bills" ? html`
         <div class="bill-metrics">
-          <div><span>Outstanding · all dates</span><strong>${money(unpaid.reduce((sum, b) => sum + remainingForBill(b), 0))}</strong></div>
+          <div><span>Outstanding · through ${periodThrough}</span><strong>${money(owed.bills.reduce((sum, b) => sum + remainingForBill(b), 0))}</strong></div>
           <div class="late"><span>Overdue · ${late.length} bills</span><strong>${money(late.reduce((sum, b) => sum + remainingForBill(b), 0))}</strong></div>
           <div class="done"><span>Paid this month</span><strong>${money(this.financeState.summary.paid)}</strong></div>
         </div>
         <div class="bill-controls">
           <input type="search" aria-label="Search bills" placeholder="Search bills or payees" .value=${this._search} @input=${(e: InputEvent) => (this._search = (e.target as HTMLInputElement).value)} />
           <select aria-label="Bill status" .value=${this._filter} @change=${(e: Event) => (this._filter = (e.target as HTMLSelectElement).value)}>
-            <option value="outstanding">Outstanding</option><option value="overdue">Overdue</option><option value="deferred">Deferred</option><option value="paid">Paid</option><option value="all">All bills</option>
+            <option value="outstanding">Outstanding this pay period</option><option value="upcoming">Upcoming</option><option value="overdue">Overdue</option><option value="deferred">Deferred</option><option value="paid">Paid</option><option value="all">All bills</option>
           </select>
         </div>
         <div class="sort-controls">

@@ -161,3 +161,20 @@ export function periodPlan(data: FinanceState, today: string) {
   const balance = { current: sum("current"), next: sum("next"), transfer: sum("transfer"), currentAfter: sum("currentAfter"), nextAfter: sum("nextAfter") };
   return { start, end, nextEnd, current, next, carryover, total, remaining, paid: round(total - remaining), carryoverTotal, nextTotal, cushionMembers, balance };
 }
+
+// What the Bills list calls "outstanding": anything still owed that's due
+// before the current pay period ends (overdue included). Bills due after it
+// are upcoming, not outstanding. Without pay schedules, the period falls back
+// to the calendar month.
+export function outstandingThisPeriod(data: FinanceState, today: string) {
+  const plan = periodPlan(data, today);
+  if (plan) return { end: plan.end, bills: plan.current.filter(b => remainingForBill(b) > 0) };
+  const next = date(today.slice(0, 7) + "-01");
+  next.setUTCMonth(next.getUTCMonth() + 1);
+  const end = iso(next);
+  const bills = data.bills.filter(b => {
+    const due = b.status === "deferred" ? b.deferredUntil : b.dueDate;
+    return due && due < end && remainingForBill(b) > 0;
+  }).sort(dueOrder);
+  return { end, bills };
+}

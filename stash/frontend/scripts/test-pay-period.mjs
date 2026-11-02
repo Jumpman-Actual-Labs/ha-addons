@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 const output = mkdtempSync(join(tmpdir(), 'stash-period-'));
 try {
   execFileSync(process.execPath, [resolve('node_modules/typescript/bin/tsc'), 'src/pay-period.ts', '--module', 'commonjs', '--target', 'ES2020', '--skipLibCheck', '--outDir', output], { stdio: 'inherit' });
-  const { payDates, balanceResponsibilities, periodPlan, cushionFlow, incomeBetween, budgetFunding, periodPayments } = createRequire(import.meta.url)(join(output, 'pay-period.js'));
+  const { payDates, balanceResponsibilities, periodPlan, cushionFlow, incomeBetween, budgetFunding, periodPayments, outstandingThisPeriod } = createRequire(import.meta.url)(join(output, 'pay-period.js'));
   const member = { memberId:'m1', name:'Jordan', income: 6000, payFrequency: 'semi_monthly', payDays: [1, 15], payAnchorDate: null };
   const fundingMember = {...member, income:10195.98, budgetResponsibleAmount:10432.62};
   const funding = budgetFunding(fundingMember, '2026-10-15', '2026-11-01');
@@ -88,5 +88,11 @@ try {
   assert.equal(early.balance.transfer,1400,'equal bills, but the later period has 2800 less income: save half');
   assert.equal(periodPlan(unevenData,'2026-10-20').balance.transfer,0,'tighter period has nothing to set aside');
   assert.equal(incomeBetween(uneven,'2026-10-01','2026-11-01'),8800,'a month of paychecks');
+  const owed = outstandingThisPeriod(data,'2026-09-24');
+  assert.equal(owed.end,'2026-10-01');
+  assert.deepEqual(owed.bills.map(b=>b.billId),['carry','partial'],'overdue + due this period; paid, next-period and deferred-past-period bills are not outstanding');
+  const noSchedule = outstandingThisPeriod({...data,members:[]},'2026-09-24');
+  assert.equal(noSchedule.end,'2026-10-01','falls back to the calendar month');
+  assert.deepEqual(noSchedule.bills.map(b=>b.billId),['carry','partial']);
   console.log('Pay-period boundaries, partial payments, carryover, deferrals, schedules, individual ownership and responsibility-only cushion checks passed.');
 } finally { rmSync(output, { recursive:true, force:true }); }
