@@ -132,6 +132,7 @@ class GainsCoordinator(JointSessionMixin, TrainingCoordinatorMixin):
             "preferred_duration_minutes",
             "rest_timer_seconds",
             "onboarding_complete",
+            "auto_accept_joint_invites",
             "bodyweight",
             "age",
         ):

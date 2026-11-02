@@ -80,3 +80,14 @@ test("150 lb squat uses 45 + 5 + 2.5 per side from the reported gym inventory", 
   assert.deepEqual(result.counts,[{plate:45,count:1},{plate:5,count:1},{plate:2.5,count:1}]);
   assert.equal(buildPlateLoadout(85,45,[{weight:10,count:1}]).exact,false);
 });
+
+test("muscle filter matches primary muscles only, not secondary", () => {
+  const lib = [
+    {id:"bench",name:"Bench",category:"push",equipment:"barbell",muscles:{primary:["chest"],secondary:["triceps"]}},
+    {id:"pushdown",name:"Pushdown",category:"push",equipment:"cable",muscles:{primary:["triceps"],secondary:[]}},
+    {id:"dip",name:"Dip",category:"push",equipment:"bodyweight",muscles:{primary:["chest"],secondary:["triceps"]}},
+  ];
+  const ok = {feasible:true,selectable:true,reasons:[],loads:[0]};
+  const result = replacementLibrary(lib,undefined,{bench:ok,pushdown:ok,dip:ok},{...filters,mode:"all",muscle:"triceps"});
+  assert.deepEqual(result.map(x=>x.exercise.id),["pushdown"]);
+});

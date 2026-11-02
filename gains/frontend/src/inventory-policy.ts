@@ -65,7 +65,9 @@ export function replacementLibrary(library: ExerciseDef[], current: ExerciseDef 
     .filter(({exercise: e, availability: a, score}) =>
       (filters.showUnavailable || a.selectable || a.feasible) &&
       (!filters.search || `${e.name} ${e.id}`.toLowerCase().includes(filters.search.trim().toLowerCase())) &&
-      (!filters.muscle || [...(e.muscles?.primary ?? []), ...(e.muscles?.secondary ?? [])].includes(filters.muscle as never)) &&
+      // Primary only: picking "Lats" should find lat exercises, not every
+      // row or curl that touches the lats secondarily.
+      (!filters.muscle || (e.muscles?.primary ?? []).includes(filters.muscle as never)) &&
       (!filters.equipment || e.equipment === filters.equipment) &&
       (!filters.movement || e.category === filters.movement) &&
       (filters.mode === "all" || score >= 3))
@@ -74,10 +76,12 @@ export function replacementLibrary(library: ExerciseDef[], current: ExerciseDef 
 }
 
 
-/** Counts match the gym editor: each entry is one matched pair of plates. */
+/** Counts match the gym editor: each entry is one matched pair of plates.
+ * loadingPoints is how many places take plates evenly: 2 for a barbell's
+ * sleeves, 1 for a landmine's single sleeve or a single pulley pin. */
 export function buildPlateLoadout(totalWeight: number, barWeight: number,
-  inventory: { weight: number; count: number }[]) {
-  const perSide = Math.max(0, (totalWeight - barWeight) / 2);
+  inventory: { weight: number; count: number }[], loadingPoints = 2) {
+  const perSide = Math.max(0, (totalWeight - barWeight) / loadingPoints);
   const empty = { perSide, counts: [] as {plate:number;count:number}[], remainder: perSide,
     exact: false, belowBar: totalWeight + 0.01 < barWeight };
   if (!Number.isFinite(totalWeight) || totalWeight <= 0 || empty.belowBar) return empty;
@@ -89,7 +93,8 @@ export function buildPlateLoadout(totalWeight: number, barWeight: number,
     const next = new Map(totals);
     const weight = Math.round(item.weight * scale);
     for (const [total, combination] of totals) {
-      for (let count = 1; count <= Math.floor(item.count) && total + count * weight <= target + 10; count++) {
+      const perPoint = Math.floor((Math.floor(item.count) * 2) / loadingPoints);
+      for (let count = 1; count <= perPoint && total + count * weight <= target + 10; count++) {
         const candidate = [...combination, {plate:item.weight,count}];
         const previous = next.get(total + count * weight);
         const pieces = candidate.reduce((n,p) => n+p.count,0);

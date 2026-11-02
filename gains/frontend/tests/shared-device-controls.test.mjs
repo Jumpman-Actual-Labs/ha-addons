@@ -37,7 +37,7 @@ function fixture() {
   Object.assign(screen,{gainsState:{workouts:[workout],profile:{profileId:"a",units:"imperial",personalRecords:{},restTimerSeconds:60}},
     hass:{},_draftLogs:{},_savingSet:null,_error:"",_effortPromptExerciseIndex:null,
     _persistSession(){},_startRestTimer(){},dispatchEvent(){},_closeTimedSetTimer(){this._timedSetTimer=null;},
-    _renderVideoModal:()=>"",_renderTimedSetTimerDialog:()=>"",_renderLoadingPickerDialog:()=>"",_renderRestTimerBanner:()=>"",
+    _renderVideoModal:()=>"",_renderWarmups:()=>"",_renderTimedSetTimerDialog:()=>"",_renderLoadingPickerDialog:()=>"",_renderRestTimerBanner:()=>"",
   });
   return {screen,workout,session};
 }

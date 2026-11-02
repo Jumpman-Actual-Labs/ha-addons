@@ -334,6 +334,7 @@ function parseProfile(entity: HassEntity): AthleteProfile {
     activityLevel: strOrNull(a.activity_level) as ActivityLevel | null,
     preferredDurationMinutes: numOrNull(a.preferred_duration_minutes),
     restTimerSeconds: numOrNull(a.rest_timer_seconds) ?? 60,
+    autoAcceptJointInvites: a.auto_accept_joint_invites !== false,
     preferredSequencingPolicy: a.preferred_sequencing_policy === "calendar" || a.preferred_sequencing_policy === "completion" ? a.preferred_sequencing_policy : undefined,
     isAdmin: bool(a.is_admin),
     onboardingComplete: bool(a.onboarding_complete),
@@ -418,6 +419,7 @@ export const gainsApi = {
       activity_level?: ActivityLevel;
       preferred_duration_minutes?: number;
       rest_timer_seconds?: number;
+      auto_accept_joint_invites?: boolean;
       preferred_sequencing_policy?: "calendar" | "completion";
       onboarding_complete?: boolean;
       bodyweight?: number;

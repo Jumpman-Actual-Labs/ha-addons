@@ -310,6 +310,12 @@ class JointSessionMixin:
                 created_at=datetime.now(UTC).isoformat(),
             )
             self.data.share_requests.append(request)
+            if partner.auto_accept_joint_invites:
+                # Accepted on the partner's behalf, as if they'd tapped Accept.
+                other = await self._async_start_joint_invite(
+                    partner.ha_user_id, request, profile, partner, workout, mode
+                )
+                return {"invite_id": request.id, "pending": False, "workout_id": other.id}
             await self._async_save()
             return {"invite_id": request.id, "pending": True}
         elif action in {"log_set", "log_effort", "complete_workout", "set_bar"}:

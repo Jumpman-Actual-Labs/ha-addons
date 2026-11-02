@@ -234,6 +234,7 @@ def profile_extra_attributes(
         ATTR_ACTIVITY_LEVEL: profile.activity_level,
         ATTR_PREFERRED_DURATION_MINUTES: profile.preferred_duration_minutes,
         ATTR_REST_TIMER_SECONDS: profile.rest_timer_seconds,
+        "auto_accept_joint_invites": profile.auto_accept_joint_invites,
         "preferred_sequencing_policy": profile.preferred_sequencing_policy,
         ATTR_IS_ADMIN: profile.is_admin,
         ATTR_ONBOARDING_COMPLETE: profile.onboarding_complete,

@@ -222,6 +222,9 @@ class AthleteProfile:
     activity_level: str | None = None
     preferred_duration_minutes: int | None = None
     rest_timer_seconds: int = 60
+    # Workout Together invites to this athlete start the joint session
+    # straight away instead of waiting in their invite list.
+    auto_accept_joint_invites: bool = True
     """Default rest-period timer between sets, in seconds -- one of
     const.py's REST_TIMER_OPTIONS. Purely a panel display preference (the
     backend doesn't run the countdown itself); update_profile validates it
@@ -281,6 +284,7 @@ class AthleteProfile:
             "activity_level": self.activity_level,
             "preferred_duration_minutes": self.preferred_duration_minutes,
             "rest_timer_seconds": self.rest_timer_seconds,
+            "auto_accept_joint_invites": self.auto_accept_joint_invites,
             "is_admin": self.is_admin,
             "onboarding_complete": self.onboarding_complete,
             "created_at": self.created_at,
@@ -313,6 +317,7 @@ class AthleteProfile:
             activity_level=_as_str(data, "activity_level"),
             preferred_duration_minutes=_as_int(data, "preferred_duration_minutes"),
             rest_timer_seconds=_as_int(data, "rest_timer_seconds", 60) or 60,
+            auto_accept_joint_invites=_as_bool(data, "auto_accept_joint_invites", True),
             is_admin=_as_bool(data, "is_admin", False),
             onboarding_complete=_as_bool(data, "onboarding_complete", False),
             created_at=_as_str(data, "created_at", "") or "",
