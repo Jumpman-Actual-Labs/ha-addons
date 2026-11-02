@@ -64,10 +64,15 @@ test("only plate-loaded cable stations get a plate loader", () => {
     lat_pulldown_cable: {loadType: "plate_loaded", baseWeight: 0, loadingPoints: 1},
   };
   assert.deepEqual(plateLoadedStation("cable_fly", null, equipment, config),
-    {equipmentId: "crossover_cable", baseWeight: 10, loadingPoints: 2});
+    {equipmentId: "crossover_cable", baseWeight: 10, loadingPoints: 2, assumed: false});
   assert.deepEqual(plateLoadedStation("lat_pulldown", null, equipment, config).equipmentId, "crossover_cable");
   assert.equal(plateLoadedStation("cable_fly", "cable_tower", equipment, config), null);
   assert.equal(plateLoadedStation("cable_fly", null, {}, config), null);
+  // Blank loading points / base load in the gym editor: still a loader,
+  // assuming one pin and no base.
+  assert.deepEqual(plateLoadedStation("close_grip_lat_pulldown", null, {lat_pulldown_cable: [null]},
+    {lat_pulldown_cable: {loadType: "plate_loaded", baseWeight: null, loadingPoints: null}}),
+    {equipmentId: "lat_pulldown_cable", baseWeight: 0, loadingPoints: 1, assumed: true});
   assert.equal(plateLoadedStation("cable_fly", null, equipment,
-    {crossover_cable: {loadType: "plate_loaded", baseWeight: null, loadingPoints: 2}}), null);
+    {crossover_cable: {loadType: "plate_loaded", baseWeight: 15, loadingPoints: null}}).assumed, true);
 });

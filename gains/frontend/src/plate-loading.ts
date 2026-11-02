@@ -39,6 +39,9 @@ export interface PulleyStation {
   equipmentId: string;
   baseWeight: number;
   loadingPoints: 1 | 2;
+  /** Loading points or base load were left blank in the gym editor, so one
+   * pin and no base weight are assumed. */
+  assumed: boolean;
 }
 
 /** The plate-loaded station a cable exercise uses at this gym, or null when
@@ -52,11 +55,14 @@ export function plateLoadedStation(
   for (const equipmentId of [...cableStations(exerciseId, requiredEquipmentId)].sort()) {
     const station = config[equipmentId];
     if (!equipment[equipmentId]?.length || station?.loadType !== "plate_loaded") continue;
-    const points = station.loadingPoints;
-    const base = station.baseWeight;
-    if ((points === 1 || points === 2) && typeof base === "number" && Number.isFinite(base) && base >= 0) {
-      return { equipmentId, baseWeight: base, loadingPoints: points };
-    }
+    // The gym editor leaves "Loading points" and "Base load" blank until
+    // they're picked; a plate-loaded station still takes plates, so assume
+    // the common single pin with no base rather than hiding the loader.
+    const points = station.loadingPoints === 2 ? 2 : 1;
+    const base = typeof station.baseWeight === "number" && Number.isFinite(station.baseWeight) && station.baseWeight >= 0
+      ? station.baseWeight : 0;
+    const assumed = (station.loadingPoints !== 1 && station.loadingPoints !== 2) || base !== station.baseWeight;
+    return { equipmentId, baseWeight: base, loadingPoints: points, assumed };
   }
   return null;
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.10
+
+- Plate-loaded cable stations get the plate loader even when "Loading
+  points" or "Base load" were left blank in the gym's equipment settings:
+  it assumes one pin and no base weight and says so. Fill both in for
+  exact totals and weight suggestions.
+
 ## 1.0.9
 
 - Warm-up sets: the first exercise of a workout that hits a muscle you
