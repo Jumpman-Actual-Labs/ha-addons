@@ -1,6 +1,8 @@
-import { buildPlateLoadout, nextSetSuggestion, replacementLibrary, type LibraryFilters } from "../inventory-policy";
+import { nextSetSuggestion, replacementLibrary, type LibraryFilters } from "../inventory-policy";
 import { workoutSurfaceStyles } from "../workout-surfaces";
+import { addPlate, groupPlates, isSingleSleeve, loadTotal, planLoad, plateLoadedStation, removePlate, remainingPlates, type LoadingKind, type PointLoads } from "../plate-loading";
 import { defaultInventoryWeight } from "../inventory-units";
+import { needsWarmup, warmupSets } from "../warmup";
 import { recoveryPercent } from "../recovery";
 import type { GainsViewContext } from "../training-types";
 import { LitElement, css, html } from "lit";
@@ -30,6 +32,17 @@ interface BarChoice {
   equipmentId: string;
   weight: number;
   label: string;
+}
+
+interface LoadingSetup {
+  kind: LoadingKind;
+  /** Bar weight, or a pulley station's base (carriage) weight. */
+  base: number;
+  /** Places that take plates: 2 barbell sleeves, 1 landmine sleeve, or a
+   * station's 1-2 pulleys. */
+  points: number;
+  label: string;
+  equipmentId: string;
 }
 
 const PLATE_BAR_EQUIPMENT_IDS = new Set([
@@ -139,13 +152,6 @@ interface PlateInventoryItem {
   count: number;
 }
 
-interface PlateLoadout {
-  perSide: number;
-  counts: Array<{ plate: number; count: number }>;
-  remainder: number;
-  exact: boolean;
-  belowBar: boolean;
-}
 
 function plateColor(weight: number, units: "lb" | "kg"): string {
   if (units === "lb") {
@@ -200,11 +206,6 @@ function barbellPlateStyle(weight: number, units: "lb" | "kg"): string {
   return `--plate-color:${color};--plate-outline:${outline};--bar-plate-height:${height}px;--bar-plate-width:${width}px`;
 }
 
-function expandPlateLoadout(counts: PlateLoadout["counts"]): number[] {
-  return counts.flatMap(({ plate, count }) =>
-    Array.from({ length: count }, () => plate),
-  );
-}
 
 
 
@@ -337,6 +338,13 @@ export class GainsWorkoutsView extends LitElement {
     exerciseIndex: number;
     setIndex: number;
   } | null = null;
+  /** Plates tapped onto the loader for one set, kept so an uneven pulley
+   * setup isn't replanned evenly on the next render. */
+  @state() private _customLoad: { key: string; points: PointLoads } | null = null;
+  @state() private _pulleyTarget: "all" | 0 | 1 = "all";
+  /** Warm-up sets ticked off on screen, by workout:exercise:warmup index.
+   * Local only: warm-ups are never logged. */
+  @state() private _warmupsDone: Record<string, boolean> = {};
   @state() private _prTooltipKey: string | null = null;
   @state() private _timedSetTimer: {
     workoutId: string;
@@ -1355,6 +1363,11 @@ export class GainsWorkoutsView extends LitElement {
       .loading-section{padding:16px 0;border-top:1px solid var(--divider-color)}.loading-section-title{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin-bottom:12px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
       .plate-loadout-chips{display:flex;gap:8px;flex-wrap:wrap}.plate-loadout-chip{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border-radius:999px;background:var(--secondary-background-color);font-weight:650}.plate-disc{position:relative;display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--plate-color,#69727D);border:1px solid var(--plate-outline,transparent);box-sizing:border-box;box-shadow:inset 0 0 0 6px var(--plate-color,#69727D),inset 0 0 0 8px color-mix(in srgb,var(--plate-color,#69727D) 72%,#000)}.plate-disc::after{content:"";position:absolute;inset:50% auto auto 50%;width:5px;height:5px;border-radius:50%;background:#69727D;transform:translate(-50%,-50%);box-shadow:0 0 0 1px rgba(0,0,0,.28)}
       .available-plate-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:2px}.available-plate{min-width:48px;display:grid;justify-items:center;gap:4px;color:var(--secondary-text-color)}.available-plate .plate-disc{width:38px;height:38px;box-shadow:inset 0 0 0 10px var(--plate-color,#69727D),inset 0 0 0 12px color-mix(in srgb,var(--plate-color,#69727D) 72%,#000)}.available-plate .plate-disc::after{width:7px;height:7px}.available-plate small{font-size:11px;font-weight:700}.available-plate .plate-inventory-count{font-size:9px;font-weight:650;white-space:nowrap;opacity:.8}
+      .loading-total-field{display:inline-flex;align-items:baseline;justify-content:center;gap:6px;margin:4px 0 8px}.loading-total-input{width:5.2ch;font-size:40px;font-weight:700;line-height:1;letter-spacing:-1.5px;text-align:center;padding:2px 6px;border-radius:12px;border:1px solid var(--divider-color);background:var(--secondary-background-color);color:var(--primary-text-color);-moz-appearance:textfield}.loading-total-input::-webkit-outer-spin-button,.loading-total-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}.loading-total-field>span{font-size:24px;font-weight:700}
+      .landmine-visual{transform:rotate(-14deg);justify-content:flex-start;padding-left:28px}.landmine-pivot{width:22px;height:22px;flex:0 0 22px;border-radius:50%;background:#7d7d7d;box-shadow:inset 0 0 0 5px #5b5b5b;margin-right:-4px}.landmine-visual .barbell-shaft{max-width:250px}
+      .pulley-loading-visual{display:flex;justify-content:center;gap:56px;padding:8px 10px 4px}.pulley-column{display:grid;justify-items:center;grid-template-rows:auto 24px minmax(70px,auto) auto auto;width:78px}.pulley-column small{margin-top:6px;color:var(--secondary-text-color);font-weight:650;white-space:nowrap}.pulley-wheel{width:30px;height:30px;border-radius:50%;background:radial-gradient(circle,#555 0 4px,#9b9b9b 5px 9px,#cfcfcf 10px 13px,#777 14px)}.pulley-cable{width:2px;height:24px;background:#bdbdbd}.pulley-pin{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-height:70px;padding-bottom:2px}.pulley-pin::before{content:"";position:absolute;inset:0 auto 0 50%;width:6px;transform:translateX(-50%);border-radius:3px;background:linear-gradient(90deg,#9b9b9b,#d9d9d9,#9b9b9b)}.pulley-plate{position:relative;display:block;width:calc(var(--bar-plate-height,56px) * 1.05);height:var(--bar-plate-width,9px);margin:1px 0;border-radius:3px;background:linear-gradient(180deg,color-mix(in srgb,var(--plate-color) 82%,#fff),var(--plate-color) 45%,color-mix(in srgb,var(--plate-color) 72%,#000));border:1px solid var(--plate-outline,rgba(0,0,0,.18));box-sizing:border-box}.pulley-carriage{width:48px;height:10px;border-radius:3px;background:#6f6f6f}
+      button.plate-loadout-chip{border:none;color:var(--primary-text-color);font:inherit;font-weight:650;cursor:pointer}button.plate-loadout-chip:disabled{cursor:default}.plate-remove{--mdc-icon-size:16px;opacity:.7}button.available-plate{border:none;background:none;padding:4px 2px;font:inherit;cursor:pointer;border-radius:10px}button.available-plate:not(:disabled):hover{background:var(--secondary-background-color)}button.available-plate:disabled{cursor:default;opacity:.45}.pulley-target{margin:0 0 10px}
+      .warmup-block{margin:12px 0;padding:10px 12px;border:1px dashed var(--divider-color);border-radius:14px}.warmup-block summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none}.warmup-block summary::-webkit-details-marker{display:none}.warmup-block summary ha-icon{color:var(--warning-color,#ffa600);--mdc-icon-size:20px}.warmup-block p{margin:8px 0}.warmup-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}.warmup-row{width:100%;display:grid;grid-template-columns:44px 1fr 24px;align-items:center;gap:10px;padding:6px 8px;border:none;border-radius:10px;background:var(--secondary-background-color);color:var(--primary-text-color);font:inherit;font-weight:600;text-align:left;cursor:pointer}.warmup-row .set-number-box{font-size:.8rem}.warmup-row.done{opacity:.6}.warmup-row.done ha-icon{color:var(--success-color,#43a047)}
       .bar-choice-list{display:grid;gap:8px}.bar-choice-row{width:100%;display:grid;grid-template-columns:40px minmax(0,1fr) 24px;align-items:center;gap:10px;padding:12px;border:1px solid var(--divider-color);border-radius:12px;background:var(--card-background-color);color:var(--primary-text-color);text-align:left;font:inherit}.bar-choice-row>span:nth-child(2){display:grid;gap:2px}.bar-choice-row small{color:var(--secondary-text-color)}.bar-choice-row.active{border-color:var(--primary-color);background:color-mix(in srgb,var(--primary-color) 10%,var(--card-background-color))}.bar-choice-row.active>ha-icon:last-child{color:var(--primary-color)}.bar-choice-row.static{cursor:default}
       .set-swipe-delete-lane{display:none}
       @media(min-width:521px){.set-swipe-shell{display:contents}}
@@ -1878,31 +1891,137 @@ export class GainsWorkoutsView extends LitElement {
     return draft?.weight ?? suggestion.weight ?? 0;
   }
 
+  private _unitConversion(workout: Workout): number {
+    const units = this._workoutUnits(workout);
+    return units === this.gainsState.profile?.units ? 1 : units === "metric" ? 0.45359237 : 1 / 0.45359237;
+  }
+
+  /** How this exercise takes plates at the athlete's gym, or null when it
+   * has no plate loading (dumbbells, selectorized stacks, bodyweight). */
+  private _loadingSetup(workout: Workout, exercise: WorkoutExercise): LoadingSetup | null {
+    const conversion = this._unitConversion(workout);
+    const equipment = exerciseEquipment(exercise.exerciseId);
+    if (equipment === "barbell") {
+      const resolved = this._resolvedBar(exercise);
+      const bar = exercise.selectedBarWeight != null ? resolved : { ...resolved, weight: resolved.weight * conversion };
+      const single = isSingleSleeve(exercise.exerciseId);
+      return { kind: single ? "landmine" : "barbell", base: bar.weight, points: single ? 1 : 2, label: bar.label, equipmentId: bar.equipmentId };
+    }
+    if (equipment === "cable") {
+      const gymId = this.gainsState.profile?.gymProfileId;
+      const gym = gymId ? this.gainsState.gymProfiles.find((candidate) => candidate.id === gymId) : null;
+      const definition = EXERCISE_LIBRARY.find((candidate) => candidate.id === exercise.exerciseId);
+      const station = gym ? plateLoadedStation(exercise.exerciseId, definition?.requiresEquipmentId, gym.equipment, gym.equipmentConfig) : null;
+      if (station) {
+        return {
+          kind: "pulley", base: station.baseWeight * conversion, points: station.loadingPoints,
+          label: EQUIPMENT_CATALOG.find((item) => item.id === station.equipmentId)?.name ?? labelize(station.equipmentId),
+          equipmentId: station.equipmentId,
+        };
+      }
+    }
+    return null;
+  }
+
+  /** The picker's two directions both land here: a typed total (points
+   * null - the plates are planned from it) or tapped plates (points kept
+   * exactly, so an uneven pulley setup survives re-renders). */
+  private _setLoadingWeight(key: string, weight: number, points: PointLoads | null): void {
+    this._updateDraftLog(key, { weight });
+    this._customLoad = points ? { key, points } : null;
+    this.requestUpdate();
+  }
+
+  private _renderPlateStack(plates: number[], units: "lb" | "kg") {
+    return plates.map((plate) => html`
+      <span class="barbell-loaded-plate" style=${barbellPlateStyle(plate, units)} title=${`${plate} ${units}`}></span>
+    `);
+  }
+
+  private _renderLoadingVisual(setup: LoadingSetup, points: PointLoads, units: "lb" | "kg") {
+    if (setup.kind === "barbell") {
+      return html`
+        <div class="barbell-loading-visual" aria-hidden="true">
+          <span class="barbell-sleeve left"></span>
+          <span class="barbell-plate-stack left">${this._renderPlateStack([...points[0]].reverse(), units)}</span>
+          <span class="barbell-collar left"></span>
+          <span class="barbell-shaft"></span>
+          <span class="barbell-collar right"></span>
+          <span class="barbell-plate-stack right">${this._renderPlateStack(points[1] ?? points[0], units)}</span>
+          <span class="barbell-sleeve right"></span>
+        </div>`;
+    }
+    if (setup.kind === "landmine") {
+      return html`
+        <div class="barbell-loading-visual landmine-visual" aria-hidden="true">
+          <span class="landmine-pivot"></span>
+          <span class="barbell-shaft"></span>
+          <span class="barbell-collar right"></span>
+          <span class="barbell-plate-stack right">${this._renderPlateStack(points[0], units)}</span>
+          <span class="barbell-sleeve right"></span>
+        </div>`;
+    }
+    return html`
+      <div class="pulley-loading-visual" aria-hidden="true">
+        ${points.map((plates, index) => html`
+          <div class="pulley-column">
+            <span class="pulley-wheel"></span>
+            <span class="pulley-cable"></span>
+            <span class="pulley-pin">
+              ${[...plates].reverse().map((plate) => html`
+                <span class="pulley-plate" style=${barbellPlateStyle(plate, units)} title=${`${plate} ${units}`}></span>
+              `)}
+            </span>
+            <span class="pulley-carriage"></span>
+            <small>${points.length === 2 ? (index === 0 ? "Left" : "Right") : "Pin"} \u00b7 ${plates.reduce((sum, plate) => sum + plate, 0)} ${units}</small>
+          </div>
+        `)}
+      </div>`;
+  }
+
   private _renderLoadingPickerDialog() {
     const picker = this._loadingPicker;
     if (!picker) return "";
     const workout = this._sessionWorkout(picker.workoutId);
     const exercise = workout?.exercises[picker.exerciseIndex];
     const set = exercise?.sets[picker.setIndex];
-    if (!workout || !exercise || !set || exerciseEquipment(exercise.exerciseId) !== "barbell") return "";
+    const setup = workout && exercise ? this._loadingSetup(workout, exercise) : null;
+    if (!workout || !exercise || !set || !setup) return "";
 
+    const key = `${workout.id}:${picker.exerciseIndex}:${picker.setIndex}`;
     const units = this._workoutUnits(workout) === "metric" ? "kg" : "lb";
-    const conversion = this._workoutUnits(workout) === this.gainsState.profile?.units ? 1 : this._workoutUnits(workout) === "metric" ? 0.45359237 : 1 / 0.45359237;
-    const selected = exercise.selectedBarWeight != null ? this._resolvedBar(exercise) : {...this._resolvedBar(exercise), weight: this._resolvedBar(exercise).weight * conversion};
+    const conversion = this._unitConversion(workout);
     const totalWeight = this._loadingWeight(workout, picker.exerciseIndex, picker.setIndex);
     const ownInventory = workout.profileId === this.gainsState.profile?.profileId;
     const policy = ownInventory ? this.gainsState.profile?.inventoryPolicy?.[exercise.exerciseId] : undefined;
-    const ladder = policy?.bars?.[`${selected.equipmentId}:${selected.weight}`] ?? [];
+    const ladder = setup.kind === "pulley" ? policy?.loads ?? [] : policy?.bars?.[`${setup.equipmentId}:${setup.base}`] ?? [];
     const verified = !!policy?.feasible && ladder.some(v => Math.abs(v - totalWeight) < 0.01);
-    const plateInventory = ownInventory ? this._plateInventory().map(p => ({...p, weight: p.weight * conversion})) : [];
-    const loadout = buildPlateLoadout(totalWeight, selected.weight, plateInventory);
-    const barPlates = expandPlateLoadout(loadout.counts);
-    const leftBarPlates = [...barPlates].reverse();
-    const choices = this._configuredBarChoices(exercise.exerciseId).map(b => ({...b, weight: b.weight * conversion}));
-    const editable = workout.status === "active" || workout.status === "planned";
-    const perSideLabel = Number.isInteger(loadout.perSide)
-      ? String(loadout.perSide)
-      : loadout.perSide.toFixed(1);
+    const inventory = ownInventory ? this._plateInventory().map(p => ({...p, weight: p.weight * conversion})) : [];
+    const custom = this._customLoad?.key === key && Math.abs(loadTotal(setup.base, this._customLoad.points) - totalWeight) < 0.01
+      ? this._customLoad.points : null;
+    const plan = planLoad(totalWeight, setup.base, inventory, setup.points);
+    const points = custom ?? plan.points;
+    const exact = !!custom || plan.exact;
+    const belowBase = totalWeight + 0.01 < setup.base;
+    const remaining = remainingPlates(inventory, points);
+    const editableWeight = workout.status === "active" && this._savingSet === null &&
+      (!set.completed || this._editingSet === key) &&
+      canLogJointSet(workout.jointSession, workout.profileId, picker.exerciseIndex, picker.setIndex, set.completed);
+    const editableBar = workout.status === "active" || workout.status === "planned";
+    const pulleyTarget = setup.kind === "pulley" && setup.points === 2 ? this._pulleyTarget : "all";
+    const platesNeeded = setup.kind === "barbell" || pulleyTarget === "all" ? setup.points : 1;
+    const pointSum = (plates: number[]) => plates.reduce((sum, plate) => sum + plate, 0);
+    const fmt = (value: number) => Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
+    const pointName = setup.kind === "barbell" ? "per side" : setup.kind === "landmine" ? "on the sleeve" : "per pulley";
+    const summary = belowBase
+      ? `Below the ${fmt(setup.base)} ${units} ${setup.kind === "pulley" ? "base weight" : setup.label}`
+      : setup.kind === "barbell"
+        ? `${fmt(pointSum(points[0]))} ${units} per side`
+        : setup.kind === "landmine"
+          ? `${fmt(pointSum(points[0]))} ${units} on the sleeve + ${fmt(setup.base)} ${units} bar`
+          : `${points.map(p => fmt(pointSum(p))).join(" + ")} ${units} plates + ${fmt(setup.base)} ${units} base`;
+    const statusOk = verified && exact && !belowBase;
+    const choices = setup.kind === "pulley" ? [] : this._configuredBarChoices(exercise.exerciseId).map(b => ({...b, weight: b.weight * conversion}));
 
     return html`
       <ha-dialog
@@ -1916,127 +2035,160 @@ export class GainsWorkoutsView extends LitElement {
           <div class="loading-picker-header">
             <div>
               <p class="muted small">${exerciseName(exercise.exerciseId)} \u00b7 Set ${picker.setIndex + 1}</p>
-              <h2>${totalWeight} ${units}</h2>
-              <p class="loading-per-side">
-                ${loadout.belowBar
-                  ? `Below the selected ${selected.label}`
-                  : `${perSideLabel} ${units} per side`}
-              </p>
+              ${editableWeight ? html`
+                <label class="loading-total-field">
+                  <input
+                    class="loading-total-input"
+                    type="number"
+                    inputmode="decimal"
+                    min="0"
+                    step="any"
+                    aria-label=${`Total weight in ${units}`}
+                    .value=${fmt(totalWeight)}
+                    @change=${(e: Event) => {
+                      const value = Number((e.target as HTMLInputElement).value);
+                      if (Number.isFinite(value) && value >= 0) this._setLoadingWeight(key, value, null);
+                    }}
+                  />
+                  <span>${units}</span>
+                </label>
+              ` : html`<h2>${fmt(totalWeight)} ${units}</h2>`}
+              <p class="loading-per-side">${summary}</p>
             </div>
             <button class="icon-button" aria-label="Close loading setup" @click=${() => (this._loadingPicker = null)}>
               <ha-icon icon="mdi:close"></ha-icon>
             </button>
           </div>
 
-          <div class="barbell-loading-visual" aria-hidden="true">
-            <span class="barbell-sleeve left"></span>
-            <span class="barbell-plate-stack left">
-              ${leftBarPlates.map((plate) => html`
-                <span
-                  class="barbell-loaded-plate"
-                  style=${barbellPlateStyle(plate, units)}
-                  title=${`${plate} ${units}`}
-                ></span>
-              `)}
-            </span>
-            <span class="barbell-collar left"></span>
-            <span class="barbell-shaft"></span>
-            <span class="barbell-collar right"></span>
-            <span class="barbell-plate-stack right">
-              ${barPlates.map((plate) => html`
-                <span
-                  class="barbell-loaded-plate"
-                  style=${barbellPlateStyle(plate, units)}
-                  title=${`${plate} ${units}`}
-                ></span>
-              `)}
-            </span>
-            <span class="barbell-sleeve right"></span>
-          </div>
+          ${this._renderLoadingVisual(setup, points, units)}
 
-          <div class="loading-status ${verified && loadout.exact && !loadout.belowBar ? "exact" : "warning"}">
-            <ha-icon icon=${verified && loadout.exact && !loadout.belowBar ? "mdi:check-circle-outline" : "mdi:alert-circle-outline"}></ha-icon>
+          <div class="loading-status ${statusOk ? "exact" : "warning"}">
+            <ha-icon icon=${statusOk ? "mdi:check-circle-outline" : "mdi:alert-circle-outline"}></ha-icon>
             <span>
               ${!policy?.feasible
                 ? "Loading inventory unverified for this athlete"
-                : loadout.belowBar
-                ? `${totalWeight} ${units} is below the ${selected.weight} ${units} bar`
-                : verified && loadout.exact
-                  ? "Exact weight"
-                  : `${loadout.remainder.toFixed(1)} ${units} per side cannot be made with your configured plates`}
+                : belowBase
+                ? `${fmt(totalWeight)} ${units} is below the ${fmt(setup.base)} ${units} ${setup.kind === "pulley" ? "base weight" : "bar"}`
+                : !exact
+                  ? `${plan.remainder.toFixed(1)} ${units} ${pointName} cannot be made with your configured plates`
+                  : verified
+                    ? "Exact weight"
+                    : "Not on your usual loading ladder, but these plates make it"}
             </span>
           </div>
 
-          <section class="loading-section">
-            <div class="loading-section-title">
-              <span>Plates per side</span>
-              <span class="muted small">${perSideLabel} ${units}</span>
-            </div>
-            <div class="plate-loadout-chips">
-              ${loadout.counts.length
-                ? loadout.counts.map(({ plate, count }) => html`
-                    <span class="plate-loadout-chip">
-                      <span class="plate-disc" style=${plateStyle(plate, units)}></span>
-                      ${count} \u00d7 ${plate} ${units}
-                    </span>
-                  `)
-                : html`<span class="muted">${loadout.belowBar ? "Choose a lighter bar or increase total weight." : "No plates \u2014 bar only."}</span>`}
-            </div>
-          </section>
-
-          <section class="loading-section">
-            <div class="loading-section-title"><span>Available plates</span></div>
-            <div class="available-plate-row">
-              ${plateInventory.map(({ weight, count }) => html`
-                <span class="available-plate">
-                  <span class="plate-disc" style=${plateStyle(weight, units)}></span>
-                  <small>${weight}</small>
-                  ${Number.isFinite(count)
-                    ? html`<small class="plate-inventory-count">${count} set${count === 1 ? "" : "s"}</small>`
-                    : ""}
-                </span>
-              `)}
-            </div>
-          </section>
-
-          <section class="loading-section">
-            <div class="loading-section-title">
-              <span>Bar</span>
-              <span class="muted small">Remembered for this exercise</span>
-            </div>
-            <div class="bar-choice-list">
-              ${choices.length
-                ? choices.map((choice) => {
-                    const active =
-                      choice.equipmentId === selected.equipmentId &&
-                      Math.abs(choice.weight - selected.weight) < 0.01;
-                    return html`
+          ${points.map((plates, index) => setup.kind === "barbell" && index > 0 ? "" : html`
+            <section class="loading-section">
+              <div class="loading-section-title">
+                <span>${setup.kind === "barbell" ? "Plates per side" : setup.kind === "landmine" ? "Plates on the sleeve" : setup.points === 2 ? `${index === 0 ? "Left" : "Right"} pulley` : "Plates on the pin"}</span>
+                <span class="muted small">${fmt(pointSum(plates))} ${units}</span>
+              </div>
+              <div class="plate-loadout-chips">
+                ${plates.length
+                  ? groupPlates(plates).map(({ plate, count }) => html`
                       <button
-                        class="bar-choice-row ${active ? "active" : ""}"
-                        ?disabled=${!editable}
-                        @click=${async () => {
-                          if (!editable) return;
-                          await this._setBar(workout, picker.exerciseIndex, choice);
-                          this._loadingPicker = null;
-                        }}
+                        class="plate-loadout-chip"
+                        type="button"
+                        ?disabled=${!editableWeight}
+                        aria-label=${`Remove a ${plate} ${units} plate`}
+                        @click=${() => this._setLoadingWeight(key, loadTotal(setup.base, removePlate(setup.kind, points, plate, index)), removePlate(setup.kind, points, plate, index))}
                       >
-                        <span class="mini-barbell-icon" aria-hidden="true"></span>
-                        <span>
-                          <strong>${choice.label}</strong>
-                          <small>${choice.weight} ${units}</small>
-                        </span>
-                        ${active ? html`<ha-icon icon="mdi:check"></ha-icon>` : ""}
+                        <span class="plate-disc" style=${plateStyle(plate, units)}></span>
+                        ${count} \u00d7 ${plate} ${units}
+                        ${editableWeight ? html`<ha-icon class="plate-remove" icon="mdi:close"></ha-icon>` : ""}
                       </button>
-                    `;
-                  })
-                : html`
-                    <div class="bar-choice-row active static">
-                      <span class="mini-barbell-icon" aria-hidden="true"></span>
-                      <span><strong>${selected.label}</strong><small>${selected.weight} ${units}</small></span>
-                    </div>
-                  `}
+                    `)
+                  : html`<span class="muted">${belowBase ? "Increase the total weight." : setup.kind === "pulley" ? "No plates." : "No plates \u2014 bar only."}</span>`}
+              </div>
+            </section>
+          `)}
+
+          <section class="loading-section">
+            <div class="loading-section-title">
+              <span>Available plates</span>
+              ${editableWeight && inventory.length ? html`<span class="muted small">Tap to add</span>` : ""}
             </div>
+            ${setup.kind === "pulley" && setup.points === 2 && editableWeight ? html`
+              <div class="filter-chips pulley-target" role="group" aria-label="Which pulley to load">
+                ${(["all", 0, 1] as const).map((target) => html`
+                  <button class="chip ${this._pulleyTarget === target ? "active" : ""}" aria-pressed=${this._pulleyTarget === target}
+                    @click=${() => (this._pulleyTarget = target)}>${target === "all" ? "Both" : target === 0 ? "Left" : "Right"}</button>
+                `)}
+              </div>` : ""}
+            <div class="available-plate-row">
+              ${inventory.map(({ weight, count }) => {
+                const enough = (remaining.get(weight) ?? 0) >= platesNeeded;
+                return html`
+                  <button
+                    class="available-plate"
+                    type="button"
+                    ?disabled=${!editableWeight || !enough}
+                    aria-label=${`Add a ${weight} ${units} plate`}
+                    @click=${() => {
+                      const next = addPlate(setup.kind, inventory, points, weight, pulleyTarget);
+                      if (next) this._setLoadingWeight(key, loadTotal(setup.base, next), next);
+                    }}
+                  >
+                    <span class="plate-disc" style=${plateStyle(weight, units)}></span>
+                    <small>${weight}</small>
+                    ${Number.isFinite(count)
+                      ? html`<small class="plate-inventory-count">${count} set${count === 1 ? "" : "s"}</small>`
+                      : ""}
+                  </button>
+                `;
+              })}
+            </div>
+            ${!inventory.length ? html`<p class="muted small">${ownInventory ? "Add plates to your gym to load them here." : "Plates come from each athlete's own gym."}</p>` : ""}
           </section>
+
+          ${setup.kind === "pulley" ? html`
+            <section class="loading-section">
+              <div class="loading-section-title"><span>Station</span></div>
+              <div class="bar-choice-row active static">
+                <span class="mini-barbell-icon" aria-hidden="true"></span>
+                <span><strong>${setup.label}</strong><small>${setup.points === 2 ? "Two pulleys" : "One pulley"} \u00b7 ${fmt(setup.base)} ${units} base</small></span>
+              </div>
+            </section>
+          ` : html`
+            <section class="loading-section">
+              <div class="loading-section-title">
+                <span>Bar</span>
+                <span class="muted small">Remembered for this exercise</span>
+              </div>
+              <div class="bar-choice-list">
+                ${choices.length
+                  ? choices.map((choice) => {
+                      const active =
+                        choice.equipmentId === setup.equipmentId &&
+                        Math.abs(choice.weight - setup.base) < 0.01;
+                      return html`
+                        <button
+                          class="bar-choice-row ${active ? "active" : ""}"
+                          ?disabled=${!editableBar}
+                          @click=${async () => {
+                            if (!editableBar) return;
+                            await this._setBar(workout, picker.exerciseIndex, choice);
+                            this._loadingPicker = null;
+                          }}
+                        >
+                          <span class="mini-barbell-icon" aria-hidden="true"></span>
+                          <span>
+                            <strong>${choice.label}</strong>
+                            <small>${choice.weight} ${units}</small>
+                          </span>
+                          ${active ? html`<ha-icon icon="mdi:check"></ha-icon>` : ""}
+                        </button>
+                      `;
+                    })
+                  : html`
+                      <div class="bar-choice-row active static">
+                        <span class="mini-barbell-icon" aria-hidden="true"></span>
+                        <span><strong>${setup.label}</strong><small>${fmt(setup.base)} ${units}</small></span>
+                      </div>
+                    `}
+              </div>
+            </section>
+          `}
         </div>
       </ha-dialog>
     `;
@@ -2546,9 +2698,14 @@ export class GainsWorkoutsView extends LitElement {
     this._jointBusy = true;
     this._error = "";
     try {
-      await trainingService(this.hass,"joint_session_action",{action,fields:{workout_id:workout.id,expected_revision:workout.revision,...(partnerProfileId ? {partner_profile_id:partnerProfileId} : {}),...(action==="join" ? {device_mode:this._jointDeviceMode} : {}),...fields}});
+      const result = await trainingService<{pending?: boolean}>(this.hass,"joint_session_action",{action,fields:{workout_id:workout.id,expected_revision:workout.revision,...(partnerProfileId ? {partner_profile_id:partnerProfileId} : {}),...(action==="join" ? {device_mode:this._jointDeviceMode} : {}),...fields}});
       this._togetherWorkout = null;
-      if (action === "join") {this._shareNotice="Workout Together invite sent. The session starts only after your partner accepts.";}
+      if (action === "join") {
+        const partner = this.gainsState.profile?.shareTargets.find(p=>p.profileId===partnerProfileId)?.displayName ?? "your partner";
+        // A partner with auto-accept on joins straight away.
+        if (result?.pending === false) {this._shareNotice=`Workout Together started with ${partner}. It's in In progress.`;this._listFilter="active";}
+        else this._shareNotice=`Workout Together invite sent to ${partner}. The session starts once they accept.`;
+      }
       this.dispatchEvent(new CustomEvent("training-refresh",{bubbles:true,composed:true}));
     } catch(e) {this._error=serviceErrorMessage(e);}
     finally {this._jointBusy=false;}
@@ -2559,7 +2716,7 @@ export class GainsWorkoutsView extends LitElement {
     const targets = this.gainsState.profile?.shareTargets ?? [];
     return html`<ha-dialog .open=${!!w} hideActions @closed=${()=>this._togetherWorkout=null}>
       <div class="picker-header"><h2>Workout Together</h2><button class="icon-button" aria-label="Close partner picker" @click=${()=>this._togetherWorkout=null}><ha-icon icon="mdi:close"></ha-icon></button></div>
-      <div class="picker-body">${this._renderError()}<p>Invite any Gains profile and choose how you will log. The session starts only after they accept in Workouts. Each athlete keeps their own reps, weight, effort and history.</p><p class="muted small">No linked account, coach grant, matching units or matching gym equipment is needed to receive an invite.</p>
+      <div class="picker-body">${this._renderError()}<p>Invite any Gains profile and choose how you will log. The session starts right away if they have auto-accept on (Settings), otherwise once they accept in Workouts. Each athlete keeps their own reps, weight, effort and history.</p><p class="muted small">No linked account, coach grant, matching units or matching gym equipment is needed to receive an invite.</p>
       <fieldset><legend>Will you use the same device or different devices?</legend>
         <label><input style="width:auto" type="radio" name="joint-device" value="same_device" .checked=${this._jointDeviceMode==="same_device"} @change=${()=>this._jointDeviceMode="same_device"}> Same device</label>
         <p class="muted small">Take turns on this device. The shared controls label whose reps, weight and effort you are recording.</p>
@@ -3118,7 +3275,7 @@ export class GainsWorkoutsView extends LitElement {
           <details class="replacement-more-filters" ?open=${!!(filters.muscle || filters.equipment || filters.movement)}>
             <summary>More filters</summary>
             <div class="replacement-filters">
-              <label>Muscle<select @change=${(e: Event) => update({ muscle: (e.target as HTMLSelectElement).value, mode: "all" })}>
+              <label>Primary muscle<select @change=${(e: Event) => update({ muscle: (e.target as HTMLSelectElement).value, mode: "all" })}>
                 <option value="" ?selected=${!filters.muscle}>All muscles</option>${Object.keys(MUSCLE_DICTIONARY).map(id => html`<option value=${id} ?selected=${filters.muscle === id}>${muscleLabels([id as MuscleId])}</option>`)}</select></label>
               <label>Equipment<select @change=${(e: Event) => update({ equipment: (e.target as HTMLSelectElement).value, mode: "all" })}>
                 <option value="" ?selected=${!filters.equipment}>All equipment</option>${EQUIPMENT_OPTIONS.map(id => html`<option value=${id} ?selected=${filters.equipment === id}>${labelize(id)}</option>`)}</select></label>
@@ -3213,7 +3370,8 @@ export class GainsWorkoutsView extends LitElement {
     const jointLocked = isJointParticipant(workout.jointSession, workout.profileId);
     const canLogNext = loggingSetIndex >= 0 && canLogJointSet(loggingWorkout.jointSession, loggingWorkout.profileId, exerciseIndex, loggingSetIndex, false);
     const timedExercise = isTimedExercise(exercise.exerciseId);
-    const barbellExercise = exerciseEquipment(exercise.exerciseId) === "barbell";
+    // Short-circuits for exercises that can never take plates.
+    const barbellExercise = ["barbell", "cable"].includes(exerciseEquipment(exercise.exerciseId)) && !!this._loadingSetup(workout, exercise);
     const units = this.gainsState.profile?.units === "metric" ? "kg" : "lb";
 
     return html`
@@ -3257,6 +3415,7 @@ export class GainsWorkoutsView extends LitElement {
         </div>
         <button class="secondary" @click=${() => this._historyModalOpen = true}><ha-icon icon="mdi:history"></ha-icon> History</button>
         ${workout.status === "active" ? html`<div class="actions"><button class="secondary" ?disabled=${jointLocked} title=${jointLocked ? "Sets stay matched while working out together" : ""} @click=${()=>this._sessionEdit(workout,"add_set",{exercise_index:exerciseIndex})}>Add set</button><button class="secondary" @click=${()=>this._skipExercise(workout,exerciseIndex)}>Skip exercise</button></div><details><summary>Exercise notes</summary><textarea .value=${exercise.notes} @change=${(e:Event)=>this._sessionEdit(workout,"notes",{exercise_index:exerciseIndex,notes:(e.target as HTMLTextAreaElement).value})}></textarea></details>`:""}
+        ${controller ? "" : this._renderWarmups(workout, exercise, exerciseIndex)}
         <div class="set-grid-header ${barbellExercise ? "with-loading" : ""}">
           <span>Set</span>
           <span>${timedExercise ? "Seconds" : "Reps"}</span>
@@ -3311,6 +3470,57 @@ export class GainsWorkoutsView extends LitElement {
       ${this._renderVideoModal(exercise)}
       ${this._renderTimedSetTimerDialog()}
       ${this._renderLoadingPickerDialog()}
+    `;
+  }
+
+  private _renderWarmups(workout: Workout, exercise: WorkoutExercise, exerciseIndex: number) {
+    if (!["planned", "active"].includes(workout.status) || isTimedExercise(exercise.exerciseId)) return "";
+    const ids = workout.exercises.map((e) => e.exerciseId);
+    if (!needsWarmup(ids, exerciseIndex, musclesForExercise)) return "";
+    const first = exercise.sets[0];
+    if (!first) return "";
+    const own = workout.profileId === this.gainsState.profile?.profileId;
+    const policy = own
+      ? this.gainsState.profile?.inventoryPolicy?.[exercise.exerciseId]
+      : workout.jointSession?.participants.find(p => p.profile_id === workout.profileId)?.inventory_policy?.[exercise.exerciseId];
+    const working = first.completed
+      ? first.actualWeight
+      : this._draftLogs[`${workout.id}:${exerciseIndex}:0`]?.weight ?? nextSetSuggestion(exercise, 0, policy).weight ?? first.plannedWeight;
+    const setup = ["barbell", "cable"].includes(exerciseEquipment(exercise.exerciseId)) ? this._loadingSetup(workout, exercise) : null;
+    const barStart = setup && setup.kind !== "pulley" ? setup.base : undefined;
+    const ladder = (barStart != null ? policy?.bars?.[`${setup!.equipmentId}:${setup!.base}`] : undefined) ?? policy?.loads ?? [];
+    const units = this._workoutUnits(workout) === "metric" ? "kg" : "lb";
+    const sets = warmupSets(working, { start: barStart, ladder, increment: units === "kg" ? 2.5 : 5 });
+    if (!sets.length) return "";
+    const worked = new Set(ids.slice(0, exerciseIndex).flatMap((id) => {
+      const muscles = musclesForExercise(id);
+      return muscles ? [...muscles.primary, ...muscles.secondary] : [];
+    }));
+    const fresh = (musclesForExercise(exercise.exerciseId)?.primary ?? []).filter((m) => !worked.has(m));
+    return html`
+      <details class="warmup-block" ?open=${!exercise.sets.some((set) => set.completed)}>
+        <summary>
+          <ha-icon icon="mdi:fire"></ha-icon>
+          <strong>Warm-up</strong>
+          <span class="muted small">${sets.length} set${sets.length === 1 ? "" : "s"} \u00b7 not logged</span>
+        </summary>
+        <p class="muted small">First ${muscleLabels(fresh)} work today \u2014 ramp up before your ${working} ${units} working sets.</p>
+        <ol class="warmup-list">
+          ${sets.map((set, index) => {
+            const key = `${workout.id}:${exerciseIndex}:${index}`;
+            const done = !!this._warmupsDone[key];
+            return html`
+              <li>
+                <button class="warmup-row ${done ? "done" : ""}" type="button" aria-pressed=${done}
+                  @click=${() => (this._warmupsDone = { ...this._warmupsDone, [key]: !done })}>
+                  <span class="set-number-box">W${index + 1}</span>
+                  <span>${set.weight} ${units} \u00d7 ${set.reps}</span>
+                  <ha-icon icon=${done ? "mdi:check-circle" : "mdi:circle-outline"}></ha-icon>
+                </button>
+              </li>`;
+          })}
+        </ol>
+      </details>
     `;
   }
 
@@ -3476,7 +3686,7 @@ export class GainsWorkoutsView extends LitElement {
   ) {
     const key = `${workout.id}:${exerciseIndex}:${setIndex}`;
     const exercise = workout.exercises[exerciseIndex];
-    const isBarbell = exerciseEquipment(exercise.exerciseId) === "barbell";
+    const isBarbell = ["barbell", "cable"].includes(exerciseEquipment(exercise.exerciseId)) && !!this._loadingSetup(workout, exercise);
     const isTimed = isTimedExercise(exercise.exerciseId);
     const { reps: suggestedReps, weight: suggestedSetWeight } = set.completed
       ? { reps: set.actualReps, weight: set.actualWeight }
@@ -3509,8 +3719,8 @@ export class GainsWorkoutsView extends LitElement {
           <button
             class="set-loading-button"
             type="button"
-            aria-label=${`Open plate and bar setup for set ${setIndex + 1}`}
-            title="Plate & bar setup"
+            aria-label=${`Open plate loading for set ${setIndex + 1}`}
+            title="Plate loading"
             @click=${() => (this._loadingPicker = {
               workoutId: workout.id,
               exerciseIndex,

@@ -43,6 +43,8 @@ export interface AthleteProfile {
   /** Default rest-period timer between sets, in seconds -- one of
    * REST_TIMER_OPTIONS. Purely a panel display preference. */
   restTimerSeconds: number;
+  /** Workout Together invites to this athlete start right away. */
+  autoAcceptJointInvites: boolean;
   preferredSequencingPolicy?: "calendar" | "completion";
   isAdmin: boolean;
   onboardingComplete: boolean;

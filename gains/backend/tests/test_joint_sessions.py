@@ -12,7 +12,18 @@ from tests.test_coordinator import coordinator as base_coordinator
 
 @pytest.fixture(name="coordinator")
 async def joint_coordinator():
-    return await base_coordinator.__wrapped__()
+    """Most tests here cover the manual invite-then-accept flow, so profiles
+    start with auto-accept off; test_auto_accept_* opt back in."""
+    c = await base_coordinator.__wrapped__()
+    ensure = c.async_ensure_profile
+
+    async def manual_accept(*args, **kwargs):
+        profile = await ensure(*args, **kwargs)
+        profile.auto_accept_joint_invites = False
+        return profile
+
+    c.async_ensure_profile = manual_accept
+    return c
 
 
 async def joined(c, device_mode="different_devices"):
@@ -527,3 +538,48 @@ async def test_joint_athletes_can_switch_bars(coordinator, mode):
             "workout_id": other.id, "exercise_index": 0,
             "equipment_id": "short_bar", "bar_weight": 20})
         assert other.exercises[0].selected_bar_equipment_id == "short_bar"
+
+
+async def test_auto_accept_starts_the_session_without_an_invite_step(coordinator):
+    c = coordinator
+    a = await c.async_ensure_profile("a", "A")
+    b = await c.async_ensure_profile("b", "B")
+    b.auto_accept_joint_invites = True
+    w = await c.async_create_workout("a", "Together", [
+        {"exercise_id": "push_up", "sets": [{"reps": 8, "weight": 0}]}])
+    result = await c.async_joint_action("a", "join", {
+        "workout_id": w.id, "expected_revision": w.revision,
+        "partner_profile_id": b.id, "device_mode": "same_device"})
+    assert result["pending"] is False
+    other = c.get_workout(result["workout_id"])
+    assert other.profile_id == b.id
+    assert w.status == other.status == "active"
+    assert w.joint_session["id"] == other.joint_session["id"]
+    assert w.joint_session["device_mode"] == "same_device"
+    request = next(r for r in c.data.share_requests if r.id == result["invite_id"])
+    assert request.status == "accepted"
+    # Nothing waits in B's invite list.
+    assert not [r for r in c.data.share_requests if r.status == "pending"]
+    assert w.audit[-1]["action"] == "joint_accept"
+    assert w.audit[-1]["recorded_by_profile_id"] == b.id
+    assert a.id != b.id
+
+
+async def test_auto_accept_defaults_on_and_can_be_turned_off(coordinator):
+    c = coordinator
+    await c.async_ensure_profile("a", "A")
+    b = await c.async_ensure_profile("b", "B")
+    from gains_addon.models import AthleteProfile
+    legacy = AthleteProfile.from_dict({"id": "x", "ha_user_id": "u"})
+    assert legacy.auto_accept_joint_invites is True
+    await c.async_update_profile("b", auto_accept_joint_invites=True)
+    assert b.auto_accept_joint_invites is True
+    await c.async_update_profile("b", auto_accept_joint_invites=False)
+    assert b.auto_accept_joint_invites is False
+    assert AthleteProfile.from_dict(b.to_dict()).auto_accept_joint_invites is False
+    w = await c.async_create_workout("a", "Together", [
+        {"exercise_id": "push_up", "sets": [{"reps": 8, "weight": 0}]}])
+    result = await c.async_joint_action("a", "join", {
+        "workout_id": w.id, "expected_revision": w.revision, "partner_profile_id": b.id})
+    assert result["pending"] is True
+    assert w.status == "planned"

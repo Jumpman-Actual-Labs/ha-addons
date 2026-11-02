@@ -14,6 +14,7 @@ interface Draft {
   activityLevel: ActivityLevel | "";
   preferredDurationMinutes: string;
   restTimerSeconds: number;
+  autoAcceptJointInvites: boolean;
   preferredSequencingPolicy: "calendar" | "completion";
   bodyweight: string;
   age: string;
@@ -39,6 +40,7 @@ function draftFromState(state: GainsState): Draft {
     preferredDurationMinutes:
       p?.preferredDurationMinutes != null ? String(p.preferredDurationMinutes) : "",
     restTimerSeconds: p?.restTimerSeconds ?? 60,
+    autoAcceptJointInvites: p?.autoAcceptJointInvites ?? true,
     preferredSequencingPolicy: p?.preferredSequencingPolicy ?? "completion",
     bodyweight: p?.bodyweight != null ? String(p.bodyweight) : "",
     age: p?.age != null ? String(p.age) : "",
@@ -59,6 +61,8 @@ export class GainsSettingsView extends LitElement {
     glassCardStyle,
     formStyles,
     css`
+      .checkbox-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; cursor: pointer; }
+      .checkbox-row input { width: auto; margin: 0; }
       ha-card.panel {
         padding: 20px;
         margin-bottom: 20px;
@@ -139,6 +143,7 @@ export class GainsSettingsView extends LitElement {
           ? Number(draft.preferredDurationMinutes)
           : undefined,
         rest_timer_seconds: draft.restTimerSeconds,
+        auto_accept_joint_invites: draft.autoAcceptJointInvites,
         ...(this.gainsState.profile?.preferredSequencingPolicy ? {preferred_sequencing_policy:draft.preferredSequencingPolicy} : {}),
         bodyweight: draft.bodyweight ? Number(draft.bodyweight) : undefined,
         age: draft.age ? Number(draft.age) : undefined,
@@ -248,6 +253,16 @@ export class GainsSettingsView extends LitElement {
             </select>
           </div>
         </div>
+
+        <label class="checkbox-row">
+          <input
+            type="checkbox"
+            .checked=${draft.autoAcceptJointInvites}
+            @change=${(e: Event) => this._set("autoAcceptJointInvites", (e.target as HTMLInputElement).checked)}
+          />
+          <span>Auto-accept Workout Together invites</span>
+        </label>
+        <p class="muted small">When someone invites you to train together, the session starts right away instead of waiting for you to accept.</p>
 
         <label for="program-sequencing">Default program sequencing</label>
         <select id="program-sequencing" ?disabled=${!this.gainsState.profile.preferredSequencingPolicy}

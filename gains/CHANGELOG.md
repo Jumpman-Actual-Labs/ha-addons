@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.0.9
+
+- Warm-up sets: the first exercise of a workout that hits a muscle you
+  haven't worked yet (deadlifts first thing, say) shows a warm-up ramp
+  above the working sets - empty bar, then about 40/60/80% of your
+  working weight for barbell work, 50/75% for everything else - rounded
+  to loads your gym can make. Tick them off as you go; they aren't logged.
+- The plate loader works both ways: type a total at the top and it shows
+  which plates to load, or tap plates to add them (tap a loaded plate to
+  take it off) and it adds up the total. Either way the set's weight
+  updates.
+- Landmine exercises load one sleeve: 70 lb on a 45 lb bar is 25 lb on the
+  sleeve, not 12.5 per side.
+- Plate-loaded cable stations get the loader too, drawn as one or two
+  pulleys with the station's base weight. Two pulleys load evenly by
+  default, or pick Left / Right to load them differently.
+- The Replace exercise muscle filter is now "Primary muscle": it only
+  lists exercises where that muscle is a primary mover.
+- New Settings option, on by default: Auto-accept Workout Together
+  invites. An invite to someone with it on starts the session right away
+  instead of waiting for them to accept.
+
 ## 1.0.8
 
 - Timed exercises (plank, holds) earn PRs: a longer hold at the same or

@@ -79,6 +79,7 @@ UPDATE_PROFILE_SCHEMA = vol.Schema(
         vol.Optional("preferred_duration_minutes"): vol.Coerce(int),
         vol.Optional("rest_timer_seconds"): vol.All(vol.Coerce(int), vol.In(REST_TIMER_OPTIONS)),
         vol.Optional("onboarding_complete"): cv.boolean,
+        vol.Optional("auto_accept_joint_invites"): cv.boolean,
         vol.Optional("bodyweight"): vol.All(vol.Coerce(float), vol.Range(min=1, max=2000)),
         vol.Optional("age"): vol.All(vol.Coerce(int), vol.Range(min=5, max=120)),
     }
