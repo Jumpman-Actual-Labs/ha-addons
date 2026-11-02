@@ -43,6 +43,8 @@ interface LoadingSetup {
   points: number;
   label: string;
   equipmentId: string;
+  /** The gym left a cable station's loading points / base load blank. */
+  assumed?: boolean;
 }
 
 const PLATE_BAR_EQUIPMENT_IDS = new Set([
@@ -1917,6 +1919,7 @@ export class GainsWorkoutsView extends LitElement {
           kind: "pulley", base: station.baseWeight * conversion, points: station.loadingPoints,
           label: EQUIPMENT_CATALOG.find((item) => item.id === station.equipmentId)?.name ?? labelize(station.equipmentId),
           equipmentId: station.equipmentId,
+          assumed: station.assumed,
         };
       }
     }
@@ -2148,6 +2151,7 @@ export class GainsWorkoutsView extends LitElement {
                 <span class="mini-barbell-icon" aria-hidden="true"></span>
                 <span><strong>${setup.label}</strong><small>${setup.points === 2 ? "Two pulleys" : "One pulley"} \u00b7 ${fmt(setup.base)} ${units} base</small></span>
               </div>
+              ${setup.assumed ? html`<p class="muted small">Loading points or base load aren't set for this station, so this assumes one pin and no base weight. Set both under Equipment for exact totals and weight suggestions.</p>` : ""}
             </section>
           ` : html`
             <section class="loading-section">
