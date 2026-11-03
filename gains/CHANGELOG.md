@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.11
+
+- Coach mode: "Finish workout" shows again on an athlete's Workout
+  Together workout when that athlete started the session on a shared
+  device. Before this, coaching that athlete showed no finish button at
+  all, so the workout couldn't be ended.
+
 ## 1.0.10
 
 - Plate-loaded cable stations get the plate loader even when "Loading

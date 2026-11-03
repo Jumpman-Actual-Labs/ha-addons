@@ -3161,7 +3161,7 @@ export class GainsWorkoutsView extends LitElement {
           ${workout.status === "planned" ? html`
             <button class="primary" ?disabled=${this._busy} @click=${()=>this._startWorkout(workout.id)}>Start workout</button>
             <button class="secondary" @click=${()=>this._skipWorkout(workout.id)}>Skip workout</button>
-          ` : workout.status === "active" && !isSharedController(workout.jointSession,workout.profileId) ? html`
+          ` : workout.status === "active" && !this._sharedController(workout) ? html`
             <button class="primary" ?disabled=${this._busy} @click=${this._completeWorkout}>Finish workout</button>
           ` : ""}
         </div>
