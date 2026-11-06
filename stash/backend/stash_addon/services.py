@@ -46,6 +46,7 @@ SERVICE_DELETE_BILL = "delete_bill"
 SERVICE_MARK_PAID_NORMAL = "mark_paid_normal"
 SERVICE_MARK_PAID_INDIVIDUAL = "mark_paid_individual"
 SERVICE_MARK_PAID_PARTIAL = "mark_paid_partial"
+SERVICE_CLEAR_OVERDUE_BILLS = "clear_overdue_bills"
 SERVICE_CLEAR_ALL_BILLS = "clear_all_bills"
 SERVICE_EDIT_PAYMENT = "edit_payment"
 SERVICE_DELETE_PAYMENT = "delete_payment"
@@ -62,6 +63,7 @@ SERVICE_EDIT_CATEGORY_EXPENSE = "edit_category_expense"
 SERVICE_DELETE_CATEGORY_EXPENSE = "delete_category_expense"
 
 SCHEMAS = {
+    SERVICE_CLEAR_OVERDUE_BILLS: vol.Schema({}),
     SERVICE_ADD_MEMBER: vol.Schema(
         {
             vol.Required("name"): cv.string,
@@ -468,7 +470,11 @@ def build_handlers(coordinator: FinanceCoordinator) -> dict[str, Handler]:
     async def handle_delete_category_expense(data: dict[str, Any]) -> None:
         await coordinator.async_delete_category_expense(data["expense_id"])
 
+    async def handle_clear_overdue_bills(data: dict[str, Any]) -> None:
+        await coordinator.async_clear_overdue_bills()
+
     return {
+        SERVICE_CLEAR_OVERDUE_BILLS: handle_clear_overdue_bills,
         SERVICE_ADD_MEMBER: handle_add_member,
         SERVICE_EDIT_MEMBER: handle_edit_member,
         SERVICE_DELETE_MEMBER: handle_delete_member,

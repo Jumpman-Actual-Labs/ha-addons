@@ -11,6 +11,8 @@ export class FinanceSettingsView extends LitElement {
   @property({ attribute: false }) financeState!: FinanceState;
 
   @state() private _saving = false;
+  @state() private _clearMessage = "";
+  @state() private _clearError = "";
   @state() private _rolledOver = false;
 
   static styles = [glassCardStyle, css`
@@ -90,6 +92,21 @@ export class FinanceSettingsView extends LitElement {
     }
   }
 
+  private async _clearOverdue(): Promise<void> {
+    if (!window.confirm("Clear all overdue bills from your budget? Future recurring bills and payment history will be kept. Cleared occurrences cannot be restored from this screen.")) return;
+    this._saving = true;
+    this._clearMessage = "";
+    this._clearError = "";
+    try {
+      await financeApi.clearOverdueBills(this.hass);
+      this._clearMessage = "Overdue bills cleared. Future bills are still scheduled.";
+    } catch (err) {
+      this._clearError = err instanceof Error ? err.message : "Unable to clear overdue bills.";
+    } finally {
+      this._saving = false;
+    }
+  }
+
   render() {
     return html`
       <ha-card>
@@ -118,6 +135,18 @@ export class FinanceSettingsView extends LitElement {
               </select>
             `
           : ""}
+      </ha-card>
+
+      <ha-card>
+        <h2>Overdue Bills</h2>
+        <p class="hint">Remove all overdue occurrences from the budget without marking them paid.
+          Future recurring bills and payment history are kept. Cleared occurrences will not
+          be regenerated after a restart or rollover.</p>
+        <button class="primary" ?disabled=${this._saving} @click=${this._clearOverdue}>
+          Clear overdue bills
+        </button>
+        ${this._clearMessage ? html`<p class="confirm" role="status">${this._clearMessage}</p>` : ""}
+        ${this._clearError ? html`<p role="alert">${this._clearError}</p>` : ""}
       </ha-card>
 
       <ha-card>

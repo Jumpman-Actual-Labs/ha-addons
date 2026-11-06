@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.5
+
+- Added Settings > Clear overdue bills to remove past obligations from the budget,
+  preserve payment history and future recurring bills, and prevent cleared
+  occurrences from regenerating on startup or rollover.
+
 ## 1.0.4
 
 - Bills > Outstanding now shows only what's owed this pay period (overdue

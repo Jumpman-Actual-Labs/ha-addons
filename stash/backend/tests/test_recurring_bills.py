@@ -4,7 +4,7 @@ import asyncio
 from datetime import date
 from unittest.mock import AsyncMock
 
-from stash_addon.const import BillStatus, BillType, Frequency
+from stash_addon.const import BillStatus, BillType, Frequency, PaymentType
 from stash_addon.coordinator import FinanceCoordinator
 from stash_addon.models import Bill
 
@@ -110,3 +110,47 @@ def test_next_occurrence_keeps_the_payee():
     asyncio.run(instance._maybe_generate_recurring(power))
 
     assert instance.bills[-1].pay_to == "Duke Energy"
+
+
+def test_clear_overdue_preserves_future_and_history_across_restart(tmp_path):
+    from stash_addon.models import Payment
+    from stash_addon.services import async_call_service, build_handlers
+    from stash_addon.storage import FinanceStore
+
+    async def run():
+        store = FinanceStore(tmp_path / "stash.json")
+        instance = FinanceCoordinator(store)
+        await instance.async_load()
+        instance.bills = [
+            make_bill(id="paid", due_date="2020-01-01", month="2020-01"),
+            make_bill(id="old", due_date="2020-02-01", month="2020-02",
+                      recurring_parent_id="paid", status=BillStatus.UNPAID),
+            make_bill(id="once", due_date="2020-01-01", month="2020-01",
+                      frequency=Frequency.ONE_TIME, status=BillStatus.PARTIALLY_PAID),
+            make_bill(id="future", due_date="2099-01-01", month="2099-01",
+                      status=BillStatus.UNPAID),
+            make_bill(id="deferred", due_date="2020-01-01", month="2020-01",
+                      frequency=Frequency.ONE_TIME, status=BillStatus.DEFERRED,
+                      deferred_until="2099-01-01"),
+        ]
+        instance.payments = [Payment(id="payment", bill_id="once", date="2020-01-01",
+                                     type=PaymentType.PARTIAL)]
+        await async_call_service(build_handlers(instance), "clear_overdue_bills", {})
+        assert {b.id for b in instance.bills} >= {"paid", "future", "deferred"}
+        assert not {"old", "once"} & {b.id for b in instance.bills}
+        assert len(instance.payments) == 1
+        assert len(instance.archive["cleared_overdue_bills"]) == 2
+        assert any(b.recurring_parent_id == "paid" and b.due_date >= date.today().isoformat()
+                   for b in instance.bills)
+        restored = FinanceCoordinator(store)
+        await restored.async_load()
+        await restored.async_ensure_recurring_bills()
+        assert not [b for b in restored.bills if b.recurring_parent_id == "paid"
+                    and b.due_date < date.today().isoformat()]
+        assert restored.recurring_cutoffs == instance.recurring_cutoffs
+        assert len(restored.payments) == 1
+        count = len(restored.bills)
+        await restored.async_clear_overdue_bills()
+        assert len(restored.bills) == count
+
+    asyncio.run(run())
