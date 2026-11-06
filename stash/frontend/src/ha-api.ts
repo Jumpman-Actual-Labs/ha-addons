@@ -466,6 +466,9 @@ export const financeApi = {
       notes,
     });
   },
+  clearOverdueBills(hass: HomeAssistant) {
+    return callFinanceService(hass, "clear_overdue_bills", {});
+  },
   triggerMonthlyRollover(hass: HomeAssistant) {
     return callFinanceService(hass, "trigger_monthly_rollover", {});
   },

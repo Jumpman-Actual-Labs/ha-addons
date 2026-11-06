@@ -101,6 +101,7 @@ class FinanceCoordinator:
         self.cash_infusions: list[CashInfusion] = []
         self.category_expenses: list[CategoryExpense] = []
         self.archive: dict[str, Any] = {}
+        self.recurring_cutoffs: dict[str, str] = {}
 
     # ----------------------------------------------------------- listeners
     # Stands in for DataUpdateCoordinator's push API from the integration
@@ -153,6 +154,7 @@ class FinanceCoordinator:
             CategoryExpense.from_dict(e) for e in raw.get("category_expenses", [])
         ]
         self.archive = raw.get("archive", {})
+        self.recurring_cutoffs = raw.get("recurring_cutoffs", {})
 
         await self.async_ensure_recurring_bills()
         self.async_set_updated_data(self._build_public_data())
@@ -176,6 +178,7 @@ class FinanceCoordinator:
             "cash_infusions": [i.to_dict() for i in self.cash_infusions],
             "category_expenses": [e.to_dict() for e in self.category_expenses],
             "archive": self.archive,
+            "recurring_cutoffs": self.recurring_cutoffs,
         }
         await self.store.async_save(data)
         self.async_set_updated_data(self._build_public_data())
@@ -727,6 +730,11 @@ class FinanceCoordinator:
         if next_date is None:
             return None
         lineage_id = bill.recurring_parent_id or bill.id
+        cutoff = getattr(self, "recurring_cutoffs", {}).get(lineage_id)
+        while cutoff and next_date.isoformat() < cutoff:
+            next_date = next_due_date(next_date, bill.frequency)
+            if next_date is None:
+                return None
         # Match by the SAME lineage, not "no parent recorded yet" - two
         # unrelated bills (e.g. Rent and Internet, both due the 1st) each
         # start with recurring_parent_id=None, so comparing that field
@@ -757,6 +765,25 @@ class FinanceCoordinator:
         )
         self.bills.append(new_bill)
         return new_bill
+
+    async def async_clear_overdue_bills(self, today: date | None = None) -> None:
+        """Dismiss past obligations, preserving history and future recurrence."""
+        today = today or date.today()
+        self._apply_dynamic_status(today)
+        cleared = [b for b in self.bills if b.status == BillStatus.OVERDUE]
+        for bill in cleared:
+            if bill.frequency != Frequency.ONE_TIME:
+                lineage = bill.recurring_parent_id or bill.id
+                self.recurring_cutoffs[lineage] = max(
+                    self.recurring_cutoffs.get(lineage, ""), today.isoformat()
+                )
+                # Seed the next scheduled occurrence before removing the source.
+                self._generate_recurring_bill(bill)
+        cleared_ids = {b.id for b in cleared}
+        self.archive.setdefault("cleared_overdue_bills", []).extend(b.to_dict() for b in cleared)
+        self.bills = [b for b in self.bills if b.id not in cleared_ids]
+        self.savings_plans = [p for p in self.savings_plans if p.bill_id not in cleared_ids]
+        await self._async_save()
 
     async def _maybe_generate_recurring(self, bill: Bill) -> None:
         if bill.status != BillStatus.PAID:
